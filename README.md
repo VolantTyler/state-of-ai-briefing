@@ -39,6 +39,28 @@ auditability.
 | `src/useBriefingData.js` | Reads the published files. Replaces `window.storage` + Drive sync. |
 | `api/refresh.js` | The nightly job. The only place the API key exists. |
 | `public/data/` | Published state, seeded from the existing Drive files. |
+| `public/icon.svg` | The mark — three lines converging on one exponential curve. Source of every raster icon. |
+| `public/site.webmanifest` | Homescreen name, colors and icon set. |
+
+## Icons and metadata
+
+The mark is three lines — brick, blue and ochre, the same brand colors §04
+uses — fanning out at the left and converging as they climb. `public/icon.svg`
+is the light edition used for the browser tab; `public/icon-dark.svg` is the
+ink edition the homescreen and app-switcher icons are cut from, because a cream
+tile disappears against a light wallpaper.
+
+The rasters (`favicon.ico`, `apple-touch-icon.png`, `icon-192.png`,
+`icon-512.png`, `icon-maskable-512.png`, `og.png`) are committed build output.
+To regenerate them after editing an SVG, rasterize with any SVG renderer —
+nothing in the build does it, so the icons cost the deploy nothing.
+`icon-maskable-512.png` is the ink mark scaled to 72% so Android's mask can
+crop to a circle without clipping the curve.
+
+Canonical, `og:url` and `og:image` need absolute URLs — most scrapers drop
+relative ones. `vite.config.js` substitutes `%SITE_URL%` at build time from
+Vercel's `VERCEL_PROJECT_PRODUCTION_URL`, so it is correct on deploy with no
+configuration. Attach a custom domain and set `SITE_URL` to override it.
 
 ## Deploy
 
