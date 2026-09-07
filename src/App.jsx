@@ -349,7 +349,7 @@ export default function App() {
             </ResponsiveContainer>
           </div>
           <div style={{ ...mono, fontSize: 10, color: FAINT, marginTop: 6 }}>
-            ■ colored bars use each company's brand color from the web-traffic chart (§04){showCN ? " · tan = China-based labs without a tracked brand color" : ""}
+            ■ colored bars use each company's brand color from the web-traffic chart (§04), plus Meta (teal), added when Muse Spark reached the frontier{showCN ? " · tan = China-based labs without a tracked brand color" : ""}
           </div>
           <Commentary>
             Anthropic's $65B Series H still makes it the most valuable private AI lab at $965B, ahead of OpenAI's $852B;
@@ -416,16 +416,25 @@ export default function App() {
 
         {/* §03 Models */}
         <SectionHead id="sec-03" n="03" title="Model capability" sub="Where the frontier sits, per the four most-watched scoreboards" />
-        <Panel id="models" label="Artificial Analysis Intelligence Index v4.1.1" meta={meta.models} sources={SRC.models}>
+        <Panel id="models" label="Artificial Analysis Intelligence Index v4.2" meta={meta.models} sources={SRC.models}>
           <AASwarm items={aaIndex} />
+          <div style={{ ...mono, fontSize: 10, color: C.brick, marginTop: 6 }}>
+            ▲ scale change — v4.2 re-anchored the index, so these scores are not comparable to the v4.1.1 numbers in editions ≤ v2.3
+          </div>
           <Commentary>
-            The frontier held steady this refresh — the same eight models, in essentially the same order, with scores
-            unchanged within measurement noise. On the adjacent scoreboards, Claude Opus 5 now holds SWE-bench
-            Verified at 96.0% (the field has drifted from "roughly saturated" to a real, if narrow, lead), Claude
-            Fable 5 tops LMArena's text Elo at ~1508, and Grok 4.6 still leads Terminal-Bench 2.1 at 88.4% — that
-            last one was double-checked this refresh after conflicting reports suggested a reshuffle; the leaderboard
-            itself shows no change.
-            {showCN ? " Three of the top eight remain Chinese models, and Kimi K3's 2.8-trillion-parameter release is still the largest open-weight model shipped." : " Hide/show has removed the Chinese entries; note that three of the top eight are normally Chinese models."}
+            Three frontier releases landed in three days and the whole board moved. Anthropic shipped Claude Fable 5.1
+            on Sep 1 (and Mythos 5.1, the same weights under trusted-access safeguards, so it takes no separate slot
+            here); Google shipped Gemini 3.8 Flash on Sep 2; OpenAI shipped GPT-6 Astra and Meta shipped Muse Spark
+            1.3 on Sep 3. Artificial Analysis re-cut its index to v4.2 in the middle of it — two new evals, the
+            saturated GPQA Diamond retired, and 40% of the weight now private held-out data specifically to make the
+            leaderboard harder to train against. Every score above is on that new, lower scale; last edition's 63.0
+            for Opus 5 reads as 54.0 here, and nothing regressed. The substance is that Fable 5.1 leads at 57.0,
+            GPT-6 Astra enters second at 55.0 — OpenAI's president called it a "generational leap" and the first
+            model OpenAI has rated critical for cyber under its preparedness framework — and Meta, absent from this
+            chart all year, arrives fourth-equal with Muse Spark 1.3, its fourth Muse Spark release in five months.
+            Grok 4.7 is not here because it does not exist yet: Musk announced it for mid-September, but xAI has
+            published no model card, price, or API id, so 4.6 still stands in for xAI.
+            {showCN ? " Chinese representation in the top eight has narrowed to Kimi K3 alone — GLM-5.3 and Qwen sit in the upper half of v4.2 without published scores yet, so their absence here is a reporting gap, not a fall." : " Hide/show has removed the Chinese entries; on the current board that is one model, Kimi K3."}
           </Commentary>
         </Panel>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 14, marginBottom: 18 }}>
@@ -457,7 +466,7 @@ export default function App() {
               </BarChart>
             </ResponsiveContainer>
           </div>
-          <div style={{ ...mono, fontSize: 10, color: FAINT, marginTop: 6 }}>■ bars use each product's brand color · Meta AI isn't tracked in the traffic-share chart, so it takes the neutral tone</div>
+          <div style={{ ...mono, fontSize: 10, color: FAINT, marginTop: 6 }}>■ bars use each product's brand color · Meta AI now carries Meta's teal, added to the palette in §03 when Muse Spark reached the frontier</div>
           <Commentary>
             Read the bases before the bars: Meta AI's 1.2B counts anyone who touched it inside WhatsApp or Instagram,
             while ChatGPT's reflects deliberate use. Gemini crossed 1 billion monthly actives in mid-August — Google's
