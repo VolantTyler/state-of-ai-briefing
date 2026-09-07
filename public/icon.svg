@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="The State of AI">
+  <title>The State of AI</title>
+  <rect width="64" height="64" fill="#FAF7F0"/>
+  <g fill="none" stroke-width="4.2" stroke-linecap="round">
+    <path d="M7 55C25 54.4 36.5 50.5 44.5 38.5C50 30 53 19.5 55 11" stroke="#A34A34"/>
+    <path d="M7 45C25.5 44.5 37.5 41 45.5 32.5C50.5 26.5 53.3 18.5 55 11" stroke="#456C8F"/>
+    <path d="M7 35C26 34.7 39.5 32.5 47.5 26C51.5 22.5 53.8 17 55 11" stroke="#BE8A17"/>
+  </g>
+</svg>
