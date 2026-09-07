@@ -61,11 +61,49 @@ const ghWrite = async (path, text, sha, message) => {
 };
 
 /* ——— Anthropic ——— */
+
+/* Scan for balanced top-level {...} spans and return the last one that
+   parses.
+
+   The naive version of this — first "{" to last "}" — is what kept the
+   markets panel dark. With web search on, the reply is interleaved text
+   blocks, and models hedge around financial figures ("prices are delayed
+   and may not reflect…"). Any stray brace in that prose, before or after
+   the real object, makes the slice span text that isn't JSON, and the
+   whole job fails even though the model answered correctly. Taking the
+   last *parseable* object tolerates prose on both sides. */
 const extractJSON = (blocks) => {
-  const text = (blocks || []).filter((b) => b.type === "text").map((b) => b.text).join("\n");
-  const a = text.indexOf("{"), b = text.lastIndexOf("}");
-  if (a === -1 || b === -1) throw new Error("no JSON in reply");
-  return JSON.parse(text.slice(a, b + 1).replace(/```json|```/g, ""));
+  const text = (blocks || [])
+    .filter((b) => b.type === "text")
+    .map((b) => b.text)
+    .join("\n")
+    .replace(/```json|```/g, "");
+
+  const found = [];
+  let depth = 0, start = -1, inStr = false, esc = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (ch === "\\") esc = true;
+      else if (ch === '"') inStr = false;
+      continue;
+    }
+    if (ch === '"') { inStr = true; continue; }
+    if (ch === "{") { if (depth === 0) start = i; depth++; continue; }
+    if (ch === "}") {
+      depth--;
+      if (depth === 0 && start !== -1) { found.push(text.slice(start, i + 1)); start = -1; }
+      else if (depth < 0) depth = 0;
+    }
+  }
+  if (depth > 0) throw new Error("truncated JSON in reply (raise max_tokens?)");
+  if (!found.length) throw new Error("no JSON in reply");
+
+  for (let i = found.length - 1; i >= 0; i--) {
+    try { return JSON.parse(found[i]); } catch (e) { /* try the next one out */ }
+  }
+  throw new Error("no parseable JSON object in reply");
 };
 
 const askClaude = async (prompt) => {
@@ -78,7 +116,7 @@ const askClaude = async (prompt) => {
     },
     body: JSON.stringify({
       model: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6",
-      max_tokens: 1500,
+      max_tokens: 4000,
       messages: [{ role: "user", content: prompt }],
       tools: [{ type: "web_search_20250305", name: "web_search" }],
     }),
@@ -113,29 +151,54 @@ export default async function handler(req, res) {
     const history = tFile.text ? csvToHistory(tFile.text) : [];
 
     /* 2 — every panel in parallel. Each job is independent, so one failure
-       keeps its prior values instead of aborting the run. */
+       keeps its prior values instead of aborting the run.
+
+       One retry per job: a search-backed answer that comes back malformed
+       is usually malformed by luck, not by rule, and a second ask is far
+       cheaper than a stale panel for 24 hours. */
     const ids = Object.keys(JOBS);
-    const results = await Promise.allSettled(ids.map((id) => askClaude(JOBS[id].prompt)));
+    const runJob = async (id) => {
+      try {
+        return await askClaude(JOBS[id].prompt);
+      } catch (first) {
+        try {
+          return await askClaude(JOBS[id].prompt);
+        } catch (second) {
+          throw new Error(`${first.message} (retry: ${second.message})`);
+        }
+      }
+    };
+    const results = await Promise.allSettled(ids.map(runJob));
 
     const meta = { ...prevMeta };
     const failures = [];
     results.forEach((r, i) => {
       const id = ids[i];
+      let why = r.status === "rejected" ? String(r.reason && r.reason.message || r.reason) : null;
       if (r.status === "fulfilled") {
         try {
           data = JOBS[id].apply(data, r.value);
           meta[id] = { at: new Date().toISOString(), failed: false };
           return;
-        } catch (e) { /* shape mismatch counts as a failure */ }
+        } catch (e) {
+          /* Reply parsed but didn't fit the panel's shape. */
+          why = `bad shape: ${String(e.message || e)}`;
+        }
       }
-      meta[id] = { ...(meta[id] || {}), failed: true };
+      /* Keep the last-good `at` so the panel can still say how old its
+         numbers are, and record *why* this run failed — a bare boolean
+         left the markets panel undiagnosable for weeks. */
+      meta[id] = { ...(meta[id] || {}), failed: true, error: (why || "unknown").slice(0, 300), erroredAt: new Date().toISOString() };
       failures.push(id);
     });
 
     if (failures.length === ids.length) {
       /* Every job failed — almost certainly an API or network problem.
          Don't commit; leave yesterday's good data in place. */
-      return res.status(502).json({ ok: false, error: "all panels failed", failures });
+      return res.status(502).json({
+        ok: false, error: "all panels failed", failures,
+        errors: Object.fromEntries(failures.map((id) => [id, meta[id].error])),
+      });
     }
 
     /* 3 — write both files back */
@@ -151,6 +214,7 @@ export default async function handler(req, res) {
       ok: true,
       refreshed: ids.filter((id) => !failures.includes(id)),
       failures,
+      errors: Object.fromEntries(failures.map((id) => [id, meta[id].error])),
     });
   } catch (e) {
     return res.status(500).json({ ok: false, error: String(e.message || e) });

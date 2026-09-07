@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-08-30T02:39:36.464Z",
+  "updatedAt": "2026-09-07T00:00:00.000Z",
   "meta": {
     "valuations": {
       "at": "2026-08-30T02:38:17.806Z",
@@ -9,7 +9,7 @@
       "failed": true
     },
     "models": {
-      "at": "2026-08-30T02:39:02.205Z",
+      "at": "2026-09-07T00:00:00.000Z",
       "failed": false
     },
     "users": {
@@ -85,51 +85,51 @@
   },
   "aa": [
     [
-      "Claude Opus 5 (Adaptive Reasoning, Max Effort)",
+      "Claude Fable 5.1 (Adaptive Reasoning, Max Effort)",
       "Anthropic",
-      63,
+      57,
       0
     ],
     [
-      "Claude Fable 5 (Adaptive Reasoning, Max Effort)",
-      "Anthropic",
-      62,
+      "GPT-6 Astra (max)",
+      "OpenAI",
+      55,
       0
     ],
     [
-      "Grok 4.6",
-      "SpaceXAI",
-      61,
+      "Claude Opus 5 (max)",
+      "Anthropic",
+      54,
+      0
+    ],
+    [
+      "Claude Fable 5 (max)",
+      "Anthropic",
+      53,
+      0
+    ],
+    [
+      "Muse Spark 1.3",
+      "Meta",
+      53,
       0
     ],
     [
       "GPT-5.6 Sol (max)",
       "OpenAI",
-      61,
+      51,
       0
     ],
     [
-      "Claude Opus 5 (Adaptive Reasoning, High Effort)",
-      "Anthropic",
-      61,
+      "Grok 4.6 (high)",
+      "xAI",
+      51,
       0
     ],
     [
       "Kimi K3 (max)",
       "Moonshot AI",
-      60,
-      1
-    ],
-    [
-      "GLM-5.3 (max)",
-      "Z.ai",
-      60,
-      1
-    ],
-    [
-      "Qwen3.8 2.4T A95B",
-      "Alibaba",
-      58,
+      50,
       1
     ]
   ]

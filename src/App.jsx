@@ -420,6 +420,41 @@ const AASwarm = ({ items }) => {
   );
 };
 
+/* ——— Trend log: scale-aware series ———
+   Artificial Analysis re-anchors its index periodically (v4.1.1 → v4.2 in
+   Sep '26 dropped every score ~6 points without any model regressing). A
+   single line across that boundary would draw a cliff that never happened,
+   so topScore is split into one series per scale: each segment carries its
+   own dataKey and is null outside its own rows, which makes the line break
+   at the seam instead of interpolating across it. */
+const SCALE_TONES = [C.clay, C.slate, C.neutral];
+
+const splitByScale = (history, key) => {
+  const scales = [];
+  history.forEach((r) => {
+    if (r[key] == null) return;
+    const v = r.scale || "earlier scale";
+    if (!scales.includes(v)) scales.push(v);
+  });
+  if (scales.length < 2) return { rows: history, series: [[key, "AA Index", C.clay]] };
+
+  const rows = history.map((r) => {
+    const out = { ...r };
+    scales.forEach((v, i) => {
+      const mine = (r.scale || "earlier scale") === v;
+      out[`${key}__${i}`] = mine ? r[key] : null;
+    });
+    return out;
+  });
+  /* Newest scale keeps the live tone; older ones fade back. */
+  const series = scales.map((v, i) => [
+    `${key}__${i}`,
+    v,
+    SCALE_TONES[Math.min(scales.length - 1 - i, SCALE_TONES.length - 1)],
+  ]);
+  return { rows, series, scales };
+};
+
 const Commentary = ({ children }) => (
   <p style={{ ...serif, fontSize: 15, lineHeight: 1.65, margin: "14px 0 0 0", paddingTop: 12, borderTop: `1px solid ${RULE_SOFT}` }}>
     <span style={{ ...mono, fontSize: 10, letterSpacing: "0.18em", color: FAINT, marginRight: 8 }}>ANALYST NOTE</span>
@@ -458,7 +493,8 @@ const Panel = ({ id, label, meta, children, sources }) => {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>
         <Eyebrow>{label}</Eyebrow>
         {meta !== null && (
-          <span style={{ ...mono, fontSize: 10, color: meta && meta.failed ? C.brick : FAINT }}>
+          <span title={meta && meta.failed && meta.error ? `Reason: ${meta.error}` : undefined}
+        style={{ ...mono, fontSize: 10, color: meta && meta.failed ? C.brick : FAINT }}>
             {meta && meta.failed ? "Last refresh failed · showing prior values" : stamp}
           </span>
         )}
@@ -559,7 +595,7 @@ export default function App() {
             </ResponsiveContainer>
           </div>
           <div style={{ ...mono, fontSize: 10, color: FAINT, marginTop: 6 }}>
-            ■ colored bars use each company's brand color from the web-traffic chart (§04){showCN ? " · tan = China-based labs without a tracked brand color" : ""}
+            ■ colored bars use each company's brand color from the web-traffic chart (§04), plus Meta (teal), added when Muse Spark reached the frontier{showCN ? " · tan = China-based labs without a tracked brand color" : ""}
           </div>
           <Commentary>
             Anthropic's $65B Series H still makes it the most valuable private AI lab at $965B, ahead of OpenAI's $852B;
@@ -626,16 +662,25 @@ export default function App() {
 
         {/* §03 Models */}
         <SectionHead id="sec-03" n="03" title="Model capability" sub="Where the frontier sits, per the four most-watched scoreboards" />
-        <Panel id="models" label="Artificial Analysis Intelligence Index v4.1.1" meta={meta.models} sources={SRC.models}>
+        <Panel id="models" label="Artificial Analysis Intelligence Index v4.2" meta={meta.models} sources={SRC.models}>
           <AASwarm items={aaIndex} />
+          <div style={{ ...mono, fontSize: 10, color: C.brick, marginTop: 6 }}>
+            ▲ scale change — v4.2 re-anchored the index, so these scores are not comparable to the v4.1.1 numbers in editions ≤ v2.3
+          </div>
           <Commentary>
-            The frontier held steady this refresh — the same eight models, in essentially the same order, with scores
-            unchanged within measurement noise. On the adjacent scoreboards, Claude Opus 5 now holds SWE-bench
-            Verified at 96.0% (the field has drifted from "roughly saturated" to a real, if narrow, lead), Claude
-            Fable 5 tops LMArena's text Elo at ~1508, and Grok 4.6 still leads Terminal-Bench 2.1 at 88.4% — that
-            last one was double-checked this refresh after conflicting reports suggested a reshuffle; the leaderboard
-            itself shows no change.
-            {showCN ? " Three of the top eight remain Chinese models, and Kimi K3's 2.8-trillion-parameter release is still the largest open-weight model shipped." : " Hide/show has removed the Chinese entries; note that three of the top eight are normally Chinese models."}
+            Three frontier releases landed in three days and the whole board moved. Anthropic shipped Claude Fable 5.1
+            on Sep 1 (and Mythos 5.1, the same weights under trusted-access safeguards, so it takes no separate slot
+            here); Google shipped Gemini 3.8 Flash on Sep 2; OpenAI shipped GPT-6 Astra and Meta shipped Muse Spark
+            1.3 on Sep 3. Artificial Analysis re-cut its index to v4.2 in the middle of it — two new evals, the
+            saturated GPQA Diamond retired, and 40% of the weight now private held-out data specifically to make the
+            leaderboard harder to train against. Every score above is on that new, lower scale; last edition's 63.0
+            for Opus 5 reads as 54.0 here, and nothing regressed. The substance is that Fable 5.1 leads at 57.0,
+            GPT-6 Astra enters second at 55.0 — OpenAI's president called it a "generational leap" and the first
+            model OpenAI has rated critical for cyber under its preparedness framework — and Meta, absent from this
+            chart all year, arrives fourth-equal with Muse Spark 1.3, its fourth Muse Spark release in five months.
+            Grok 4.7 is not here because it does not exist yet: Musk announced it for mid-September, but xAI has
+            published no model card, price, or API id, so 4.6 still stands in for xAI.
+            {showCN ? " Chinese representation in the top eight has narrowed to Kimi K3 alone — GLM-5.3 and Qwen sit in the upper half of v4.2 without published scores yet, so their absence here is a reporting gap, not a fall." : " Hide/show has removed the Chinese entries; on the current board that is one model, Kimi K3."}
           </Commentary>
         </Panel>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 14, marginBottom: 18 }}>
@@ -667,7 +712,7 @@ export default function App() {
               </BarChart>
             </ResponsiveContainer>
           </div>
-          <div style={{ ...mono, fontSize: 10, color: FAINT, marginTop: 6 }}>■ bars use each product's brand color · Meta AI isn't tracked in the traffic-share chart, so it takes the neutral tone</div>
+          <div style={{ ...mono, fontSize: 10, color: FAINT, marginTop: 6 }}>■ bars use each product's brand color · Meta AI now carries Meta's teal, added to the palette in §03 when Muse Spark reached the frontier</div>
           <Commentary>
             Read the bases before the bars: Meta AI's 1.2B counts anyone who touched it inside WhatsApp or Instagram,
             while ChatGPT's reflects deliberate use. Gemini crossed 1 billion monthly actives in mid-August — Google's
@@ -842,26 +887,39 @@ export default function App() {
                 { title: "Valuations · $B", keys: [["anthropic", "Anthropic", brandFill("Anthropic", C.blue)], ["openai", "OpenAI", brandFill("OpenAI", C.brick)]] },
                 { title: "Share price · $", keys: [["nvda", "NVDA", C.slate], ["msft", "MSFT", brandFill("MSFT", C.plum)]] },
                 { title: "Users · M", keys: [["chatgpt", "ChatGPT", brandFill("ChatGPT", C.sage)], ["gemini", "Gemini", brandFill("Gemini", C.blue)], ["claude", "Claude", brandFill("Claude", C.ochre)]] },
-                { title: "Top index score", keys: [["topScore", "AA Index", C.clay]] },
-              ].map((chart) => (
+                { title: "Top index score", keys: null, split: "topScore" },
+              ].map((chart) => {
+                const sp = chart.split ? splitByScale(history, chart.split) : null;
+                const rows = sp ? sp.rows : history;
+                const keys = sp ? sp.series : chart.keys;
+                const broken = sp && sp.scales;
+                return (
                 <div key={chart.title}>
                   <Eyebrow>{chart.title}</Eyebrow>
                   <div style={{ height: 150, marginTop: 6 }}>
                     <ResponsiveContainer>
-                      <LineChart data={history} margin={{ left: 0, right: 8, top: 8 }}>
+                      <LineChart data={rows} margin={{ left: 0, right: 8, top: 8 }}>
                         <CartesianGrid stroke={RULE_SOFT} vertical={false} />
                         <XAxis dataKey="date" tick={{ ...mono, fontSize: 9, fill: FAINT }} axisLine={{ stroke: INK }} tickLine={false} />
                         <YAxis tick={{ ...mono, fontSize: 9, fill: FAINT }} axisLine={{ stroke: INK }} tickLine={false} domain={["auto", "auto"]} width={38} />
                         <Tooltip content={<PaperTooltip />} />
-                        {chart.keys.map(([k, name, color]) => (
-                          <Line key={k} type="monotone" dataKey={k} name={name} stroke={color} strokeWidth={1.75} connectNulls
+                        {keys.map(([k, name, color]) => (
+                          <Line key={k} type="monotone" dataKey={k} name={name} stroke={color} strokeWidth={1.75}
+                            connectNulls={!chart.split}
                             dot={{ r: 3, fill: PAPER, stroke: INK, strokeWidth: 1 }} isAnimationActive={false} />
                         ))}
                       </LineChart>
                     </ResponsiveContainer>
                   </div>
+                  {broken && (
+                    <div style={{ ...mono, fontSize: 9.5, color: FAINT, marginTop: 4, lineHeight: 1.5 }}>
+                      ▲ line breaks where Artificial Analysis re-anchored the index ({broken.join(" → ")}) — the drop is a
+                      change of scale, not of capability
+                    </div>
+                  )}
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
           <Commentary>

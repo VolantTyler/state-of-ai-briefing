@@ -1,7 +1,8 @@
 export const EDITION = {
-  version: "v2.3",
-  date: "2026-08-29",
+  version: "v2.4",
+  date: "2026-09-07",
   changelog: [
+    ["v2.4", "2026-09-07", "Model capability rebuilt around the September releases: Claude Fable 5.1 (Sep 1), GPT-6 Astra (Sep 3), Meta's Muse Spark 1.3 (Sep 3) and Gemini 3.8 Flash (Sep 2). The Artificial Analysis Intelligence Index moved to v4.2 — a re-anchored scale with two new evals and 40% private held-out data — so every score in §03 is restated on v4.2 and is NOT comparable to the v4.1.1 numbers in earlier editions. Meta joins the brand palette as it enters the frontier. Grok 4.7 is announced but unreleased and is deliberately absent."],
     ["v2.3", "2026-08-29", "Runtime state now syncs to Google Drive: current panel values and the dated trend log are written to ai-briefing-values.json and ai-briefing-trend.csv on every refresh, and pulled on load — so data accumulated in one place shows up everywhere the dashboard is opened. Local browser storage becomes a cache rather than the record."],
     ["v2.2", "2026-08-28", "Design pass: chart colors now match each company's brand color from the web-traffic-share chart throughout; Artificial Analysis Intelligence Index redrawn as a packed swarm on a zoomed axis to show frontier clustering; added a collapsible table of contents and per-section back-to-top buttons."],
     ["v2.1", "2026-08-26", "Data refresh: Databricks re-priced to $190B, Anthropic revenue run-rate to $65B, Gemini past 1B MAU, China's OpenRouter token share to ~60%, hyperscaler stock prices and capex updated. xAI valuation flagged as structurally uncertain after the SpaceX merger/IPO."],
@@ -18,22 +19,34 @@ export const C = {
   blue: "#7A93AC", ochre: "#C8A24E", sage: "#8AA07B", brick: "#B06A55",
   plum: "#8D7A96", slate: "#6E7B84", clay: "#A98C77", paperDeep: "#F1EBDD",
   neutral: "#CFC6B4",
+  /* Added v2.4 for Meta. `clay` is spoken for as the China-tier fill, so a
+     new tone was needed rather than a reuse. Teal sits far enough from
+     `sage` (OpenAI) and `slate` (Perplexity) to read apart on the swarm. */
+  teal: "#5F8A80",
 };
 
 /* ——— Brand colors, sourced from the web-traffic-share chart (§04) ———
    Every other bar/line/dot for a company or its product reuses this color,
    so "ochre" reads as Anthropic/Claude everywhere in the edition, etc. */
-export const BRAND_COLOR = { Anthropic: C.ochre, OpenAI: C.sage, Google: C.blue, xAI: C.brick, Microsoft: C.plum, Perplexity: C.slate };
+export const BRAND_COLOR = { Anthropic: C.ochre, OpenAI: C.sage, Google: C.blue, xAI: C.brick, Microsoft: C.plum, Perplexity: C.slate, Meta: C.teal };
 export const BRAND_OF = {
   Anthropic: "Anthropic", Claude: "Anthropic", "Claude Opus 5": "Anthropic", "Claude Fable 5": "Anthropic",
-  OpenAI: "OpenAI", ChatGPT: "OpenAI", "GPT-5.6 Sol": "OpenAI",
-  Google: "Google", Gemini: "Google", "Gemini 3.7 Flash": "Google", Alphabet: "Google", GOOG: "Google",
-  xAI: "xAI", Grok: "xAI", "Grok 4.6": "xAI",
+  "Claude Fable 5.1": "Anthropic", "Claude Mythos 5.1": "Anthropic",
+  OpenAI: "OpenAI", ChatGPT: "OpenAI", "GPT-5.6 Sol": "OpenAI", "GPT-5.6 Terra": "OpenAI", "GPT-6 Astra": "OpenAI",
+  Google: "Google", Gemini: "Google", "Gemini 3.7 Flash": "Google", "Gemini 3.8 Flash": "Google", Alphabet: "Google", GOOG: "Google",
+  xAI: "xAI", Grok: "xAI", "Grok 4.6": "xAI", SpaceXAI: "xAI",
   Microsoft: "Microsoft", Copilot: "Microsoft", MSFT: "Microsoft",
+  Meta: "Meta", "Meta AI": "Meta", "Muse Spark": "Meta", "Muse Spark 1.3": "Meta", META: "Meta",
   Perplexity: "Perplexity",
 };
 export const brandFill = (name, fallback) => (BRAND_OF[name] ? BRAND_COLOR[BRAND_OF[name]] : fallback);
 
+
+/* ——— Which Artificial Analysis index version the scores above are on ———
+   Stamped onto every trend-log row so the §08 chart can break its line where
+   the scale changed instead of drawing a cliff that never happened. Bump this
+   whenever Artificial Analysis re-anchors the index. */
+export const AA_INDEX_VERSION = "v4.2";
 
 /* ——— Baseline dataset, researched 2026-08-21/22, refreshed 2026-08-26 ——— */
 export const BASELINE = {
@@ -66,15 +79,25 @@ export const BASELINE = {
     { ticker: "AVGO", name: "Broadcom", price: 356.74, cap: "—", note: "custom accelerators; down from summer highs" },
     { ticker: "TSM", name: "TSMC", price: 417.41, cap: "—", note: "frontier fabrication" },
   ],
+  /* Scores are Artificial Analysis Intelligence Index **v4.2** (Sep '26).
+     v4.2 re-anchored the scale, added AA-Briefcase and GDP.pdf, dropped the
+     saturated GPQA Diamond, and took private held-out data to 40% — so these
+     numbers are lower than, and not comparable to, the v4.1.1 scores that
+     earlier editions of this briefing carried. */
+  /* Names carry the scored configuration in parentheses where the source
+     states it: §03 splits that off, putting the base name on the axis and
+     the variant in the fine print. Muse Spark 1.3 is left bare because the
+     v4.2 table doesn't say which of its variants was measured — guessing a
+     qualifier would read as sourced when it isn't. */
   aaIndex: [
-    { model: "Claude Opus 5", lab: "Anthropic", score: 63.0 },
-    { model: "Claude Fable 5", lab: "Anthropic", score: 62.1 },
-    { model: "Grok 4.6", lab: "xAI", score: 60.9 },
-    { model: "Kimi K3", lab: "Moonshot", score: 59.7, cn: true },
-    { model: "GLM-5.3", lab: "Z.AI", score: 59.5, cn: true },
-    { model: "GPT-5.6 Sol", lab: "OpenAI", score: 58.9 },
-    { model: "Qwen3.8 Max", lab: "Alibaba", score: 58.1, cn: true },
-    { model: "Gemini 3.7 Flash", lab: "Google", score: 56.0 },
+    { model: "Claude Fable 5.1 (Adaptive Reasoning, Max Effort)", lab: "Anthropic", score: 57.0 },
+    { model: "GPT-6 Astra (max)", lab: "OpenAI", score: 55.0 },
+    { model: "Claude Opus 5 (max)", lab: "Anthropic", score: 54.0 },
+    { model: "Claude Fable 5 (max)", lab: "Anthropic", score: 53.0 },
+    { model: "Muse Spark 1.3", lab: "Meta", score: 53.0 },
+    { model: "GPT-5.6 Sol (max)", lab: "OpenAI", score: 51.0 },
+    { model: "Grok 4.6 (high)", lab: "xAI", score: 51.0 },
+    { model: "Kimi K3 (max)", lab: "Moonshot", score: 50.0, cn: true },
   ],
   users: [
     { name: "Meta AI", users: 1200, basis: "MAU · embedded in apps" },
@@ -119,16 +142,16 @@ export const BASELINE = {
 };
 
 export const TRACKERS = [
-  { name: "Artificial Analysis Intelligence Index", leader: "Claude Opus 5 — 63.0", detail: "Composite of 9 evals (v4.1.1): GDPval-AA v2, τ³-Banking, Terminal-Bench 2.1, HLE, GPQA Diamond, more.", url: "https://artificialanalysis.ai/evaluations/artificial-analysis-intelligence-index" },
-  { name: "LMArena (Chatbot Arena)", leader: "Claude Fable 5 tops text Elo (~1508)", detail: "Crowd-sourced blind A/B preference voting — the subjective counterweight to static benchmarks.", url: "https://www.datalearner.com/en/leaderboards" },
-  { name: "SWE-bench Verified", leader: "Claude Opus 5 — 96.0%", detail: "Real GitHub issue resolution — rose from 60% to the mid-90s in a single year, per Stanford's AI Index.", url: "https://hai.stanford.edu/ai-index/2026-ai-index-report/technical-performance" },
-  { name: "Terminal-Bench 2.1 (agentic)", leader: "Grok 4.6 — 88.4%", detail: "Hard terminal-agent tasks; the field's new center of gravity as benchmarks shift toward agentic work.", url: "https://artificialanalysis.ai/articles/artificial-analysis-intelligence-index-v4-1" },
+  { name: "Artificial Analysis Intelligence Index", leader: "Claude Fable 5.1 — 57.0", detail: "Composite of 10 evals (v4.2): AA-Briefcase and GDP.pdf added, saturated GPQA Diamond retired, 40% of weight now private held-out data. Re-anchored scale — do not compare to v4.1.1 scores.", url: "https://artificialanalysis.ai/evaluations/artificial-analysis-intelligence-index" },
+  { name: "LMArena (Chatbot Arena)", leader: "Claude Fable 5 holds text Elo (1507)", detail: "Crowd-sourced blind A/B voting. Fable 5.1 entered at 1504 ±11 — inside the noise of the top four, and still accumulating votes; GPT-6 Astra has not yet placed.", url: "https://arena.ai/leaderboard/text" },
+  { name: "SWE-bench Verified", leader: "Claude Opus 5 — 96.0%", detail: "Real GitHub issue resolution — rose from 60% to the mid-90s in a single year, per Stanford's AI Index. No published re-run yet for the September models.", url: "https://hai.stanford.edu/ai-index/2026-ai-index-report/technical-performance" },
+  { name: "Terminal-Bench 2.1 (agentic)", leader: "Claude Fable 5.1 — 91.4%", detail: "Hard terminal-agent tasks; the field's center of gravity as benchmarks shift toward agentic work. First score above 90 — Grok 4.6's 88.4% held the top for most of the summer.", url: "https://artificialanalysis.ai/evaluations/terminalbench-v2-1" },
 ];
 
 export const SRC = {
   valuations: [["CNBC — Anthropic Series H", "https://www.cnbc.com/2026/05/28/anthropic-open-ai-startup-value.html"], ["CNBC — Databricks $190B round", "https://www.cnbc.com/2026/08/13/databricks-funding-round-190-billion-valuation.html"], ["Fortune — China's AI IPO rush", "https://fortune.com/2026/07/23/moonshot-deepseek-great-chinese-ai-ipo-rush/"], ["Bloomberg — DeepSeek resumes $8B round", "https://www.bloomberg.com/news/articles/2026-08-06/deepseek-resumes-8-billion-round-with-monolith-in-the-running"]],
   markets: [["CNBC quotes", "https://www.cnbc.com/quotes/AAPL,AMZN,GOOGL,MSFT,META,NVDA,TSLA"], ["stockanalysis.com — market data", "https://stockanalysis.com/"], ["MLQ.ai — hyperscaler capex tracker", "https://mlq.ai/news/big-techs-2026-capex-range-reaches-720-billion-to-745-billion/"]],
-  models: [["Artificial Analysis", "https://artificialanalysis.ai/evaluations/artificial-analysis-intelligence-index"], ["Stanford HAI — AI Index 2026", "https://hai.stanford.edu/ai-index/2026-ai-index-report"], ["tbench.ai — Terminal-Bench 2.1", "https://www.tbench.ai/leaderboard/terminal-bench/2.1"]],
+  models: [["Artificial Analysis — Intelligence Index v4.2", "https://artificialanalysis.ai/evaluations/artificial-analysis-intelligence-index"], ["Artificial Analysis — announcing v4.2", "https://artificialanalysis.ai/articles/artificial-analysis-intelligence-index-v4-2"], ["Artificial Analysis — Claude Fable 5.1 tops the Index", "https://artificialanalysis.ai/articles/claude-fable-5-1"], ["Artificial Analysis — benchmarking GPT-6 Astra", "https://artificialanalysis.ai/articles/benchmarking-gpt-6-astra"], ["Artificial Analysis — Muse Spark 1.3: Meta reaches the frontier", "https://artificialanalysis.ai/articles/muse-spark-1-3"], ["OpenAI — GPT-6 Astra", "https://openai.com/index/gpt-6-astra/"], ["Stanford HAI — AI Index 2026", "https://hai.stanford.edu/ai-index/2026-ai-index-report"], ["tbench.ai — Terminal-Bench 2.1", "https://www.tbench.ai/leaderboard/terminal-bench/2.1"]],
   users: [["TechCrunch — Gemini passes 1B MAU", "https://techcrunch.com/2026/08/11/googles-gemini-app-surges-to-one-billion-users/"], ["Tech Insider — chatbot web-share, July ’26", "https://tech-insider.org/ie/claude-vs-chatgpt-vs-gemini-2026/"], ["Instant Press — AI statistics", "https://www.instantpress.co/ai-statistics"]],
   capital: [["TechCrunch — Anthropic ARR to $65B", "https://techcrunch.com/2026/08/17/anthropics-annualized-revenue-surges-to-65b/"], ["Bloomberg — OpenAI ARR tops $40B", "https://www.bloomberg.com/news/articles/2026-08-13/openai-s-revenue-run-rate-tops-40-billion-ahead-of-ipo"], ["MLQ.ai — capex roundup", "https://mlq.ai/news/big-techs-2026-capex-range-reaches-720-billion-to-745-billion/"]],
   energy: [["Gartner — data center power", "https://www.gartner.com/en/newsroom/press-releases/2026-06-10-gartner-says-data-center-electricity-demand-to-grow-26-percent-in-2026"], ["Forbes — US ~40% of global data-center power", "https://www.forbes.com/sites/rrapier/2026/08/23/the-us-now-uses-nearly-40-of-the-worlds-data-center-electricity/"], ["IEA — Energy and AI", "https://www.iea.org/reports/energy-and-ai/energy-demand-from-ai"], ["Goldman Sachs — US power demand", "https://www.goldmansachs.com/insights/articles/us-data-center-power-demand-projected-to-double-by-2027"]],
@@ -154,14 +177,23 @@ export const JOBS = {
     },
   },
   markets: {
-    prompt: 'Search the web for the latest stock prices in USD for NVDA, MSFT, GOOG, META, AMZN, AVGO, TSM. Respond ONLY with compact JSON, no prose or fences: {"stocks":{"NVDA":0,"MSFT":0,"GOOG":0,"META":0,"AMZN":0,"AVGO":0,"TSM":0}}',
+    /* Quotes are the one job that reliably attracts a hedge ("prices are
+       delayed and may not reflect real-time values"), and the hedge used
+       to take the whole panel down with it. Say up front that a delayed
+       last close is the wanted answer, so there is nothing to hedge. */
+    prompt: 'Search the web for the most recent share price in USD for each of NVDA, MSFT, GOOG, META, AMZN, AVGO, TSM. The most recent regular-session close is exactly what is wanted — delayed or end-of-day quotes are fine and no real-time data is needed. Do not add disclaimers. Use the last known close for any ticker whose market is currently shut. Respond ONLY with compact JSON, no prose or fences: {"stocks":{"NVDA":0,"MSFT":0,"GOOG":0,"META":0,"AMZN":0,"AVGO":0,"TSM":0}}',
     apply: (d, j) => (!j.stocks ? d : { ...d, stocks: d.stocks.map((s) => {
       const p = Number(j.stocks[s.ticker]);
       return p > 0 ? { ...s, price: Math.round(p * 100) / 100 } : s;
     }) }),
   },
   models: {
-    prompt: 'Search the web for the current top 8 models on the Artificial Analysis Intelligence Index with their scores and labs. Include Chinese models if they rank. Respond ONLY with compact JSON, no prose or fences: {"models":[{"model":"","lab":"","score":0,"cn":false}]}',
+    /* Two constraints that pull in opposite directions, both deliberate.
+       Dedupe by family: an earlier run returned Claude Opus 5 three times at
+       three effort settings, spending three of eight slots on one model. But
+       KEEP the parenthesised configuration — §03 splits it off and shows it
+       as the variant qualifier, so stripping it would blank a real column. */
+    prompt: 'Search the web for the current top 8 models on the Artificial Analysis Intelligence Index, version 4.2 (v4.2), with their scores and labs. Use v4.2 scores only — v4.1.1 scores are on a different, higher scale and must not be mixed in. List each model family at most once, choosing its highest-scoring configuration; do not return the same model at several effort levels. Keep the scored configuration in parentheses after the model name exactly as the leaderboard writes it, e.g. "Claude Fable 5.1 (Adaptive Reasoning, Max Effort)" or "GPT-6 Astra (max)"; if the leaderboard names no configuration, give the model name alone. Include Chinese models if they rank. Respond ONLY with compact JSON, no prose or fences: {"models":[{"model":"","lab":"","score":0,"cn":false}]}',
     apply: (d, j) => {
       if (!Array.isArray(j.models) || !j.models.length) return d;
       const clean = j.models
@@ -220,7 +252,10 @@ export const JOBS = {
    Byte-identical to the Drive files the artifact edition wrote, so the
    seeded public/data/*.json and *.csv carry the existing record forward.
    Only *values* travel; labels, notes and sources live in the code. */
-export const HIST_COLS = ["date", "anthropic", "openai", "nvda", "msft", "chatgpt", "claude", "gemini", "topScore"];
+/* `scale` is appended last so older CSVs — which end at topScore — still parse:
+   missing trailing fields simply read back as null. */
+export const HIST_COLS = ["date", "anthropic", "openai", "nvda", "msft", "chatgpt", "claude", "gemini", "topScore", "scale"];
+const TEXT_COLS = new Set(["date", "scale"]);
 
 export const packValues = (d, meta) => ({
   updatedAt: new Date().toISOString(),
@@ -275,6 +310,7 @@ export const snapshot = (d) => {
     claude: val(d.users, "name", "Claude", "users"),
     gemini: val(d.users, "name", "Gemini", "users"),
     topScore: d.aaIndex.length ? d.aaIndex[0].score : null,
+    scale: d.aaIndex.length ? AA_INDEX_VERSION : null,
   };
 };
 
@@ -292,7 +328,8 @@ export const csvToHistory = (text) => {
     const row = {};
     HIST_COLS.forEach((c, i) => {
       const raw = parts[i];
-      row[c] = i === 0 ? raw : (raw === "" || raw == null ? null : Number(raw));
+      if (raw === "" || raw == null) { row[c] = null; return; }
+      row[c] = TEXT_COLS.has(c) ? raw : Number(raw);
     });
     return row;
   }).filter(Boolean);
