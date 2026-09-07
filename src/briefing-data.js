@@ -42,6 +42,12 @@ export const BRAND_OF = {
 export const brandFill = (name, fallback) => (BRAND_OF[name] ? BRAND_COLOR[BRAND_OF[name]] : fallback);
 
 
+/* ——— Which Artificial Analysis index version the scores above are on ———
+   Stamped onto every trend-log row so the §08 chart can break its line where
+   the scale changed instead of drawing a cliff that never happened. Bump this
+   whenever Artificial Analysis re-anchors the index. */
+export const AA_INDEX_VERSION = "v4.2";
+
 /* ——— Baseline dataset, researched 2026-08-21/22, refreshed 2026-08-26 ——— */
 export const BASELINE = {
   valuations: [
@@ -166,7 +172,11 @@ export const JOBS = {
     },
   },
   markets: {
-    prompt: 'Search the web for the latest stock prices in USD for NVDA, MSFT, GOOG, META, AMZN, AVGO, TSM. Respond ONLY with compact JSON, no prose or fences: {"stocks":{"NVDA":0,"MSFT":0,"GOOG":0,"META":0,"AMZN":0,"AVGO":0,"TSM":0}}',
+    /* Quotes are the one job that reliably attracts a hedge ("prices are
+       delayed and may not reflect real-time values"), and the hedge used
+       to take the whole panel down with it. Say up front that a delayed
+       last close is the wanted answer, so there is nothing to hedge. */
+    prompt: 'Search the web for the most recent share price in USD for each of NVDA, MSFT, GOOG, META, AMZN, AVGO, TSM. The most recent regular-session close is exactly what is wanted — delayed or end-of-day quotes are fine and no real-time data is needed. Do not add disclaimers. Use the last known close for any ticker whose market is currently shut. Respond ONLY with compact JSON, no prose or fences: {"stocks":{"NVDA":0,"MSFT":0,"GOOG":0,"META":0,"AMZN":0,"AVGO":0,"TSM":0}}',
     apply: (d, j) => (!j.stocks ? d : { ...d, stocks: d.stocks.map((s) => {
       const p = Number(j.stocks[s.ticker]);
       return p > 0 ? { ...s, price: Math.round(p * 100) / 100 } : s;
@@ -232,7 +242,10 @@ export const JOBS = {
    Byte-identical to the Drive files the artifact edition wrote, so the
    seeded public/data/*.json and *.csv carry the existing record forward.
    Only *values* travel; labels, notes and sources live in the code. */
-export const HIST_COLS = ["date", "anthropic", "openai", "nvda", "msft", "chatgpt", "claude", "gemini", "topScore"];
+/* `scale` is appended last so older CSVs — which end at topScore — still parse:
+   missing trailing fields simply read back as null. */
+export const HIST_COLS = ["date", "anthropic", "openai", "nvda", "msft", "chatgpt", "claude", "gemini", "topScore", "scale"];
+const TEXT_COLS = new Set(["date", "scale"]);
 
 export const packValues = (d, meta) => ({
   updatedAt: new Date().toISOString(),
@@ -287,6 +300,7 @@ export const snapshot = (d) => {
     claude: val(d.users, "name", "Claude", "users"),
     gemini: val(d.users, "name", "Gemini", "users"),
     topScore: d.aaIndex.length ? d.aaIndex[0].score : null,
+    scale: d.aaIndex.length ? AA_INDEX_VERSION : null,
   };
 };
 
@@ -304,7 +318,8 @@ export const csvToHistory = (text) => {
     const row = {};
     HIST_COLS.forEach((c, i) => {
       const raw = parts[i];
-      row[c] = i === 0 ? raw : (raw === "" || raw == null ? null : Number(raw));
+      if (raw === "" || raw == null) { row[c] = null; return; }
+      row[c] = TEXT_COLS.has(c) ? raw : Number(raw);
     });
     return row;
   }).filter(Boolean);

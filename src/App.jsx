@@ -210,6 +210,41 @@ const AASwarm = ({ items }) => {
   );
 };
 
+/* ——— Trend log: scale-aware series ———
+   Artificial Analysis re-anchors its index periodically (v4.1.1 → v4.2 in
+   Sep '26 dropped every score ~6 points without any model regressing). A
+   single line across that boundary would draw a cliff that never happened,
+   so topScore is split into one series per scale: each segment carries its
+   own dataKey and is null outside its own rows, which makes the line break
+   at the seam instead of interpolating across it. */
+const SCALE_TONES = [C.clay, C.slate, C.neutral];
+
+const splitByScale = (history, key) => {
+  const scales = [];
+  history.forEach((r) => {
+    if (r[key] == null) return;
+    const v = r.scale || "earlier scale";
+    if (!scales.includes(v)) scales.push(v);
+  });
+  if (scales.length < 2) return { rows: history, series: [[key, "AA Index", C.clay]] };
+
+  const rows = history.map((r) => {
+    const out = { ...r };
+    scales.forEach((v, i) => {
+      const mine = (r.scale || "earlier scale") === v;
+      out[`${key}__${i}`] = mine ? r[key] : null;
+    });
+    return out;
+  });
+  /* Newest scale keeps the live tone; older ones fade back. */
+  const series = scales.map((v, i) => [
+    `${key}__${i}`,
+    v,
+    SCALE_TONES[Math.min(scales.length - 1 - i, SCALE_TONES.length - 1)],
+  ]);
+  return { rows, series, scales };
+};
+
 const Commentary = ({ children }) => (
   <p style={{ ...serif, fontSize: 15, lineHeight: 1.65, margin: "14px 0 0 0", paddingTop: 12, borderTop: `1px solid ${RULE_SOFT}` }}>
     <span style={{ ...mono, fontSize: 10, letterSpacing: "0.18em", color: FAINT, marginRight: 8 }}>ANALYST NOTE</span>
@@ -248,7 +283,8 @@ const Panel = ({ id, label, meta, children, sources }) => {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>
         <Eyebrow>{label}</Eyebrow>
         {meta !== null && (
-          <span style={{ ...mono, fontSize: 10, color: meta && meta.failed ? C.brick : FAINT }}>
+          <span title={meta && meta.failed && meta.error ? `Reason: ${meta.error}` : undefined}
+        style={{ ...mono, fontSize: 10, color: meta && meta.failed ? C.brick : FAINT }}>
             {meta && meta.failed ? "Last refresh failed · showing prior values" : stamp}
           </span>
         )}
@@ -641,26 +677,39 @@ export default function App() {
                 { title: "Valuations · $B", keys: [["anthropic", "Anthropic", brandFill("Anthropic", C.blue)], ["openai", "OpenAI", brandFill("OpenAI", C.brick)]] },
                 { title: "Share price · $", keys: [["nvda", "NVDA", C.slate], ["msft", "MSFT", brandFill("MSFT", C.plum)]] },
                 { title: "Users · M", keys: [["chatgpt", "ChatGPT", brandFill("ChatGPT", C.sage)], ["gemini", "Gemini", brandFill("Gemini", C.blue)], ["claude", "Claude", brandFill("Claude", C.ochre)]] },
-                { title: "Top index score", keys: [["topScore", "AA Index", C.clay]] },
-              ].map((chart) => (
+                { title: "Top index score", keys: null, split: "topScore" },
+              ].map((chart) => {
+                const sp = chart.split ? splitByScale(history, chart.split) : null;
+                const rows = sp ? sp.rows : history;
+                const keys = sp ? sp.series : chart.keys;
+                const broken = sp && sp.scales;
+                return (
                 <div key={chart.title}>
                   <Eyebrow>{chart.title}</Eyebrow>
                   <div style={{ height: 150, marginTop: 6 }}>
                     <ResponsiveContainer>
-                      <LineChart data={history} margin={{ left: 0, right: 8, top: 8 }}>
+                      <LineChart data={rows} margin={{ left: 0, right: 8, top: 8 }}>
                         <CartesianGrid stroke={RULE_SOFT} vertical={false} />
                         <XAxis dataKey="date" tick={{ ...mono, fontSize: 9, fill: FAINT }} axisLine={{ stroke: INK }} tickLine={false} />
                         <YAxis tick={{ ...mono, fontSize: 9, fill: FAINT }} axisLine={{ stroke: INK }} tickLine={false} domain={["auto", "auto"]} width={38} />
                         <Tooltip content={<PaperTooltip />} />
-                        {chart.keys.map(([k, name, color]) => (
-                          <Line key={k} type="monotone" dataKey={k} name={name} stroke={color} strokeWidth={1.75} connectNulls
+                        {keys.map(([k, name, color]) => (
+                          <Line key={k} type="monotone" dataKey={k} name={name} stroke={color} strokeWidth={1.75}
+                            connectNulls={!chart.split}
                             dot={{ r: 3, fill: PAPER, stroke: INK, strokeWidth: 1 }} isAnimationActive={false} />
                         ))}
                       </LineChart>
                     </ResponsiveContainer>
                   </div>
+                  {broken && (
+                    <div style={{ ...mono, fontSize: 9.5, color: FAINT, marginTop: 4, lineHeight: 1.5 }}>
+                      ▲ line breaks where Artificial Analysis re-anchored the index ({broken.join(" → ")}) — the drop is a
+                      change of scale, not of capability
+                    </div>
+                  )}
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
           <Commentary>
