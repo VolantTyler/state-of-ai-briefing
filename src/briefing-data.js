@@ -84,15 +84,20 @@ export const BASELINE = {
      saturated GPQA Diamond, and took private held-out data to 40% — so these
      numbers are lower than, and not comparable to, the v4.1.1 scores that
      earlier editions of this briefing carried. */
+  /* Names carry the scored configuration in parentheses where the source
+     states it: §03 splits that off, putting the base name on the axis and
+     the variant in the fine print. Muse Spark 1.3 is left bare because the
+     v4.2 table doesn't say which of its variants was measured — guessing a
+     qualifier would read as sourced when it isn't. */
   aaIndex: [
-    { model: "Claude Fable 5.1", lab: "Anthropic", score: 57.0 },
-    { model: "GPT-6 Astra", lab: "OpenAI", score: 55.0 },
-    { model: "Claude Opus 5", lab: "Anthropic", score: 54.0 },
-    { model: "Claude Fable 5", lab: "Anthropic", score: 53.0 },
+    { model: "Claude Fable 5.1 (Adaptive Reasoning, Max Effort)", lab: "Anthropic", score: 57.0 },
+    { model: "GPT-6 Astra (max)", lab: "OpenAI", score: 55.0 },
+    { model: "Claude Opus 5 (max)", lab: "Anthropic", score: 54.0 },
+    { model: "Claude Fable 5 (max)", lab: "Anthropic", score: 53.0 },
     { model: "Muse Spark 1.3", lab: "Meta", score: 53.0 },
-    { model: "GPT-5.6 Sol", lab: "OpenAI", score: 51.0 },
-    { model: "Grok 4.6", lab: "xAI", score: 51.0 },
-    { model: "Kimi K3", lab: "Moonshot", score: 50.0, cn: true },
+    { model: "GPT-5.6 Sol (max)", lab: "OpenAI", score: 51.0 },
+    { model: "Grok 4.6 (high)", lab: "xAI", score: 51.0 },
+    { model: "Kimi K3 (max)", lab: "Moonshot", score: 50.0, cn: true },
   ],
   users: [
     { name: "Meta AI", users: 1200, basis: "MAU · embedded in apps" },
@@ -183,7 +188,12 @@ export const JOBS = {
     }) }),
   },
   models: {
-    prompt: 'Search the web for the current top 8 models on the Artificial Analysis Intelligence Index, version 4.2 (v4.2), with their scores and labs. Use v4.2 scores only — v4.1.1 scores are on a different, higher scale and must not be mixed in. Report one entry per model family at its highest-scoring effort setting, using the plain model name without the effort suffix (e.g. "Claude Fable 5.1", not "Claude Fable 5.1 (max)"). Include Chinese models if they rank. Respond ONLY with compact JSON, no prose or fences: {"models":[{"model":"","lab":"","score":0,"cn":false}]}',
+    /* Two constraints that pull in opposite directions, both deliberate.
+       Dedupe by family: an earlier run returned Claude Opus 5 three times at
+       three effort settings, spending three of eight slots on one model. But
+       KEEP the parenthesised configuration — §03 splits it off and shows it
+       as the variant qualifier, so stripping it would blank a real column. */
+    prompt: 'Search the web for the current top 8 models on the Artificial Analysis Intelligence Index, version 4.2 (v4.2), with their scores and labs. Use v4.2 scores only — v4.1.1 scores are on a different, higher scale and must not be mixed in. List each model family at most once, choosing its highest-scoring configuration; do not return the same model at several effort levels. Keep the scored configuration in parentheses after the model name exactly as the leaderboard writes it, e.g. "Claude Fable 5.1 (Adaptive Reasoning, Max Effort)" or "GPT-6 Astra (max)"; if the leaderboard names no configuration, give the model name alone. Include Chinese models if they rank. Respond ONLY with compact JSON, no prose or fences: {"models":[{"model":"","lab":"","score":0,"cn":false}]}',
     apply: (d, j) => {
       if (!Array.isArray(j.models) || !j.models.length) return d;
       const clean = j.models

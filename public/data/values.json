@@ -85,25 +85,25 @@
   },
   "aa": [
     [
-      "Claude Fable 5.1",
+      "Claude Fable 5.1 (Adaptive Reasoning, Max Effort)",
       "Anthropic",
       57,
       0
     ],
     [
-      "GPT-6 Astra",
+      "GPT-6 Astra (max)",
       "OpenAI",
       55,
       0
     ],
     [
-      "Claude Opus 5",
+      "Claude Opus 5 (max)",
       "Anthropic",
       54,
       0
     ],
     [
-      "Claude Fable 5",
+      "Claude Fable 5 (max)",
       "Anthropic",
       53,
       0
@@ -115,19 +115,19 @@
       0
     ],
     [
-      "GPT-5.6 Sol",
+      "GPT-5.6 Sol (max)",
       "OpenAI",
       51,
       0
     ],
     [
-      "Grok 4.6",
+      "Grok 4.6 (high)",
       "xAI",
       51,
       0
     ],
     [
-      "Kimi K3",
+      "Kimi K3 (max)",
       "Moonshot AI",
       50,
       1
