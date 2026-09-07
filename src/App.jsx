@@ -147,65 +147,275 @@ const TOC = ({ items, open, onToggle }) => (
   </div>
 );
 
-/* ——— AA Index: packed swarm on a zoomed axis (Option B) ———
-   Real distance = real score gap; models within ~1pt of each other
-   stack into lanes instead of overlapping, so the eye reads both
-   the ranking and exactly how bunched the frontier is. */
-const AASwarm = ({ items }) => {
-  if (!items.length) return null;
-  const W = 800, marginX = 54, usableW = W - marginX * 2, laneH = 46, minDist = 96;
-  const scores = items.map((m) => m.score);
+/* ——— AA Index: only crowded points cluster; everyone else keeps the line ———
+   Live model names carry verbose reasoning-effort qualifiers (e.g. "Claude
+   Opus 5 (Adaptive Reasoning, High Effort)") that are far wider than the
+   gap between two close scores — packing every model onto one line, even
+   in separate lanes, made labels overlap regardless. Two moves fix that
+   without hiding anyone:
+     · a model alone at its point keeps its name on the primary line, shown
+       as the base name only; the variant qualifier is the fine print, so it
+       surfaces on hover and in the cluster list rather than on the axis.
+     · models crowding the *same* point (within POINT_EPSILON, where their
+       dots would sit on top of each other) collapse into one lettered mark,
+       and are unpacked below on their own number line whose full width
+       covers only that sliver of the axis.
+   Hovering links the two halves: a cluster to its detail section, a zoomed
+   dot to its row. Scales without new crowding — a tighter frontier just
+   grows the clusters, not the overlap. */
+const POINT_EPSILON = 0.2; // scores this close share a point on the primary axis
+const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+/* "Claude Opus 5 (Adaptive Reasoning, Max Effort)" → base + variant. The base
+   names the model on the axis; the variant says which configuration was
+   scored, which only matters once you're reading a specific number. */
+const splitModelName = (name) => {
+  const m = /^(.*?)\s*\(([^()]*)\)\s*$/.exec(name);
+  return m && m[1] ? { base: m[1], sub: m[2] } : { base: name, sub: null };
+};
+
+/* Brand color: verbose names miss BRAND_OF's exact keys, so try the base
+   name before falling back to the lab. */
+const dotFill = (it) =>
+  (it.cn ? C.clay : brandFill(it.model, brandFill(splitModelName(it.model).base, brandFill(it.lab, C.plum))));
+
+const groupByPoint = (items) => {
+  const sorted = [...items].sort((a, b) => a.score - b.score);
+  const groups = [];
+  for (const it of sorted) {
+    const last = groups[groups.length - 1];
+    if (last && it.score - last[last.length - 1].score <= POINT_EPSILON) last.push(it);
+    else groups.push([it]);
+  }
+  const byScore = groups
+    .map((g) => ({ items: g, min: Math.min(...g.map((i) => i.score)), max: Math.max(...g.map((i) => i.score)) }))
+    .sort((a, b) => b.max - a.max);
+  let li = 0;
+  return byScore.map((c) => (c.items.length > 1 ? { ...c, letter: LETTERS[li++] || "?" } : c));
+};
+
+/* A cluster of exact ties has no range to print — "60.0", not "60.0–60.0". */
+const rangeLabel = (c) => (c.max - c.min > 0.001 ? `${c.min.toFixed(1)}–${c.max.toFixed(1)}` : c.min.toFixed(1));
+
+/* Sweep-line lane packer: bumps a node to the next lane only when it
+   collides with the last (rightmost) node already placed in that lane —
+   guarantees no two same-lane footprints overlap, however wide. */
+const packLanes = (nodes) => {
+  const sorted = [...nodes].sort((a, b) => a.x - b.x);
+  const laneLast = [];
+  return sorted.map((n) => {
+    let lane = 0;
+    while (laneLast[lane] && n.x - laneLast[lane].x < n.halfWidth + laneLast[lane].halfWidth) lane++;
+    laneLast[lane] = n;
+    return { ...n, lane };
+  });
+};
+
+const truncateLabel = (s, n = 22) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
+
+const AAOverview = ({ clusters, allItems, topScore, hoverCluster, onHoverCluster, hoverModel, onHoverModel }) => {
+  const W = 800, marginX = 54, usableW = W - marginX * 2;
+  const scores = allItems.map((m) => m.score);
   const domainMin = Math.floor(Math.min(...scores)) - 1;
   const domainMax = Math.ceil(Math.max(...scores)) + 1;
   const xScale = (s) => marginX + ((s - domainMin) / (domainMax - domainMin)) * usableW;
-
-  const sorted = [...items].sort((a, b) => xScale(a.score) - xScale(b.score));
-  const placed = [];
-  const laid = sorted.map((it) => {
-    const x = xScale(it.score);
-    let lane = 0;
-    while (placed.some((p) => p.lane === lane && Math.abs(p.x - x) < minDist)) lane++;
-    placed.push({ x, lane });
-    return { ...it, x, lane };
-  });
-
-  const maxLane = Math.max(0, ...laid.map((d) => d.lane));
-  const baseline = 44 + maxLane * laneH;
-  const svgH = baseline + 36;
   const ticks = [];
   for (let t = domainMin; t <= domainMax; t++) ticks.push(t);
+
+  const nodes = clusters.map((c) => {
+    if (c.items.length === 1) {
+      const it = c.items[0];
+      const { base, sub } = splitModelName(it.model);
+      const label = truncateLabel(base);
+      /* mono advances ~6.3px/char at 10.5px — half the label, plus air */
+      return { kind: "single", item: it, base: label, sub, x: xScale(it.score), halfWidth: label.length * 3.2 + 9 };
+    }
+    return { kind: "cluster", cluster: c, x: xScale((c.min + c.max) / 2), x0: xScale(c.min), x1: xScale(c.max), halfWidth: 64 };
+  });
+  const laid = packLanes(nodes);
+  const maxLane = Math.max(0, ...laid.map((n) => n.lane));
+  /* Reserve the hover row up front so revealing a variant never reflows. */
+  const hoverRow = nodes.some((n) => n.kind === "single" && n.sub) ? 22 : 0;
+  const laneStep = 40, topPad = 50 + hoverRow, belowBaseline = 26;
+  const baseline = topPad + maxLane * laneStep;
+  const svgH = baseline + belowBaseline;
+
+  return (
+    <div style={{ height: Math.min(svgH * (860 / W), 460) }}>
+      <svg viewBox={`0 0 ${W} ${svgH}`} width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
+        <line x1={marginX} y1={baseline} x2={W - marginX} y2={baseline} stroke={INK} strokeWidth={1} />
+        {ticks.map((t) => (
+          <g key={t}>
+            <line x1={xScale(t)} y1={baseline - 4} x2={xScale(t)} y2={baseline + 4} stroke={RULE_SOFT} />
+            <text x={xScale(t)} y={baseline + 19} textAnchor="middle" style={{ ...mono, fontSize: 10.5, fill: FAINT }}>{t}</text>
+          </g>
+        ))}
+        {laid.map((n) => {
+          const topY = baseline - 24 - n.lane * laneStep;
+          if (n.kind === "single") {
+            const it = n.item;
+            const isLeader = it.score === topScore;
+            const on = hoverModel === it.model;
+            const r = isLeader ? 7.5 : 6;
+            const chipW = n.sub ? Math.max(44, n.sub.length * 5.4 + 14) : 0;
+            return (
+              <g key={it.model} onMouseEnter={() => onHoverModel(it.model)} onMouseLeave={() => onHoverModel(null)}>
+                <line x1={n.x} y1={topY + r + 1} x2={n.x} y2={baseline - 4} stroke={RULE_SOFT} strokeWidth={1} />
+                <circle cx={n.x} cy={topY} r={on ? r + 1.5 : r} fill={dotFill(it)} stroke={INK} strokeWidth={on || isLeader ? 1.5 : 1} />
+                <text x={n.x} y={topY - 13} textAnchor="middle" style={{ ...mono, fontSize: 10.5, fontWeight: isLeader ? 500 : 400, fill: INK }}>{n.base}</text>
+                <text x={n.x} y={topY - 25} textAnchor="middle" style={{ ...mono, fontSize: 9.5, fill: on ? INK : FAINT }}>{it.score.toFixed(1)}</text>
+                {on && n.sub && (
+                  <g>
+                    <rect x={n.x - chipW / 2} y={topY - 47} width={chipW} height={15} rx={2} fill={PAPER} stroke={RULE_SOFT} strokeWidth={1} />
+                    <text x={n.x} y={topY - 36.5} textAnchor="middle" style={{ ...mono, fontSize: 9, fill: FAINT }}>{n.sub}</text>
+                  </g>
+                )}
+                <circle cx={n.x} cy={topY} r={18} fill="transparent" />
+                <title>{it.model}</title>
+              </g>
+            );
+          }
+          const c = n.cluster;
+          const hasLeader = c.items.some((it) => it.score === topScore);
+          const on = hoverCluster === c.letter;
+          const badgeY = topY - 4;
+          const pillX = n.x0 - 10, pillW = Math.max(20, n.x1 - n.x0 + 20);
+          return (
+            <g key={c.letter} onMouseEnter={() => onHoverCluster(c.letter)} onMouseLeave={() => onHoverCluster(null)}>
+              <rect x={pillX} y={baseline - 9} width={pillW} height={18} rx={9} fill={on ? C.neutral : C.paperDeep} stroke={INK} strokeWidth={on ? 2 : hasLeader ? 1.5 : 1} />
+              <line x1={n.x} y1={badgeY + 9} x2={n.x} y2={baseline - 9} stroke={RULE_SOFT} strokeWidth={1} />
+              <circle cx={n.x} cy={badgeY} r={9} fill={on ? INK : PAPER} stroke={INK} strokeWidth={on ? 1.75 : 1.25} />
+              <text x={n.x} y={badgeY + 3.5} textAnchor="middle" style={{ ...mono, fontSize: 10, fontWeight: 600, fill: on ? PAPER : INK }}>{c.letter}</text>
+              <text x={n.x} y={badgeY - 13} textAnchor="middle" style={{ ...mono, fontSize: 9.5, fill: on ? INK : FAINT }}>{c.items.length} models · {rangeLabel(c)}</text>
+              <rect x={Math.min(pillX, n.x - 44)} y={badgeY - 21} width={Math.max(pillW, 88)} height={baseline + 11 - badgeY + 21} fill="transparent" />
+              <title>{`Cluster ${c.letter} — ${c.items.map((i) => splitModelName(i.model).base).join(", ")}`}</title>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+};
+
+const AAClusterZoom = ({ cluster, topScore, hoverModel, onHoverModel }) => {
+  const W = 800, marginX = 54, usableW = W - marginX * 2;
+  const spread = cluster.max - cluster.min;
+  const pad = Math.max(0.4, spread * 0.35);
+  const domainMin = cluster.min - pad, domainMax = cluster.max + pad;
+  const xScale = (s) => marginX + ((s - domainMin) / (domainMax - domainMin)) * usableW;
+
+  const nodes = cluster.items.map((it) => ({ ...it, x: xScale(it.score), halfWidth: 10 }));
+  const laid = packLanes(nodes);
+  const maxLane = Math.max(0, ...laid.map((d) => d.lane));
+  const baseline = 22 + maxLane * 18;
+  const svgH = baseline + 20;
+  /* Exact ties put both end ticks at one x — print the score once. */
+  const endTicks = spread > 0.001 ? [cluster.min, cluster.max] : [cluster.min];
+
+  return (
+    <div style={{ height: Math.min(svgH * (860 / W) + 4, 150) }}>
+      <svg viewBox={`0 0 ${W} ${svgH}`} width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
+        <line x1={marginX} y1={baseline} x2={W - marginX} y2={baseline} stroke={RULE_SOFT} strokeWidth={1} />
+        {endTicks.map((t) => (
+          <g key={t}>
+            <line x1={xScale(t)} y1={baseline} x2={xScale(t)} y2={baseline + 6} stroke={FAINT} />
+            <text x={xScale(t)} y={baseline + 18} textAnchor="middle" style={{ ...mono, fontSize: 9.5, fill: FAINT }}>{t.toFixed(1)}</text>
+          </g>
+        ))}
+        {laid.map((d) => {
+          const cy = baseline - 11 - d.lane * 18;
+          const isLeader = d.score === topScore;
+          const on = hoverModel === d.model;
+          const dim = hoverModel && !on;
+          const r = isLeader ? 7 : 5.5;
+          return (
+            <g key={d.model} opacity={dim ? 0.4 : 1} onMouseEnter={() => onHoverModel(d.model)} onMouseLeave={() => onHoverModel(null)}>
+              <line x1={d.x} y1={cy + r} x2={d.x} y2={baseline} stroke={RULE_SOFT} strokeWidth={1} />
+              <circle cx={d.x} cy={cy} r={on ? r + 2 : r} fill={dotFill(d)} stroke={INK} strokeWidth={on || isLeader ? 2 : 1} />
+              <circle cx={d.x} cy={cy} r={14} fill="transparent" />
+              <title>{d.model}</title>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+};
+
+const AAClusterList = ({ cluster, topScore, hoverModel, onHoverModel }) => (
+  <div>
+    {[...cluster.items].sort((a, b) => b.score - a.score).map((it) => {
+      const isLeader = it.score === topScore;
+      const on = hoverModel === it.model;
+      const { base, sub } = splitModelName(it.model);
+      return (
+        <div
+          key={it.model}
+          onMouseEnter={() => onHoverModel(it.model)}
+          onMouseLeave={() => onHoverModel(null)}
+          style={{
+            display: "flex", alignItems: "center", gap: 10, padding: "5px 6px", margin: "0 -6px",
+            borderBottom: `1px solid ${RULE_SOFT}`, background: on ? C.paperDeep : "transparent",
+            boxShadow: on ? `inset 2px 0 0 ${INK}` : "none", transition: "background 120ms ease, box-shadow 120ms ease",
+          }}
+        >
+          <span style={{ width: 10, height: 10, borderRadius: "50%", background: dotFill(it), border: `1px solid ${INK}`, flexShrink: 0, transform: on ? "scale(1.35)" : "none", transition: "transform 120ms ease" }} />
+          <span style={{ ...serif, fontSize: 13.5, flex: 1 }}>
+            {base}
+            {sub && <span style={{ ...mono, fontSize: 9.5, color: FAINT, marginLeft: 7, letterSpacing: "0.04em" }}>{sub}</span>}
+            {isLeader && <span style={{ ...mono, fontSize: 9, color: FAINT, marginLeft: 8, letterSpacing: "0.08em" }}>★ LEADER</span>}
+          </span>
+          <span style={{ ...mono, fontSize: 12, color: INK }}>{it.score.toFixed(1)}</span>
+        </div>
+      );
+    })}
+  </div>
+);
+
+const AASwarm = ({ items }) => {
+  /* Hover state lives here because both links cross component boundaries:
+     a cluster mark on the line ↔ its section below, a zoomed dot ↔ its row. */
+  const [hoverCluster, setHoverCluster] = useState(null);
+  const [hoverModel, setHoverModel] = useState(null);
+  if (!items.length) return null;
+  const scores = items.map((m) => m.score);
   const topScore = Math.max(...scores);
   const spread = Math.round((topScore - Math.min(...scores)) * 10) / 10;
+  const clusters = groupByPoint(items);
+  const multi = clusters.filter((c) => c.items.length > 1);
 
   return (
     <div>
-      <div style={{ height: Math.min(svgH * (860 / W), 420) }}>
-        <svg viewBox={`0 0 ${W} ${svgH}`} width="100%" height="100%" preserveAspectRatio="xMidYMax meet">
-          <line x1={marginX} y1={baseline} x2={W - marginX} y2={baseline} stroke={INK} strokeWidth={1} />
-          {ticks.map((t) => (
-            <g key={t}>
-              <line x1={xScale(t)} y1={baseline - 4} x2={xScale(t)} y2={baseline + 4} stroke={RULE_SOFT} />
-              <text x={xScale(t)} y={baseline + 19} textAnchor="middle" style={{ ...mono, fontSize: 10.5, fill: FAINT }}>{t}</text>
-            </g>
-          ))}
-          {laid.map((d) => {
-            const cy = baseline - 12 - d.lane * laneH;
-            const isLeader = d.score === topScore;
-            const fill = d.cn ? C.clay : brandFill(d.model, brandFill(d.lab, C.plum));
-            return (
-              <g key={d.model}>
-                <line x1={d.x} y1={cy + (isLeader ? 8 : 7)} x2={d.x} y2={baseline - 4} stroke={RULE_SOFT} strokeWidth={1} />
-                <circle cx={d.x} cy={cy} r={isLeader ? 7.5 : 6} fill={fill} stroke={INK} strokeWidth={isLeader ? 1.5 : 1} />
-                <text x={d.x} y={cy - 13} textAnchor="middle" style={{ ...mono, fontSize: 10.5, fontWeight: isLeader ? 500 : 400, fill: INK }}>{d.model}</text>
-                <text x={d.x} y={cy - 25} textAnchor="middle" style={{ ...mono, fontSize: 9.5, fill: FAINT }}>{d.score.toFixed(1)}</text>
-              </g>
-            );
-          })}
-        </svg>
-      </div>
+      <AAOverview
+        clusters={clusters} allItems={items} topScore={topScore}
+        hoverCluster={hoverCluster} onHoverCluster={setHoverCluster}
+        hoverModel={hoverModel} onHoverModel={setHoverModel}
+      />
       <div style={{ ...mono, fontSize: 10, color: FAINT, marginTop: 4 }}>
-        Stacked dots = models within ~1 point of each other · full field spans {spread} points
+        {multi.length
+          ? `Lettered marks = models sharing one point, unpacked below · hover a model for its variant, a cluster to link it · full field spans ${spread} points`
+          : `Hover a model for its variant · full field spans ${spread} points`}
       </div>
+      {multi.map((c) => {
+        const on = hoverCluster === c.letter;
+        return (
+          <div
+            key={c.letter}
+            onMouseEnter={() => setHoverCluster(c.letter)}
+            onMouseLeave={() => setHoverCluster(null)}
+            style={{ marginTop: 18, paddingTop: 14, borderTop: `1px solid ${RULE_SOFT}` }}
+          >
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 8 }}>
+              <span style={{ ...mono, fontSize: 10.5, fontWeight: 600, color: on ? PAPER : INK, background: on ? INK : "transparent", border: `1px solid ${INK}`, borderRadius: "50%", width: 18, height: 18, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "background 120ms ease, color 120ms ease" }}>{c.letter}</span>
+              <span style={{ ...mono, fontSize: 10.5, letterSpacing: "0.14em", textTransform: "uppercase", color: on ? INK : FAINT, transition: "color 120ms ease" }}>
+                Cluster {c.letter} · {c.items.length} models · {rangeLabel(c)}
+              </span>
+            </div>
+            <AAClusterZoom cluster={c} topScore={topScore} hoverModel={hoverModel} onHoverModel={setHoverModel} />
+            <AAClusterList cluster={c} topScore={topScore} hoverModel={hoverModel} onHoverModel={setHoverModel} />
+          </div>
+        );
+      })}
     </div>
   );
 };
