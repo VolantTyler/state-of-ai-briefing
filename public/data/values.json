@@ -1,0 +1,136 @@
+{
+  "updatedAt": "2026-08-30T02:39:36.464Z",
+  "meta": {
+    "valuations": {
+      "at": "2026-08-30T02:38:17.806Z",
+      "failed": false
+    },
+    "markets": {
+      "failed": true
+    },
+    "models": {
+      "at": "2026-08-30T02:39:02.205Z",
+      "failed": false
+    },
+    "users": {
+      "at": "2026-08-30T02:39:10.055Z",
+      "failed": false
+    },
+    "share": {
+      "at": "2026-08-30T02:39:14.569Z",
+      "failed": false
+    },
+    "capital": {
+      "at": "2026-08-30T02:39:29.236Z",
+      "failed": false
+    },
+    "energy": {
+      "at": "2026-08-30T02:39:36.457Z",
+      "failed": false
+    }
+  },
+  "val": {
+    "Anthropic": 965,
+    "OpenAI": 852,
+    "xAI": 230,
+    "Databricks": 190,
+    "DeepSeek": 74,
+    "Anduril": 61,
+    "Z.ai (Zhipu)": 60.8,
+    "Moonshot AI": 35,
+    "MiniMax": 12.5
+  },
+  "stocks": {
+    "NVDA": 213.05,
+    "MSFT": 491.71,
+    "GOOG": 349.9,
+    "META": 570.05,
+    "AMZN": 261.06,
+    "AVGO": 356.74,
+    "TSM": 417.41
+  },
+  "users": {
+    "Meta AI": 1200,
+    "ChatGPT": 1100,
+    "Gemini": 950,
+    "Copilot": 420,
+    "Claude": 245,
+    "Grok": 117
+  },
+  "share": {
+    "ChatGPT": 53.9,
+    "Gemini": 27.9,
+    "Claude": 9.2,
+    "Grok": 2.4,
+    "Copilot": 1.3,
+    "Perplexity": 1.3,
+    "Others": 4
+  },
+  "capex": {
+    "Alphabet": 200,
+    "Amazon": 220,
+    "Microsoft": 190,
+    "Meta": 137.5
+  },
+  "rev": {
+    "Anthropic": 65,
+    "OpenAI": 40,
+    "xAI": 3.3
+  },
+  "energy": {
+    "totalTWh": 565,
+    "peakGW": 132,
+    "usShare": 36,
+    "aiShareOfDC": 31
+  },
+  "aa": [
+    [
+      "Claude Opus 5 (Adaptive Reasoning, Max Effort)",
+      "Anthropic",
+      63,
+      0
+    ],
+    [
+      "Claude Fable 5 (Adaptive Reasoning, Max Effort)",
+      "Anthropic",
+      62,
+      0
+    ],
+    [
+      "Grok 4.6",
+      "SpaceXAI",
+      61,
+      0
+    ],
+    [
+      "GPT-5.6 Sol (max)",
+      "OpenAI",
+      61,
+      0
+    ],
+    [
+      "Claude Opus 5 (Adaptive Reasoning, High Effort)",
+      "Anthropic",
+      61,
+      0
+    ],
+    [
+      "Kimi K3 (max)",
+      "Moonshot AI",
+      60,
+      1
+    ],
+    [
+      "GLM-5.3 (max)",
+      "Z.ai",
+      60,
+      1
+    ],
+    [
+      "Qwen3.8 2.4T A95B",
+      "Alibaba",
+      58,
+      1
+    ]
+  ]
+}
