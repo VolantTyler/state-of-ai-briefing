@@ -101,15 +101,51 @@ Expect `{"ok":true,"refreshed":[...],"failures":[]}` and two new commits.
 - **Vercel Hobby runs cron once per day**, which is exactly the chosen cadence.
   The trigger time is approximate — Vercel fires within the hour.
 - **A failed panel keeps its prior values** and is marked `failed` in
-  `values.json`, so the dashboard shows "Last refresh failed · showing prior
-  values" on that card rather than a gap. If *every* panel fails the job
-  commits nothing at all, leaving yesterday's good data untouched.
+  `values.json`, so the dashboard shows "Refresh failed 5 hours ago" on that
+  card rather than a gap. If *every* panel fails, the values are still left
+  untouched — but the job now writes `meta` and `lastRunAt` anyway, so a
+  totally failed night is visible in the repo instead of looking exactly like
+  a cron that never fired.
 - **Cost** is seven Sonnet calls with web search per day. Hosting is free on
   Hobby.
 - **The commit loop is safe** — the cron only ever writes `public/data/`, and
   Vercel's build doesn't write to the repo, so there's no feedback loop.
 - **`CRON_SECRET` is not optional.** Without it `/api/refresh` is a public
   button wired to your API key.
+
+## Reading the freshness stamps
+
+Each panel carries two timestamps in `values.json`, and the difference
+between them is the whole point:
+
+| Field | Meaning |
+|---|---|
+| `checkedAt` | The last run that successfully fetched this panel. |
+| `changedAt` | The last run whose fetch actually moved a number. |
+| `at` | Legacy alias of `checkedAt`, still written for older readers. |
+| `failed`, `error`, `erroredAt` | The last failure and why, for the tooltip. |
+
+`changedAt` is decided by `panelDigest` in `src/briefing-data.js`: it
+serializes just this job's slice of the wire format, so a value that
+survives a round trip unchanged doesn't count as news.
+
+One timestamp couldn't tell these apart, and that made a working dashboard
+look broken:
+
+| Card says | Means |
+|---|---|
+| `Refreshed 5 hours ago` | Checked on schedule; a figure moved. |
+| `Refreshed 5 hours ago · no change in 9 days` | Checked on schedule every night; the world hasn't moved. **Not an error.** |
+| `Last checked 9 days ago` | The check itself stopped running. Clay-colored. |
+| `Refresh failed 5 hours ago` | The check ran and errored. Brick-colored, reason in the tooltip. |
+| `Refresh has never succeeded` | No successful refresh on record; the card is showing seeded values. |
+
+The masthead summarizes the same thing across all seven panels, and reads
+from `lastRunAt`/`checkedAt` rather than `updatedAt`, because `updatedAt`
+also advances on a hand edit — which would report a dead cron as healthy.
+
+"Behind" is more than two days without a successful check. The cron is
+daily and Vercel fires it within the hour, so one late run is not a fault.
 
 ## Changing the schedule
 

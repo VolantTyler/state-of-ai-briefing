@@ -7,18 +7,103 @@ import { useBriefingData } from "./useBriefingData.js";
 import {
   EDITION, INK, PAPER, FAINT, RULE_SOFT, C, TEXT_BRICK, TEXT_CLAY,
   BRAND_COLOR, BRAND_OF, brandFill,
-  BASELINE, TRACKERS, SRC, snapshot,
+  BASELINE, TRACKERS, SRC, snapshot, panelTimes,
 } from "./briefing-data.js";
 
-const relTime = (iso) => {
+/* ——— How old is it? ———
+   One vocabulary for every timestamp on the page. `span` is the bare
+   magnitude ("9 days"), `ago` is the same thing as an age ("9 days ago").
+   Everything spells the unit out: at 10px mono in a card corner "9d" reads
+   as a code, and the whole point of these stamps is that a reader can tell
+   at a glance whether a number is current. */
+const span = (iso) => {
   if (!iso) return null;
   const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
+  if (mins < 1) return null;
+  if (mins < 60) return `${mins} minute${mins === 1 ? "" : "s"}`;
   const h = Math.floor(mins / 60);
-  if (h < 24) return `${h}h ago`;
-  const dys = Math.floor(h / 24);
-  return dys === 1 ? "yesterday" : `${dys}d ago`;
+  if (h < 24) return `${h} hour${h === 1 ? "" : "s"}`;
+  const d = Math.floor(h / 24);
+  return `${d} day${d === 1 ? "" : "s"}`;
+};
+
+const ago = (iso) => {
+  const s = span(iso);
+  return s ? `${s} ago` : iso ? "just now" : null;
+};
+
+/* The nightly cron fires at 08:00 UTC, and Vercel fires it within the hour,
+   so a panel checked inside the last two days is on schedule — one late run
+   is not a fault. Past that, something is actually wrong. */
+const STALE_MS = 2 * 24 * 60 * 60 * 1000;
+const isStale = (iso) => !iso || Date.now() - new Date(iso).getTime() > STALE_MS;
+
+/* ——— What the corner of a panel says ———
+
+   The old stamp said "Refreshed 9d ago" whether the job had run nightly and
+   found nothing new, or had not run at all since August. Those are opposite
+   situations — one is the dashboard working, the other is the dashboard
+   broken — and they read identically, so a healthy panel looked like a fault.
+
+   Four states now, and only the last two are problems:
+
+     Refreshed 5 hours ago                            checked, numbers moved
+     Refreshed 5 hours ago · no change in 9 days      checked, nothing to move
+     Last checked 9 days ago                          the check itself stopped
+     Refresh failed 5 hours ago                       the check ran and errored
+
+   Tone carries the same split as the words, so the distinction survives a
+   glance that doesn't stop to read: faint for the two healthy states, clay
+   for a stalled check, brick for an outright failure. */
+const refreshStamp = (meta) => {
+  const t = panelTimes(meta);
+  if (!t) return { text: "Baseline data", tone: "faint" };
+
+  if (t.failed) {
+    /* A panel with no `checkedAt` at all has never once come back clean, so
+       there are no "prior values" from a refresh to point at — it is showing
+       the seeded baseline. Saying "failed 5 hours ago" there would imply a
+       working panel that had one bad night. */
+    if (!t.checkedAt) {
+      return {
+        text: "Refresh has never succeeded · showing seeded values",
+        tone: "bad",
+        title: t.error ? `Reason: ${t.error}` : "This panel has no successful refresh on record.",
+      };
+    }
+    return {
+      text: `Refresh failed ${ago(t.erroredAt || t.checkedAt)} · showing values from ${ago(t.checkedAt)}`,
+      tone: "bad",
+      title: t.error ? `Reason: ${t.error}` : undefined,
+    };
+  }
+
+  if (!t.checkedAt) return { text: "Awaiting first refresh", tone: "warn" };
+
+  if (isStale(t.checkedAt)) {
+    return {
+      text: `Last checked ${ago(t.checkedAt)}`,
+      tone: "warn",
+      title: "The nightly refresh has not successfully checked this panel since then — the values shown are that old.",
+    };
+  }
+
+  /* Checked on schedule. If the numbers themselves haven't moved, say so
+     rather than letting the reader assume the check is what went quiet.
+
+     Only worth saying once a full day has passed without a move, though: on
+     a nightly job every panel is trivially "unchanged since this morning",
+     and a suffix that never goes away stops carrying information.
+     `changedAt` is also null for panels last written before the two
+     timestamps were split, where there is nothing truthful to add. */
+  const heldSince = t.changedAt && t.changedAt < t.checkedAt ? t.changedAt : null;
+  const held = heldSince && Date.now() - new Date(heldSince).getTime() >= 24 * 60 * 60 * 1000
+    ? span(heldSince) : null;
+  return {
+    text: `Refreshed ${ago(t.checkedAt)}${held ? ` · no change in ${held}` : ""}`,
+    tone: "faint",
+    title: held ? `Checked nightly. The last time any figure in this panel moved was ${ago(heldSince)}.` : undefined,
+  };
 };
 
 /* ——— In-page navigation ———
@@ -485,17 +570,50 @@ const PaperTooltip = ({ active, payload, label, unit = "" }) => {
 const tick = { ...mono, fontSize: 11, fill: INK };
 const tickFaint = { ...mono, fontSize: 10.5, fill: FAINT };
 
+/* ——— The masthead line ———
+   Reads off the panels rather than off `updatedAt`, because `updatedAt` also
+   moves when a human edits the file by hand — which would report a nightly
+   job as healthy on a day it never ran. The newest successful panel check is
+   the honest answer to "when did this last refresh". */
+const runStamp = (lastRunAt, updatedAt, meta) => {
+  const panels = Object.values(meta || {}).map(panelTimes).filter(Boolean);
+  if (!panels.length) return { text: `Refreshed nightly · last successful check ${ago(updatedAt)}`, tone: "faint" };
+
+  const checks = panels.map((p) => p.checkedAt).filter(Boolean);
+  const newest = checks.length ? checks.reduce((a, b) => (a > b ? a : b)) : null;
+  const behind = panels.filter((p) => p.failed || isStale(p.checkedAt)).length;
+
+  /* The job fired and every panel came back empty. Worth its own sentence:
+     the fix is upstream — an API key, a rate limit — not in the data. */
+  if (lastRunAt && !isStale(lastRunAt) && behind === panels.length) {
+    return { text: `Nightly refresh ran ${ago(lastRunAt)} · every panel failed`, tone: "bad" };
+  }
+
+  if (isStale(newest)) {
+    return {
+      text: newest ? `Nightly refresh has not run in ${span(newest)}` : "Nightly refresh has not run yet",
+      tone: "warn",
+    };
+  }
+
+  const lead = `Refreshed nightly · last successful check ${ago(newest)}`;
+  return behind
+    ? { text: `${lead} · ${behind} of ${panels.length} panels behind`, tone: "warn" }
+    : { text: lead, tone: "faint" };
+};
+
+const STAMP_COLOR = { faint: FAINT, warn: TEXT_CLAY, bad: TEXT_BRICK };
+
 /* ——— Panel: card with read-only timestamp ——— */
 const Panel = ({ id, label, meta, children, sources }) => {
-  const stamp = meta && meta.at ? `Refreshed ${relTime(meta.at)}` : "Baseline data";
+  const stamp = refreshStamp(meta);
   return (
     <div style={{ border: `1px solid ${INK}`, borderRadius: 2, background: PAPER, padding: 22, marginBottom: 18, boxShadow: "3px 3px 0 rgba(25,23,20,0.08)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>
         <Eyebrow>{label}</Eyebrow>
         {meta !== null && (
-          <span title={meta && meta.failed && meta.error ? `Reason: ${meta.error}` : undefined}
-        style={{ ...mono, fontSize: 10, color: meta && meta.failed ? TEXT_BRICK : FAINT }}>
-            {meta && meta.failed ? "Last refresh failed · showing prior values" : stamp}
+          <span title={stamp.title} style={{ ...mono, fontSize: 10, color: STAMP_COLOR[stamp.tone] }}>
+            {stamp.text}
           </span>
         )}
       </div>
@@ -507,7 +625,7 @@ const Panel = ({ id, label, meta, children, sources }) => {
 
 /* ————————————————— main ————————————————— */
 export default function App() {
-  const { data, meta, history, updatedAt, status: loadStatus } = useBriefingData();
+  const { data, meta, history, updatedAt, lastRunAt, status: loadStatus } = useBriefingData();
   const [showCN, setShowCN] = useState(true);
   const [tocOpen, setTocOpen] = useState(true);
 
@@ -532,6 +650,7 @@ export default function App() {
   }, [showCN]);
 
   const hasTrend = history.length > 1;
+  const runLine = runStamp(lastRunAt, updatedAt, meta);
 
   return (
     <div style={{ background: PAPER, minHeight: "100vh", color: INK }}>
@@ -563,9 +682,9 @@ export default function App() {
               Chinese labs {showCN ? "shown" : "hidden"} ({cnCount})
             </label>
           </div>
-          <div style={{ ...mono, fontSize: 10, color: FAINT, marginTop: 10 }}>
+          <div style={{ ...mono, fontSize: 10, color: loadStatus === "ok" ? STAMP_COLOR[runLine.tone] : FAINT, marginTop: 10 }}>
             {loadStatus === "loading" && "Loading…"}
-            {loadStatus === "ok" && `Refreshed nightly · last run ${relTime(updatedAt)}`}
+            {loadStatus === "ok" && runLine.text}
             {loadStatus === "baseline" && "Showing compiled-in baseline — published data unavailable"}
           </div>
         </header>
