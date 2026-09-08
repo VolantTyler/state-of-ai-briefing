@@ -5,7 +5,7 @@ import {
 } from "recharts";
 import { useBriefingData } from "./useBriefingData.js";
 import {
-  EDITION, INK, PAPER, FAINT, RULE_SOFT, C,
+  EDITION, INK, PAPER, FAINT, RULE_SOFT, C, TEXT_BRICK, TEXT_CLAY,
   BRAND_COLOR, BRAND_OF, brandFill,
   BASELINE, TRACKERS, SRC, snapshot,
 } from "./briefing-data.js";
@@ -494,7 +494,7 @@ const Panel = ({ id, label, meta, children, sources }) => {
         <Eyebrow>{label}</Eyebrow>
         {meta !== null && (
           <span title={meta && meta.failed && meta.error ? `Reason: ${meta.error}` : undefined}
-        style={{ ...mono, fontSize: 10, color: meta && meta.failed ? C.brick : FAINT }}>
+        style={{ ...mono, fontSize: 10, color: meta && meta.failed ? TEXT_BRICK : FAINT }}>
             {meta && meta.failed ? "Last refresh failed · showing prior values" : stamp}
           </span>
         )}
@@ -664,7 +664,7 @@ export default function App() {
         <SectionHead id="sec-03" n="03" title="Model capability" sub="Where the frontier sits, per the four most-watched scoreboards" />
         <Panel id="models" label="Artificial Analysis Intelligence Index v4.2" meta={meta.models} sources={SRC.models}>
           <AASwarm items={aaIndex} />
-          <div style={{ ...mono, fontSize: 10, color: C.brick, marginTop: 6 }}>
+          <div style={{ ...mono, fontSize: 10, color: TEXT_BRICK, marginTop: 6 }}>
             ▲ scale change — v4.2 re-anchored the index, so these scores are not comparable to the v4.1.1 numbers in editions ≤ v2.3
           </div>
           <Commentary>
@@ -846,7 +846,7 @@ export default function App() {
                 [data.china.costRatio, "cheaper output tokens: DeepSeek-V4-Pro ≈$0.87/M vs Claude Fable ≈$50/M"],
               ].map(([big, small]) => (
                 <div key={small} style={{ border: `1px solid ${INK}`, borderRadius: 2, padding: "16px 14px", background: PAPER, boxShadow: "3px 3px 0 rgba(25,23,20,0.08)" }}>
-                  <div style={{ ...serif, fontSize: 30, fontWeight: 600, letterSpacing: "-0.02em", color: C.clay }}>{big}</div>
+                  <div style={{ ...serif, fontSize: 30, fontWeight: 600, letterSpacing: "-0.02em", color: TEXT_CLAY }}>{big}</div>
                   <div style={{ ...serif, fontSize: 13, fontStyle: "italic", color: "#5C564B", lineHeight: 1.5, marginTop: 4 }}>{small}</div>
                 </div>
               ))}

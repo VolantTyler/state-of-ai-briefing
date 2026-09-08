@@ -13,7 +13,10 @@ export const EDITION = {
 
 export const INK = "#191714";
 export const PAPER = "#FAF7F0";
-export const FAINT = "#857D6F";
+/* #857D6F read at 4.19:1 on PAPER — under the 4.5:1 WCAG AA floor for text,
+   which this token is used as ~35 times (captions, ticks, table cells).
+   Darkened to hold ≥4.5:1 while keeping the same warm-gray hue. */
+export const FAINT = "#70685A";
 export const RULE_SOFT = "#E4DCCB";
 export const C = {
   blue: "#7A93AC", ochre: "#C8A24E", sage: "#8AA07B", brick: "#B06A55",
@@ -24,6 +27,13 @@ export const C = {
      `sage` (OpenAI) and `slate` (Perplexity) to read apart on the swarm. */
   teal: "#5F8A80",
 };
+
+/* `brick` and `clay` above are chart/dot fills (non-text, exempt from text
+   contrast rules) and stay as-is so bars keep matching their §04 brand
+   swatch. The few spots that set body text in those hues need darker,
+   text-only variants to clear 4.5:1 on PAPER. */
+export const TEXT_BRICK = "#965844";
+export const TEXT_CLAY = "#7A6556";
 
 /* ——— Brand colors, sourced from the web-traffic-share chart (§04) ———
    Every other bar/line/dot for a company or its product reuses this color,
