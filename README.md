@@ -159,6 +159,29 @@ curl -i -X POST https://<your-app>.vercel.app/api/refresh \
   -H "Authorization: Bearer $(op read 'op://Private/state-of-ai-briefing/CRON_SECRET')"
 ```
 
+### Checking what the deployment actually sees
+
+`GET /api/status` (same `CRON_SECRET` auth as the refresh endpoint) reports
+every expected variable at once, plus which deployment answered:
+
+```bash
+curl -s https://<your-app>.vercel.app/api/status \
+  -H "Authorization: Bearer $(op read 'op://Private/state-of-ai-briefing/CRON_SECRET')" | jq
+```
+
+It never returns a value — only a state (`ok` / `empty` / `whitespace` /
+`missing`) and a character count. That is enough to catch the two failures
+`vercel env ls` cannot show you: a variable saved blank, and a value one
+character too long because `echo` appended a newline. `env()` in `refresh.js`
+treats an empty string exactly like an absent one, so without this the two are
+indistinguishable — and because it throws on the first falsy variable it
+reaches, a misconfigured deployment otherwise reveals its problems one
+redeploy at a time.
+
+The `deployment` block echoes `VERCEL_ENV`, the branch and the commit SHA,
+which separates a genuinely missing variable from a production alias still
+pointing at a build that predates it.
+
 `vercel env ls` is the safe companion command: it prints variable names and
 which environments they target, never values. That is usually the check you
 actually wanted — cron runs against Production, and a variable set only for
