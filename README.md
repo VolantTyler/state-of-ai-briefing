@@ -96,6 +96,74 @@ curl -X POST https://<your-app>.vercel.app/api/refresh \
 
 Expect `{"ok":true,"refreshed":[...],"failures":[]}` and two new commits.
 
+## Secrets
+
+`.env.example` lists six environment variables; three of them are secret. That
+file says what the shape is. This section says where each one *lives* and how
+to replace it — the part that matters at 3am, and the part a password manager
+cannot tell you on its own.
+
+| Variable | Issued by | Source of truth | Sensitive in Vercel | Blast radius of a rotation |
+|---|---|---|---|---|
+| `ANTHROPIC_API_KEY` | Anthropic | Anthropic console | Yes | Anything else using the same key |
+| `GITHUB_TOKEN` | GitHub | GitHub → fine-grained PATs | Yes | This repo only, if scoped correctly |
+| `CRON_SECRET` | You — `openssl rand -hex 32` | Vercel | Yes | This app alone; nothing external consumes it |
+| `ANTHROPIC_MODEL` | — | This README | No | Not a secret |
+| `GITHUB_REPO`, `GITHUB_BRANCH` | — | This README | No | Not secrets |
+
+Every secret is mirrored in 1Password as **one item per project** —
+`state-of-ai-briefing — Vercel`, one field per variable — not one item per
+secret. Forty entries you can no longer map back to anything is how a vault
+becomes as useless as no vault.
+
+### When a variable should be marked Sensitive
+
+Vercel's **Sensitive** flag is not a judgment about how secret a value is —
+every secret here is equally secret. It makes the variable *write-only*:
+nobody, including you, can read it back out of the dashboard afterwards.
+
+So the question is never "is this sensitive?" It is **"does a second copy
+exist?"** Sensitive is correct whenever you have a recovery path, and a trap
+when you don't: a write-only variable stored nowhere else is a value you have
+already lost — you just won't find out until you need it.
+
+Which fixes the order, and the order is the whole lesson. **Store the value
+elsewhere first, prove that copy works, and only then mark it Sensitive.**
+Test the backup before destroying the original.
+
+### Rotating
+
+`CRON_SECRET` is the cheap one. You invented it and only this app consumes it,
+so there is nobody to coordinate with:
+
+1. `openssl rand -hex 32`
+2. Update the 1Password field.
+3. Vercel → Settings → Environment Variables, with **Production** ticked.
+4. **Redeploy** — functions read the values baked in at deploy time, so an
+   edit alone changes nothing.
+5. Verify with the manual run below, then mark it Sensitive.
+
+`ANTHROPIC_API_KEY` and `GITHUB_TOKEN` rotate at the issuer first, then follow
+steps 2–5. Fine-grained GitHub PATs expire — 30 days by default — so record
+the expiry date in 1Password next to the value. A cron that goes quiet is
+often just an expired token.
+
+### Reading a secret without putting it on disk
+
+`vercel env pull` writes *every* production secret into a local file, which is
+a poor trade for needing one string. Read the single value straight out of
+1Password instead, so it never reaches shell history or the filesystem:
+
+```bash
+curl -i -X POST https://<your-app>.vercel.app/api/refresh \
+  -H "Authorization: Bearer $(op read 'op://Private/state-of-ai-briefing/CRON_SECRET')"
+```
+
+`vercel env ls` is the safe companion command: it prints variable names and
+which environments they target, never values. That is usually the check you
+actually wanted — cron runs against Production, and a variable set only for
+Preview is invisible to it while looking present in the dashboard.
+
 ## Notes
 
 - **Vercel Hobby runs cron once per day**, which is exactly the chosen cadence.
