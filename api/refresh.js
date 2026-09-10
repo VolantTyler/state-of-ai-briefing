@@ -1,5 +1,5 @@
 import {
-  BASELINE, JOBS, packValues, unpackValues,
+  BASELINE, JOBS, packValues, unpackValues, panelDigest,
   historyToCSV, csvToHistory, logHistory,
 } from "../src/briefing-data.js";
 
@@ -136,6 +136,8 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: "unauthorized" });
   }
 
+  const runAt = new Date().toISOString();
+
   try {
     /* 1 — current state from the repo, falling back to the baseline */
     const [vFile, tFile] = await Promise.all([ghRead(VALUES_PATH), ghRead(TREND_PATH)]);
@@ -177,24 +179,64 @@ export default async function handler(req, res) {
       let why = r.status === "rejected" ? String(r.reason && r.reason.message || r.reason) : null;
       if (r.status === "fulfilled") {
         try {
+          /* A successful fetch always advances `checkedAt`; `changedAt` only
+             moves if the panel's slice of the wire format actually differs.
+             A panel checked nightly that finds no new number therefore reads
+             as current, not as abandoned — which is the whole point of the
+             split. `at` is still written as the old alias so anything reading
+             the previous shape keeps working. */
+          const before = panelDigest(data, id);
           data = JOBS[id].apply(data, r.value);
-          meta[id] = { at: new Date().toISOString(), failed: false };
+          const changed = panelDigest(data, id) !== before;
+          const prior = meta[id] || {};
+          const now = new Date().toISOString();
+          meta[id] = {
+            at: now,
+            checkedAt: now,
+            /* Falling back to `now` matters on a panel that has never been
+               seen to move: without it `changedAt` stays null forever and
+               the page can never say "checked nightly, still nothing new" —
+               which is the one message a genuinely steady panel needs. The
+               clock therefore starts at the first check we can vouch for,
+               and "no change in 9 days" means nine days of checks that all
+               came back with the same number. */
+            changedAt: changed ? now : (prior.changedAt || now),
+            failed: false,
+          };
           return;
         } catch (e) {
           /* Reply parsed but didn't fit the panel's shape. */
           why = `bad shape: ${String(e.message || e)}`;
         }
       }
-      /* Keep the last-good `at` so the panel can still say how old its
+      /* Keep the last-good timestamps so the panel can still say how old its
          numbers are, and record *why* this run failed — a bare boolean
-         left the markets panel undiagnosable for weeks. */
+         left the markets panel undiagnosable for weeks. `checkedAt` is
+         deliberately not advanced: the run happened, but it did not
+         successfully check this panel. */
       meta[id] = { ...(meta[id] || {}), failed: true, error: (why || "unknown").slice(0, 300), erroredAt: new Date().toISOString() };
       failures.push(id);
     });
 
     if (failures.length === ids.length) {
       /* Every job failed — almost certainly an API or network problem.
-         Don't commit; leave yesterday's good data in place. */
+         Yesterday's values stay exactly as they are; `data` is untouched
+         because no `apply` succeeded, so this write moves only `meta` and
+         `lastRunAt`.
+
+         It is still worth writing. Bailing out entirely, which is what this
+         used to do, left a totally failed night with no trace anywhere in
+         the repo — indistinguishable from a cron that never fired, which is
+         the ambiguity the page is now trying to resolve. One commit a night
+         is a cheap price for being able to tell those apart. */
+      try {
+        await ghWrite(
+          VALUES_PATH,
+          JSON.stringify(packValues(data, meta, runAt), null, 2) + "\n",
+          vFile.sha,
+          `data: refresh ${runAt.slice(0, 10)} (all panels failed, values unchanged)`,
+        );
+      } catch (e) { /* the run already failed; a failed write changes nothing */ }
       return res.status(502).json({
         ok: false, error: "all panels failed", failures,
         errors: Object.fromEntries(failures.map((id) => [id, meta[id].error])),
@@ -202,9 +244,9 @@ export default async function handler(req, res) {
     }
 
     /* 3 — write both files back */
-    const nextValues = JSON.stringify(packValues(data, meta), null, 2) + "\n";
+    const nextValues = JSON.stringify(packValues(data, meta, runAt), null, 2) + "\n";
     const nextHistory = historyToCSV(logHistory(data, history)) + "\n";
-    const stamp = new Date().toISOString().slice(0, 10);
+    const stamp = runAt.slice(0, 10);
     const note = failures.length ? ` (${failures.join(", ")} kept prior values)` : "";
 
     await ghWrite(VALUES_PATH, nextValues, vFile.sha, `data: refresh ${stamp}${note}`);

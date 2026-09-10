@@ -170,9 +170,14 @@ export const SRC = {
 
 /* ——— Refresh jobs, one per panel ———
    Unchanged from the artifact edition. These now run server-side in
-   api/refresh.js on a schedule; nothing in the browser ever calls the API. */
+   api/refresh.js on a schedule; nothing in the browser ever calls the API.
+
+   `keys` names the wire-format fields the job writes, which is what lets the
+   cron tell a check that found nothing new from a check that never happened.
+   See `panelDigest` below. */
 export const JOBS = {
   valuations: {
+    keys: ["val"],
     prompt: 'Search the web for the latest reported valuations in billions USD for these AI companies: Anthropic, OpenAI, xAI, Databricks, Z.ai (Zhipu), DeepSeek, Anduril, Moonshot AI, MiniMax. Respond ONLY with compact JSON, no prose or fences: {"valuations":{"Anthropic":0,"OpenAI":0,"xAI":0,"Databricks":0,"Z.ai (Zhipu)":0,"DeepSeek":0,"Anduril":0,"Moonshot AI":0,"MiniMax":0}}',
     apply: (d, j) => {
       if (!j.valuations) return d;
@@ -187,6 +192,7 @@ export const JOBS = {
     },
   },
   markets: {
+    keys: ["stocks"],
     /* Quotes are the one job that reliably attracts a hedge ("prices are
        delayed and may not reflect real-time values"), and the hedge used
        to take the whole panel down with it. Say up front that a delayed
@@ -198,6 +204,7 @@ export const JOBS = {
     }) }),
   },
   models: {
+    keys: ["aa"],
     /* Two constraints that pull in opposite directions, both deliberate.
        Dedupe by family: an earlier run returned Claude Opus 5 three times at
        three effort settings, spending three of eight slots on one model. But
@@ -214,6 +221,7 @@ export const JOBS = {
     },
   },
   users: {
+    keys: ["users"],
     prompt: 'Search the web for the latest monthly active users in millions for AI assistants: Meta AI, ChatGPT, Gemini, Copilot, Claude, Grok. Respond ONLY with compact JSON, no prose or fences: {"users":{"Meta AI":0,"ChatGPT":0,"Gemini":0,"Copilot":0,"Claude":0,"Grok":0}}',
     apply: (d, j) => (!j.users ? d : { ...d, users: d.users.map((u) => {
       const n = Number(j.users[u.name]);
@@ -221,6 +229,7 @@ export const JOBS = {
     }).sort((a, b) => b.users - a.users) }),
   },
   share: {
+    keys: ["share"],
     prompt: 'Search the web for the latest global AI chatbot web-traffic share percentages (Similarweb) for ChatGPT, Gemini, Claude, Grok, Copilot, Perplexity. Respond ONLY with compact JSON, no prose or fences: {"share":{"ChatGPT":0,"Gemini":0,"Claude":0,"Grok":0,"Copilot":0,"Perplexity":0}}',
     apply: (d, j) => {
       if (!j.share) return d;
@@ -236,6 +245,7 @@ export const JOBS = {
     },
   },
   capital: {
+    keys: ["capex", "rev"],
     prompt: 'Search the web for (a) 2026 planned capital expenditure in billions USD for Alphabet, Amazon, Microsoft, Meta and (b) latest annualized revenue run-rates in billions USD for Anthropic, OpenAI, xAI. Respond ONLY with compact JSON, no prose or fences: {"capex":{"Alphabet":0,"Amazon":0,"Microsoft":0,"Meta":0},"revenue":{"Anthropic":0,"OpenAI":0,"xAI":0}}',
     apply: (d, j) => {
       let n = { ...d };
@@ -245,6 +255,7 @@ export const JOBS = {
     },
   },
   energy: {
+    keys: ["energy"],
     prompt: 'Search the web for the latest global data center electricity forecasts: total TWh for 2026, peak power demand in GW for 2026, the US share of global data center consumption as a percent, and the AI-optimized server share of data center power as a percent. Respond ONLY with compact JSON, no prose or fences: {"energy":{"totalTWh":0,"peakGW":0,"usShare":0,"aiShareOfDC":0}}',
     apply: (d, j) => {
       if (!j.energy) return d;
@@ -267,8 +278,14 @@ export const JOBS = {
 export const HIST_COLS = ["date", "anthropic", "openai", "nvda", "msft", "chatgpt", "claude", "gemini", "topScore", "scale"];
 const TEXT_COLS = new Set(["date", "scale"]);
 
-export const packValues = (d, meta) => ({
+export const packValues = (d, meta, lastRunAt) => ({
   updatedAt: new Date().toISOString(),
+  /* Written only by api/refresh.js, so it is evidence the cron actually
+     fired — including on a night when every panel failed and no value
+     moved. `updatedAt` can't do that job: it also advances when the file is
+     edited by hand, so a stale cron behind a recent hand edit reads as
+     healthy. */
+  ...(lastRunAt ? { lastRunAt } : {}),
   meta,
   val: Object.fromEntries(d.valuations.map((x) => [x.name, x.value])),
   stocks: Object.fromEntries(d.stocks.map((x) => [x.ticker, x.price])),
@@ -279,6 +296,42 @@ export const packValues = (d, meta) => ({
   energy: d.energyStats,
   aa: d.aaIndex.map((m) => [m.model, m.lab, m.score, m.cn ? 1 : 0]),
 });
+
+/* ——— Panel freshness ———
+
+   `at` used to be the only timestamp, and it moved on every successful run,
+   so a panel that had been checked faithfully every night but had found no
+   new number read exactly like a panel nobody had looked at in nine days.
+   The two are now recorded separately:
+
+     checkedAt — the last run that successfully fetched this panel
+     changedAt — the last run whose fetch actually moved a number
+
+   `panelDigest` is what decides "actually moved": the job's own slice of the
+   wire format, serialized. Comparing the published shape rather than the
+   in-memory objects means rounding and re-sorting are already applied, so a
+   value that survives a round trip unchanged doesn't register as news. */
+export const panelDigest = (d, id) => {
+  const job = JOBS[id];
+  if (!job || !job.keys) return null;
+  const packed = packValues(d, null);
+  return JSON.stringify(job.keys.map((k) => packed[k]));
+};
+
+/* Files written before the split carry only `at`, which meant "last
+   successful run" — that is `checkedAt`. There is no way to know when those
+   values last moved, so `changedAt` reads back null and the UI says how long
+   it has been since the check rather than inventing a change date. */
+export const panelTimes = (m) => {
+  if (!m || typeof m !== "object") return null;
+  return {
+    checkedAt: m.checkedAt || m.at || null,
+    changedAt: m.changedAt || null,
+    failed: !!m.failed,
+    error: m.error || null,
+    erroredAt: m.erroredAt || null,
+  };
+};
 
 export const unpackValues = (d, p) => {
   if (!p || typeof p !== "object") return d;
