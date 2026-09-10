@@ -773,8 +773,9 @@ export default function App() {
             Combined 2026 capex guidance across the big four hyperscalers now sits at roughly $720–745B, up 77% year
             over year, with the mix shifting: Amazon and Alphabet raised their budgets while Microsoft trimmed its
             guidance after extending the useful life of its data-center assets from 15 to 25 years — an accounting
-            change, not a spending pullback. Nvidia reports Q2 FY27 after the close today; consensus sits near $92B
-            in revenue, and options markets are pricing an 8–12% swing on the print.
+            change, not a spending pullback. Nvidia reported Q2 FY27 on 2026-09-07, against consensus near $92B in
+            revenue, with options markets having priced an 8–12% swing into the print; the result itself is not yet
+            reflected here.
           </Commentary>
         </Panel>
         <BackToTop />

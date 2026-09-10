@@ -5,6 +5,56 @@ enough context to pick it up cold.
 
 ---
 
+## Commentary prose is never refreshed, and drifts silently
+
+**Status:** open · raised 2026-09-10
+
+§02 carried "Nvidia reports Q2 FY27 after the close today" in both the ticker
+note (`BASELINE.stocks`) and the §02 commentary. It was written on 2026-09-07
+and was still on the live site on 2026-09-10, three days after the "today" it
+referred to.
+
+Both strings are now pinned to `2026-09-07`, which ages visibly instead of
+lying. Two things remain.
+
+**1 — Fill in the actual print.** The commentary states consensus (~$92B) and
+the expected 8–12% swing, and now says outright that the result is not
+reflected. Someone has to look up what Nvidia actually reported and rewrite
+that sentence, along with the ticker note.
+
+**2 — The structural problem, which is the real item.** `JOBS.markets.apply`
+writes `s.price` and nothing else. No refresh job touches any `note` or any
+`<Commentary>` block, so every panel can honestly report `Refreshed 2 hours
+ago` beside prose frozen at whenever a human last edited it. The freshness
+stamps vouch for the numbers only, and nothing says so.
+
+Three ways out, roughly in increasing order of ambition:
+
+- *Convention.* Never put relative time in static prose — no "today",
+  "yesterday", "this week". Absolute dates age visibly. Cheapest, and worth
+  adopting regardless of what else happens.
+- *Make staleness visible.* Give commentary its own `writtenAt` date, rendered
+  in the panel, so a reader can see that the prose and the numbers have
+  different ages. Honest, and small.
+- *Make it refreshable.* Extend the jobs to rewrite one-line notes, which
+  means the model is generating prose that ships unreviewed. Powerful and
+  considerably riskier; probably wants the `writtenAt` step first.
+
+**Related, lower severity.** These drift gradually rather than going false
+overnight, but they are all frozen prose that reads as current:
+
+| Where | Text |
+|---|---|
+| `App.jsx:723` | "went public in June and now trades around a $1.87T market cap" — also covered by the SpaceX/xAI item below |
+| `App.jsx:866` | "A year ago this was one big circle: ChatGPT held ~79%" |
+| `App.jsx:962` | "up from under 2% a year ago, and now above 45% within a few months" |
+| `App.jsx:981` | "up from 45% just weeks ago" — also covered by the §07 token-share item below |
+
+`briefing-data.js:200` also says "currently shut", but that string is inside a
+refresh *prompt* and is evaluated fresh on every run. Correct as written.
+
+---
+
 ## Reconcile §07's China token share (60%) against current reporting (~45%)
 
 **Status:** open · raised 2026-09-07
