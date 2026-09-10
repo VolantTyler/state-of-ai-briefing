@@ -81,7 +81,7 @@ export const BASELINE = {
     { t: "May ’26", OpenAI: 852, Anthropic: 965 },
   ],
   stocks: [
-    { ticker: "NVDA", name: "Nvidia", price: 213.05, cap: "≈ $5.16T", note: "reports Q2 FY27 after close today" },
+    { ticker: "NVDA", name: "Nvidia", price: 213.05, cap: "≈ $5.16T", note: "Q2 FY27 reported 2026-09-07" },
     { ticker: "MSFT", name: "Microsoft", price: 491.71, cap: "≈ $3.65T", note: "capex revised to ≈$175B on accounting change" },
     { ticker: "GOOG", name: "Alphabet", price: 349.90, cap: "≈ $4.28T", note: "capex guide raised to $195–205B" },
     { ticker: "META", name: "Meta", price: 570.05, cap: "≈ $1.45T", note: "volatile Aug; +4% premarket on $22B compute deal report" },
