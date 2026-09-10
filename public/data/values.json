@@ -1,32 +1,47 @@
 {
-  "updatedAt": "2026-09-10T03:17:01.100Z",
+  "updatedAt": "2026-09-10T08:25:35.923Z",
+  "lastRunAt": "2026-09-10T08:25:02.708Z",
   "meta": {
     "valuations": {
-      "at": "2026-09-10T03:17:01.100Z",
+      "at": "2026-09-10T08:25:35.921Z",
+      "checkedAt": "2026-09-10T08:25:35.921Z",
+      "changedAt": "2026-09-10T08:25:35.921Z",
       "failed": false
     },
     "markets": {
-      "at": "2026-09-10T03:17:01.100Z",
+      "at": "2026-09-10T08:25:35.921Z",
+      "checkedAt": "2026-09-10T08:25:35.921Z",
+      "changedAt": "2026-09-10T08:25:35.921Z",
       "failed": false
     },
     "models": {
-      "at": "2026-09-10T03:17:01.100Z",
+      "at": "2026-09-10T08:25:35.922Z",
+      "checkedAt": "2026-09-10T08:25:35.922Z",
+      "changedAt": "2026-09-10T08:25:35.922Z",
       "failed": false
     },
     "users": {
-      "at": "2026-09-10T03:17:01.100Z",
+      "at": "2026-09-10T08:25:35.922Z",
+      "checkedAt": "2026-09-10T08:25:35.922Z",
+      "changedAt": "2026-09-10T08:25:35.922Z",
       "failed": false
     },
     "share": {
-      "at": "2026-09-10T03:17:01.100Z",
+      "at": "2026-09-10T08:25:35.922Z",
+      "checkedAt": "2026-09-10T08:25:35.922Z",
+      "changedAt": "2026-09-10T08:25:35.922Z",
       "failed": false
     },
     "capital": {
-      "at": "2026-09-10T03:17:01.100Z",
+      "at": "2026-09-10T08:25:35.923Z",
+      "checkedAt": "2026-09-10T08:25:35.923Z",
+      "changedAt": "2026-09-10T08:25:35.923Z",
       "failed": false
     },
     "energy": {
-      "at": "2026-09-10T03:17:01.100Z",
+      "at": "2026-09-10T08:25:35.923Z",
+      "checkedAt": "2026-09-10T08:25:35.923Z",
+      "changedAt": "2026-09-10T08:25:35.923Z",
       "failed": false
     }
   },
@@ -37,26 +52,26 @@
     "Databricks": 190,
     "Z.ai (Zhipu)": 63.8,
     "Anduril": 61,
-    "DeepSeek": 50,
-    "Moonshot AI": 50,
+    "DeepSeek": 51.8,
+    "Moonshot AI": 35,
     "MiniMax": 16.1
   },
   "stocks": {
     "NVDA": 225.73,
     "MSFT": 493.95,
-    "GOOG": 328.38,
-    "META": 645.92,
-    "AMZN": 252.05,
-    "AVGO": 368.56,
+    "GOOG": 328.31,
+    "META": 650.69,
+    "AMZN": 252.4,
+    "AVGO": 357.9,
     "TSM": 439
   },
   "users": {
     "Meta AI": 1500,
-    "ChatGPT": 1000,
+    "ChatGPT": 1100,
     "Gemini": 950,
     "Copilot": 420,
-    "Grok": 117,
-    "Claude": 56
+    "Claude": 245,
+    "Grok": 117
   },
   "share": {
     "ChatGPT": 55.5,
@@ -70,7 +85,7 @@
   "capex": {
     "Alphabet": 200,
     "Amazon": 220,
-    "Microsoft": 175,
+    "Microsoft": 190,
     "Meta": 138
   },
   "rev": {
@@ -104,6 +119,12 @@
       0
     ],
     [
+      "Claude Fable 5 (with fallback)",
+      "Anthropic",
+      53,
+      0
+    ],
+    [
       "Muse Spark 1.3 (max)",
       "Meta",
       53,
@@ -117,20 +138,14 @@
     ],
     [
       "Grok 4.6 (high)",
-      "xAI",
+      "SpaceXAI",
       51,
       0
     ],
     [
       "Kimi K3 (max)",
-      "Moonshot AI",
+      "Moonshot/Kimi",
       50,
-      1
-    ],
-    [
-      "GLM-5.3 (max)",
-      "Z.AI",
-      49,
       1
     ]
   ]
