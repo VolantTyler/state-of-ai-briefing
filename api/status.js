@@ -14,7 +14,15 @@
    ———————————————————————————————————————————————— */
 
 const REQUIRED = ["ANTHROPIC_API_KEY", "GITHUB_TOKEN", "GITHUB_REPO", "CRON_SECRET"];
-const OPTIONAL = ["ANTHROPIC_MODEL", "GITHUB_BRANCH"];
+
+/* Optional variables carry the fallback `refresh.js` applies when they are
+   unset, because "empty" is the *correct* state for these and reporting it
+   the same way as a missing API key reads like four problems when there are
+   two. An unset optional variable is not a defect; it is a default. */
+const OPTIONAL = {
+  ANTHROPIC_MODEL: "claude-sonnet-4-6",
+  GITHUB_BRANCH: "main",
+};
 
 const describe = (k) => {
   const raw = process.env[k];
@@ -39,7 +47,14 @@ export default async function handler(req, res) {
   }
 
   const vars = {};
-  [...REQUIRED, ...OPTIONAL].forEach((k) => { vars[k] = describe(k); });
+  REQUIRED.forEach((k) => { vars[k] = describe(k); });
+  Object.entries(OPTIONAL).forEach(([k, fallback]) => {
+    const d = describe(k);
+    /* `refresh.js` reads these as `process.env.X || fallback`, so empty and
+       missing behave identically — say so, and name the value that will
+       actually be used. */
+    vars[k] = d.state === "ok" ? d : { state: "default", using: fallback };
+  });
   const blocking = REQUIRED.filter((k) => vars[k].state !== "ok");
 
   return res.status(200).json({
