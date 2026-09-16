@@ -1,62 +1,62 @@
 {
-  "updatedAt": "2026-09-15T08:25:03.700Z",
-  "lastRunAt": "2026-09-15T08:25:02.832Z",
+  "updatedAt": "2026-09-16T08:25:03.745Z",
+  "lastRunAt": "2026-09-16T08:25:02.818Z",
   "meta": {
     "valuations": {
       "at": "2026-09-11T08:26:00.589Z",
       "checkedAt": "2026-09-11T08:26:00.589Z",
       "changedAt": "2026-09-10T08:25:35.921Z",
       "failed": true,
-      "error": "anthropic 400: {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.\"},\"request_id\":\"req_011Cf4uTFsctUdmvHVNohUop\"} (retry: anthropic 400: {\"type\":\"error\",\"error\":{\"t",
-      "erroredAt": "2026-09-15T08:25:03.700Z"
+      "error": "anthropic 400: {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.\"},\"request_id\":\"req_011Cf6oGAxhQfHUMoNeDnUJP\"} (retry: anthropic 400: {\"type\":\"error\",\"error\":{\"t",
+      "erroredAt": "2026-09-16T08:25:03.745Z"
     },
     "markets": {
       "at": "2026-09-11T08:26:00.589Z",
       "checkedAt": "2026-09-11T08:26:00.589Z",
       "changedAt": "2026-09-11T08:26:00.589Z",
       "failed": true,
-      "error": "anthropic 400: {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.\"},\"request_id\":\"req_011Cf4uTFsNSEruM5BeVwWhp\"} (retry: anthropic 400: {\"type\":\"error\",\"error\":{\"t",
-      "erroredAt": "2026-09-15T08:25:03.700Z"
+      "error": "anthropic 400: {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.\"},\"request_id\":\"req_011Cf6oGB1RRgsMsoy3fjRx6\"} (retry: anthropic 400: {\"type\":\"error\",\"error\":{\"t",
+      "erroredAt": "2026-09-16T08:25:03.745Z"
     },
     "models": {
       "at": "2026-09-11T08:26:00.589Z",
       "checkedAt": "2026-09-11T08:26:00.589Z",
       "changedAt": "2026-09-11T08:26:00.589Z",
       "failed": true,
-      "error": "anthropic 400: {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.\"},\"request_id\":\"req_011Cf4uTFsct49KHfxt4UBDG\"} (retry: anthropic 400: {\"type\":\"error\",\"error\":{\"t",
-      "erroredAt": "2026-09-15T08:25:03.700Z"
+      "error": "anthropic 400: {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.\"},\"request_id\":\"req_011Cf6oGB2AnmLUZKoNcrDpb\"} (retry: anthropic 400: {\"type\":\"error\",\"error\":{\"t",
+      "erroredAt": "2026-09-16T08:25:03.745Z"
     },
     "users": {
       "at": "2026-09-11T08:26:00.589Z",
       "checkedAt": "2026-09-11T08:26:00.589Z",
       "changedAt": "2026-09-11T08:26:00.589Z",
       "failed": true,
-      "error": "anthropic 400: {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.\"},\"request_id\":\"req_011Cf4uTFrNdVMmiwvL6a9at\"} (retry: anthropic 400: {\"type\":\"error\",\"error\":{\"t",
-      "erroredAt": "2026-09-15T08:25:03.700Z"
+      "error": "anthropic 400: {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.\"},\"request_id\":\"req_011Cf6oGB1B3Yvwb4KAasheS\"} (retry: anthropic 400: {\"type\":\"error\",\"error\":{\"t",
+      "erroredAt": "2026-09-16T08:25:03.745Z"
     },
     "share": {
       "at": "2026-09-11T08:26:00.589Z",
       "checkedAt": "2026-09-11T08:26:00.589Z",
       "changedAt": "2026-09-10T08:25:35.922Z",
       "failed": true,
-      "error": "anthropic 400: {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.\"},\"request_id\":\"req_011Cf4uTFqPU4XyMPec3YQmu\"} (retry: anthropic 400: {\"type\":\"error\",\"error\":{\"t",
-      "erroredAt": "2026-09-15T08:25:03.700Z"
+      "error": "anthropic 400: {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.\"},\"request_id\":\"req_011Cf6oGAzSFiB8Kmk9upwgr\"} (retry: anthropic 400: {\"type\":\"error\",\"error\":{\"t",
+      "erroredAt": "2026-09-16T08:25:03.745Z"
     },
     "capital": {
       "at": "2026-09-11T08:26:00.590Z",
       "checkedAt": "2026-09-11T08:26:00.590Z",
       "changedAt": "2026-09-10T08:25:35.923Z",
       "failed": true,
-      "error": "anthropic 400: {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.\"},\"request_id\":\"req_011Cf4uTFxKyccq25T8VgCmr\"} (retry: anthropic 400: {\"type\":\"error\",\"error\":{\"t",
-      "erroredAt": "2026-09-15T08:25:03.700Z"
+      "error": "anthropic 400: {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.\"},\"request_id\":\"req_011Cf6oGAyw8XL93WmvF4DUv\"} (retry: anthropic 400: {\"type\":\"error\",\"error\":{\"t",
+      "erroredAt": "2026-09-16T08:25:03.745Z"
     },
     "energy": {
       "at": "2026-09-11T08:26:00.590Z",
       "checkedAt": "2026-09-11T08:26:00.590Z",
       "changedAt": "2026-09-10T08:25:35.923Z",
       "failed": true,
-      "error": "anthropic 400: {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.\"},\"request_id\":\"req_011Cf4uTFoQ31bNbxRBWnvNh\"} (retry: anthropic 400: {\"type\":\"error\",\"error\":{\"t",
-      "erroredAt": "2026-09-15T08:25:03.700Z"
+      "error": "anthropic 400: {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.\"},\"request_id\":\"req_011Cf6oGAwx2WwEKxnNs96y3\"} (retry: anthropic 400: {\"type\":\"error\",\"error\":{\"t",
+      "erroredAt": "2026-09-16T08:25:03.745Z"
     }
   },
   "val": {
