@@ -24,6 +24,20 @@ const OPTIONAL = {
   GITHUB_BRANCH: "main",
 };
 
+/* Alert channels. Present-but-incomplete sets are called out so a lone
+   AGENTMAIL_API_KEY without NOTIFY_EMAIL does not look "configured".
+   These live in the Vercel project env — cron never reads a local `.env`. */
+const ALERT_GROUPS = [
+  {
+    id: "email",
+    keys: ["AGENTMAIL_API_KEY", "AGENTMAIL_INBOX_ID", "NOTIFY_EMAIL"],
+  },
+  {
+    id: "grokBot",
+    keys: ["GROK_BOT_WEBHOOK_URL", "GROK_BOT_WEBHOOK_KEY"],
+  },
+];
+
 const describe = (k) => {
   const raw = process.env[k];
   if (raw === undefined) return { state: "missing", len: 0 };
@@ -55,6 +69,16 @@ export default async function handler(req, res) {
        actually be used. */
     vars[k] = d.state === "ok" ? d : { state: "default", using: fallback };
   });
+
+  const alerts = {};
+  ALERT_GROUPS.forEach(({ id, keys }) => {
+    keys.forEach((k) => { vars[k] = describe(k); });
+    const ok = keys.filter((k) => vars[k].state === "ok").length;
+    alerts[id] = ok === keys.length ? "armed"
+      : ok === 0 ? "off"
+      : "incomplete";
+  });
+
   const blocking = REQUIRED.filter((k) => vars[k].state !== "ok");
 
   return res.status(200).json({
@@ -69,6 +93,7 @@ export default async function handler(req, res) {
       node: process.version,
     },
     blocking,
+    alerts,
     vars,
   });
 }
