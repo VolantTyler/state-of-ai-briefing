@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LabelList, Legend,
@@ -119,6 +119,24 @@ const refreshStamp = (meta) => {
 const reducedMotion = () => {
   try { return !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches); }
   catch (e) { return false; }
+};
+
+const MOBILE_MQ = "(max-width: 640px)";
+
+const useIsMobile = () => {
+  const [mobile, setMobile] = useState(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return false;
+    return window.matchMedia(MOBILE_MQ).matches;
+  });
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return undefined;
+    const mq = window.matchMedia(MOBILE_MQ);
+    const onChange = (e) => setMobile(e.matches);
+    mq.addEventListener("change", onChange);
+    setMobile(mq.matches);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+  return mobile;
 };
 
 const scrollerFor = (el) => {
@@ -382,6 +400,95 @@ const AAOverview = ({ clusters, allItems, topScore, hoverCluster, onHoverCluster
   );
 };
 
+/* Vertical axis for narrow viewports — score runs top-to-bottom so model
+   names get a full text row instead of stacking above a cramped number line. */
+const packLanesVertical = (nodes) => {
+  const sorted = [...nodes].sort((a, b) => a.y - b.y);
+  const laneLast = [];
+  return sorted.map((n) => {
+    let lane = 0;
+    while (laneLast[lane] && Math.abs(n.y - laneLast[lane].y) < (n.halfHeight + laneLast[lane].halfHeight)) lane++;
+    laneLast[lane] = n;
+    return { ...n, lane };
+  });
+};
+
+const AAOverviewVertical = ({ clusters, allItems, topScore, hoverCluster, onHoverCluster, hoverModel, onHoverModel }) => {
+  const W = 360, axisX = 168, marginTop = 28, marginBottom = 32, pointSpan = 52;
+  const scores = allItems.map((m) => m.score);
+  const domainMin = Math.floor(Math.min(...scores)) - 1;
+  const domainMax = Math.ceil(Math.max(...scores)) + 1;
+  const usableH = (domainMax - domainMin) * pointSpan;
+  const H = marginTop + usableH + marginBottom;
+  const yScale = (s) => marginTop + usableH - ((s - domainMin) / (domainMax - domainMin)) * usableH;
+  const ticks = [];
+  for (let t = domainMin; t <= domainMax; t++) ticks.push(t);
+
+  const nodes = clusters.map((c) => {
+    if (c.items.length === 1) {
+      const it = c.items[0];
+      const { base, sub } = splitModelName(it.model);
+      return { kind: "single", item: it, base, sub, y: yScale(it.score), halfHeight: 12 };
+    }
+    const mid = (c.min + c.max) / 2;
+    return { kind: "cluster", cluster: c, y: yScale(mid), y0: yScale(c.max), y1: yScale(c.min), halfHeight: 14 };
+  });
+  const laid = packLanesVertical(nodes);
+  const laneStep = 92;
+
+  return (
+    <div style={{ width: "100%", height: Math.min(H, 540), minHeight: 380 }}>
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
+        <line x1={axisX} y1={marginTop} x2={axisX} y2={H - marginBottom} stroke={INK} strokeWidth={1} />
+        {ticks.map((t) => (
+          <g key={t}>
+            <line x1={axisX - 4} y1={yScale(t)} x2={axisX + 4} y2={yScale(t)} stroke={RULE_SOFT} />
+            <text x={axisX + 10} y={yScale(t) + 3.5} textAnchor="start" style={{ ...mono, fontSize: 10.5, fill: FAINT }}>{t}</text>
+          </g>
+        ))}
+        {laid.map((n) => {
+          const laneOffset = n.lane * laneStep;
+          if (n.kind === "single") {
+            const it = n.item;
+            const isLeader = it.score === topScore;
+            const on = hoverModel === it.model;
+            const r = isLeader ? 7.5 : 6;
+            const labelX = axisX - 10 - laneOffset;
+            return (
+              <g key={it.model} onMouseEnter={() => onHoverModel(it.model)} onMouseLeave={() => onHoverModel(null)}>
+                <line x1={labelX + 4} y1={n.y} x2={axisX - r - 1} y2={n.y} stroke={RULE_SOFT} strokeWidth={1} />
+                <circle cx={axisX} cy={n.y} r={on ? r + 1.5 : r} fill={dotFill(it)} stroke={INK} strokeWidth={on || isLeader ? 1.5 : 1} />
+                <text x={labelX} y={n.y + 4} textAnchor="end" style={{ ...mono, fontSize: 11, fontWeight: isLeader ? 500 : 400, fill: INK }}>{n.base}</text>
+                {on && n.sub && (
+                  <text x={labelX} y={n.y - 10} textAnchor="end" style={{ ...mono, fontSize: 9, fill: FAINT }}>{n.sub}</text>
+                )}
+                <circle cx={axisX} cy={n.y} r={18} fill="transparent" />
+                <title>{it.model}</title>
+              </g>
+            );
+          }
+          const c = n.cluster;
+          const hasLeader = c.items.some((it) => it.score === topScore);
+          const on = hoverCluster === c.letter;
+          const pillY = n.y0 - 9, pillH = Math.max(18, n.y1 - n.y0 + 18);
+          const badgeX = axisX + 14 + laneOffset;
+          return (
+            <g key={c.letter} onMouseEnter={() => onHoverCluster(c.letter)} onMouseLeave={() => onHoverCluster(null)}>
+              <rect x={axisX - 10} y={pillY} width={20} height={pillH} rx={9} fill={on ? C.neutral : C.paperDeep} stroke={INK} strokeWidth={on ? 2 : hasLeader ? 1.5 : 1} />
+              <line x1={badgeX - 9} y1={n.y} x2={axisX + 10} y2={n.y} stroke={RULE_SOFT} strokeWidth={1} />
+              <circle cx={badgeX} cy={n.y} r={9} fill={on ? INK : PAPER} stroke={INK} strokeWidth={on ? 1.75 : 1.25} />
+              <text x={badgeX} y={n.y + 3.5} textAnchor="middle" style={{ ...mono, fontSize: 10, fontWeight: 600, fill: on ? PAPER : INK }}>{c.letter}</text>
+              <text x={badgeX + 14} y={n.y + 4} textAnchor="start" style={{ ...mono, fontSize: 9.5, fill: on ? INK : FAINT }}>{c.items.length} models · {rangeLabel(c)}</text>
+              <rect x={axisX - 14} y={pillY - 4} width={badgeX + 90 - axisX} height={pillH + 8} fill="transparent" />
+              <title>{`Cluster ${c.letter} — ${c.items.map((i) => splitModelName(i.model).base).join(", ")}`}</title>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+};
+
 const AAClusterZoom = ({ cluster, topScore, hoverModel, onHoverModel }) => {
   const W = 800, marginX = 54, usableW = W - marginX * 2;
   const spread = cluster.max - cluster.min;
@@ -457,7 +564,7 @@ const AAClusterList = ({ cluster, topScore, hoverModel, onHoverModel }) => (
   </div>
 );
 
-const AASwarm = ({ items }) => {
+const AASwarm = ({ items, vertical = false }) => {
   /* Hover state lives here because both links cross component boundaries:
      a cluster mark on the line ↔ its section below, a zoomed dot ↔ its row. */
   const [hoverCluster, setHoverCluster] = useState(null);
@@ -468,10 +575,11 @@ const AASwarm = ({ items }) => {
   const spread = Math.round((topScore - Math.min(...scores)) * 10) / 10;
   const clusters = groupByPoint(items);
   const multi = clusters.filter((c) => c.items.length > 1);
+  const Overview = vertical ? AAOverviewVertical : AAOverview;
 
   return (
     <div>
-      <AAOverview
+      <Overview
         clusters={clusters} allItems={items} topScore={topScore}
         hoverCluster={hoverCluster} onHoverCluster={setHoverCluster}
         hoverModel={hoverModel} onHoverModel={setHoverModel}
@@ -628,6 +736,7 @@ export default function App() {
   const { data, meta, history, updatedAt, lastRunAt, status: loadStatus } = useBriefingData();
   const [showCN, setShowCN] = useState(true);
   const [tocOpen, setTocOpen] = useState(true);
+  const isMobile = useIsMobile();
 
   /* China filtering */
   const f = (arr) => (showCN ? arr : arr.filter((x) => !x.cn));
@@ -753,18 +862,18 @@ export default function App() {
         {/* §02 Public markets */}
         <SectionHead id="sec-02" n="02" title="Public markets" sub="How Wall Street is pricing the picks, shovels, and platforms" />
         <Panel id="markets" label="Key AI equities" meta={meta.markets} sources={SRC.markets}>
-          <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 10 }}>
-            <thead><tr>{["Ticker", "Company", "Price", "Mkt cap", "Note"].map((h) => (
+          <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 10, tableLayout: "fixed" }}>
+            <thead><tr>{(isMobile ? ["Company", "Price", "Mkt cap", "Note"] : ["Ticker", "Company", "Price", "Mkt cap", "Note"]).map((h) => (
               <th key={h} style={{ ...mono, fontSize: 10, letterSpacing: "0.15em", textTransform: "uppercase", color: FAINT, textAlign: "left", padding: "6px 8px", borderBottom: `1px solid ${INK}` }}>{h}</th>
             ))}</tr></thead>
             <tbody>
               {data.stocks.map((s, i) => (
                 <tr key={s.ticker} style={{ background: i % 2 ? "transparent" : "rgba(25,23,20,0.025)" }}>
-                  <td style={{ ...mono, fontSize: 12.5, fontWeight: 500, padding: "9px 8px", borderBottom: `1px solid ${RULE_SOFT}` }}>{s.ticker}</td>
+                  {!isMobile && <td style={{ ...mono, fontSize: 12.5, fontWeight: 500, padding: "9px 8px", borderBottom: `1px solid ${RULE_SOFT}` }}>{s.ticker}</td>}
                   <td style={{ ...serif, fontSize: 14.5, padding: "9px 8px", borderBottom: `1px solid ${RULE_SOFT}` }}>{s.name}</td>
-                  <td style={{ ...mono, fontSize: 12.5, padding: "9px 8px", borderBottom: `1px solid ${RULE_SOFT}` }}>${s.price.toLocaleString()}</td>
-                  <td style={{ ...mono, fontSize: 12, color: FAINT, padding: "9px 8px", borderBottom: `1px solid ${RULE_SOFT}` }}>{s.cap}</td>
-                  <td style={{ ...serif, fontSize: 13.5, fontStyle: "italic", color: FAINT, padding: "9px 8px", borderBottom: `1px solid ${RULE_SOFT}` }}>{s.note}</td>
+                  <td style={{ ...mono, fontSize: 12.5, padding: "9px 8px", borderBottom: `1px solid ${RULE_SOFT}`, whiteSpace: "nowrap" }}>${s.price.toLocaleString()}</td>
+                  <td style={{ ...mono, fontSize: 12, color: FAINT, padding: "9px 8px", borderBottom: `1px solid ${RULE_SOFT}`, whiteSpace: "nowrap" }}>{s.cap}</td>
+                  <td style={{ ...serif, fontSize: 13.5, fontStyle: "italic", color: FAINT, padding: "9px 8px", borderBottom: `1px solid ${RULE_SOFT}`, wordBreak: "break-word" }}>{s.note}</td>
                 </tr>
               ))}
             </tbody>
@@ -783,7 +892,7 @@ export default function App() {
         {/* §03 Models */}
         <SectionHead id="sec-03" n="03" title="Model capability" sub="Where the frontier sits, per the four most-watched scoreboards" />
         <Panel id="models" label="Artificial Analysis Intelligence Index v4.2" meta={meta.models} sources={SRC.models}>
-          <AASwarm items={aaIndex} />
+          <AASwarm items={aaIndex} vertical={isMobile} />
           <div style={{ ...mono, fontSize: 10, color: TEXT_BRICK, marginTop: 6 }}>
             ▲ scale change — v4.2 re-anchored the index, so these scores are not comparable to the v4.1.1 numbers in editions ≤ v2.3
           </div>
