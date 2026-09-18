@@ -127,6 +127,107 @@ const askClaude = async (prompt) => {
   return extractJSON(data.content);
 };
 
+/* ——— Failure alerts ———
+   Email via AgentMail + wake a Cursor Grok Bot webhook routine. Both channels
+   are optional and best-effort: a notify failure must never mask the refresh
+   result. Alerts fire on total failure, partial panel failure, and crashes.
+   Set these in the Vercel project env (Settings → Environment Variables) —
+   there is no repo `.env`; cron only sees what Vercel injects at runtime. */
+
+const truncate = (s, n = 400) => {
+  const t = String(s || "");
+  return t.length > n ? `${t.slice(0, n - 1)}…` : t;
+};
+
+const buildAlert = ({ severity, runAt, failures = [], errors = {}, error }) => {
+  const stamp = (runAt || new Date().toISOString()).slice(0, 10);
+  const subject =
+    severity === "fatal" ? `State of AI refresh crashed · ${stamp}`
+    : severity === "all" ? `State of AI refresh failed (all panels) · ${stamp}`
+    : `State of AI refresh partial failure · ${stamp}`;
+
+  const lines = [
+    `severity: ${severity}`,
+    `runAt: ${runAt || "(unknown)"}`,
+  ];
+  if (failures.length) lines.push(`failures: ${failures.join(", ")}`);
+  if (error) lines.push(`error: ${truncate(error)}`);
+  for (const id of failures) {
+    if (errors[id]) lines.push(`  ${id}: ${truncate(errors[id], 240)}`);
+  }
+  lines.push("", "Dashboard keeps prior values until the next successful refresh.");
+
+  return {
+    source: "state-of-ai-briefing",
+    event: "refresh_failed",
+    severity,
+    runAt: runAt || null,
+    failures,
+    errors: Object.fromEntries(
+      Object.entries(errors).map(([k, v]) => [k, truncate(v, 500)]),
+    ),
+    error: error ? truncate(error, 500) : null,
+    subject,
+    message: lines.join("\n"),
+  };
+};
+
+const sendEmailAlert = async (alert) => {
+  const key = process.env.AGENTMAIL_API_KEY;
+  const inbox = process.env.AGENTMAIL_INBOX_ID;
+  const to = process.env.NOTIFY_EMAIL;
+  if (!key || !inbox || !to) return { skipped: "email unset" };
+
+  const res = await fetch(
+    `https://api.agentmail.to/v0/inboxes/${encodeURIComponent(inbox)}/messages/send`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${key}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        to: [to],
+        subject: alert.subject,
+        text: alert.message,
+        labels: ["state-of-ai", "refresh-failed", alert.severity],
+      }),
+    },
+  );
+  if (!res.ok) throw new Error(`agentmail ${res.status}: ${truncate(await res.text(), 200)}`);
+  return { ok: true };
+};
+
+const notifyGrokBot = async (alert) => {
+  const url = process.env.GROK_BOT_WEBHOOK_URL;
+  const key = process.env.GROK_BOT_WEBHOOK_KEY;
+  if (!url || !key) return { skipped: "grok bot unset" };
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json",
+      "User-Agent": "state-of-ai-briefing",
+    },
+    body: JSON.stringify(alert),
+  });
+  if (!res.ok) throw new Error(`grok bot ${res.status}: ${truncate(await res.text(), 200)}`);
+  return { ok: true };
+};
+
+const notifyFailure = async (payload) => {
+  const alert = buildAlert(payload);
+  const results = await Promise.allSettled([
+    sendEmailAlert(alert),
+    notifyGrokBot(alert),
+  ]);
+  return {
+    email: results[0].status === "fulfilled" ? results[0].value : { error: String(results[0].reason?.message || results[0].reason) },
+    grokBot: results[1].status === "fulfilled" ? results[1].value : { error: String(results[1].reason?.message || results[1].reason) },
+  };
+};
+
 export default async function handler(req, res) {
   /* Vercel Cron signs its requests with CRON_SECRET. Without this check the
      endpoint is a public button that spends money. */
@@ -229,6 +330,7 @@ export default async function handler(req, res) {
          the repo — indistinguishable from a cron that never fired, which is
          the ambiguity the page is now trying to resolve. One commit a night
          is a cheap price for being able to tell those apart. */
+      const errors = Object.fromEntries(failures.map((id) => [id, meta[id].error]));
       try {
         await ghWrite(
           VALUES_PATH,
@@ -237,9 +339,9 @@ export default async function handler(req, res) {
           `data: refresh ${runAt.slice(0, 10)} (all panels failed, values unchanged)`,
         );
       } catch (e) { /* the run already failed; a failed write changes nothing */ }
+      const notified = await notifyFailure({ severity: "all", runAt, failures, errors });
       return res.status(502).json({
-        ok: false, error: "all panels failed", failures,
-        errors: Object.fromEntries(failures.map((id) => [id, meta[id].error])),
+        ok: false, error: "all panels failed", failures, errors, notified,
       });
     }
 
@@ -248,17 +350,25 @@ export default async function handler(req, res) {
     const nextHistory = historyToCSV(logHistory(data, history)) + "\n";
     const stamp = runAt.slice(0, 10);
     const note = failures.length ? ` (${failures.join(", ")} kept prior values)` : "";
+    const errors = Object.fromEntries(failures.map((id) => [id, meta[id].error]));
 
     await ghWrite(VALUES_PATH, nextValues, vFile.sha, `data: refresh ${stamp}${note}`);
     await ghWrite(TREND_PATH, nextHistory, tFile.sha, `data: trend log ${stamp}`);
+
+    const notified = failures.length
+      ? await notifyFailure({ severity: "partial", runAt, failures, errors })
+      : undefined;
 
     return res.status(200).json({
       ok: true,
       refreshed: ids.filter((id) => !failures.includes(id)),
       failures,
-      errors: Object.fromEntries(failures.map((id) => [id, meta[id].error])),
+      errors,
+      ...(notified ? { notified } : {}),
     });
   } catch (e) {
-    return res.status(500).json({ ok: false, error: String(e.message || e) });
+    const error = String(e.message || e);
+    const notified = await notifyFailure({ severity: "fatal", runAt, error });
+    return res.status(500).json({ ok: false, error, notified });
   }
 }
