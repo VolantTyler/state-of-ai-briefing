@@ -1,24 +1,109 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LabelList, Legend,
 } from "recharts";
 import { useBriefingData } from "./useBriefingData.js";
 import {
-  EDITION, INK, PAPER, FAINT, RULE_SOFT, C,
+  EDITION, INK, PAPER, FAINT, RULE_SOFT, C, TEXT_BRICK, TEXT_CLAY,
   BRAND_COLOR, BRAND_OF, brandFill,
-  BASELINE, TRACKERS, SRC, snapshot,
+  BASELINE, TRACKERS, SRC, snapshot, panelTimes,
 } from "./briefing-data.js";
 
-const relTime = (iso) => {
+/* ——— How old is it? ———
+   One vocabulary for every timestamp on the page. `span` is the bare
+   magnitude ("9 days"), `ago` is the same thing as an age ("9 days ago").
+   Everything spells the unit out: at 10px mono in a card corner "9d" reads
+   as a code, and the whole point of these stamps is that a reader can tell
+   at a glance whether a number is current. */
+const span = (iso) => {
   if (!iso) return null;
   const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
+  if (mins < 1) return null;
+  if (mins < 60) return `${mins} minute${mins === 1 ? "" : "s"}`;
   const h = Math.floor(mins / 60);
-  if (h < 24) return `${h}h ago`;
-  const dys = Math.floor(h / 24);
-  return dys === 1 ? "yesterday" : `${dys}d ago`;
+  if (h < 24) return `${h} hour${h === 1 ? "" : "s"}`;
+  const d = Math.floor(h / 24);
+  return `${d} day${d === 1 ? "" : "s"}`;
+};
+
+const ago = (iso) => {
+  const s = span(iso);
+  return s ? `${s} ago` : iso ? "just now" : null;
+};
+
+/* The nightly cron fires at 08:00 UTC, and Vercel fires it within the hour,
+   so a panel checked inside the last two days is on schedule — one late run
+   is not a fault. Past that, something is actually wrong. */
+const STALE_MS = 2 * 24 * 60 * 60 * 1000;
+const isStale = (iso) => !iso || Date.now() - new Date(iso).getTime() > STALE_MS;
+
+/* ——— What the corner of a panel says ———
+
+   The old stamp said "Refreshed 9d ago" whether the job had run nightly and
+   found nothing new, or had not run at all since August. Those are opposite
+   situations — one is the dashboard working, the other is the dashboard
+   broken — and they read identically, so a healthy panel looked like a fault.
+
+   Four states now, and only the last two are problems:
+
+     Refreshed 5 hours ago                            checked, numbers moved
+     Refreshed 5 hours ago · no change in 9 days      checked, nothing to move
+     Last checked 9 days ago                          the check itself stopped
+     Refresh failed 5 hours ago                       the check ran and errored
+
+   Tone carries the same split as the words, so the distinction survives a
+   glance that doesn't stop to read: faint for the two healthy states, clay
+   for a stalled check, brick for an outright failure. */
+const refreshStamp = (meta) => {
+  const t = panelTimes(meta);
+  if (!t) return { text: "Baseline data", tone: "faint" };
+
+  if (t.failed) {
+    /* A panel with no `checkedAt` at all has never once come back clean, so
+       there are no "prior values" from a refresh to point at — it is showing
+       the seeded baseline. Saying "failed 5 hours ago" there would imply a
+       working panel that had one bad night. */
+    if (!t.checkedAt) {
+      return {
+        text: "Refresh has never succeeded · showing seeded values",
+        tone: "bad",
+        title: t.error ? `Reason: ${t.error}` : "This panel has no successful refresh on record.",
+      };
+    }
+    return {
+      text: `Refresh failed ${ago(t.erroredAt || t.checkedAt)} · showing values from ${ago(t.checkedAt)}`,
+      tone: "bad",
+      title: t.error ? `Reason: ${t.error}` : undefined,
+    };
+  }
+
+  if (!t.checkedAt) return { text: "Awaiting first refresh", tone: "warn" };
+
+  if (isStale(t.checkedAt)) {
+    return {
+      text: `Last checked ${ago(t.checkedAt)}`,
+      tone: "warn",
+      title: "The nightly refresh has not successfully checked this panel since then — the values shown are that old.",
+    };
+  }
+
+  /* Checked on schedule. If the numbers themselves haven't moved, say so
+     rather than letting the reader assume the check is what went quiet.
+
+     Only worth saying once a full day has passed without a move, though: on
+     a nightly job every panel is trivially "unchanged since this morning",
+     and a suffix that never goes away stops carrying information.
+     `changedAt` is also null for panels last written before the two
+     timestamps were split, where there is nothing truthful to add. */
+  const heldSince = t.changedAt && t.changedAt < t.checkedAt ? t.changedAt : null;
+  const held = heldSince && Date.now() - new Date(heldSince).getTime() >= 24 * 60 * 60 * 1000
+    ? span(heldSince) : null;
+  return {
+    text: `Refreshed ${ago(t.checkedAt)}${held ? ` · no change in ${held}` : ""}`,
+    tone: "faint",
+    title: held ? `Checked nightly. The last time any figure in this panel moved was ${ago(heldSince)}.` : undefined,
+  };
 };
 
 /* ——— In-page navigation ———
@@ -34,6 +119,24 @@ const relTime = (iso) => {
 const reducedMotion = () => {
   try { return !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches); }
   catch (e) { return false; }
+};
+
+const MOBILE_MQ = "(max-width: 640px)";
+
+const useIsMobile = () => {
+  const [mobile, setMobile] = useState(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return false;
+    return window.matchMedia(MOBILE_MQ).matches;
+  });
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return undefined;
+    const mq = window.matchMedia(MOBILE_MQ);
+    const onChange = (e) => setMobile(e.matches);
+    mq.addEventListener("change", onChange);
+    setMobile(mq.matches);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+  return mobile;
 };
 
 const scrollerFor = (el) => {
@@ -297,6 +400,95 @@ const AAOverview = ({ clusters, allItems, topScore, hoverCluster, onHoverCluster
   );
 };
 
+/* Vertical axis for narrow viewports — score runs top-to-bottom so model
+   names get a full text row instead of stacking above a cramped number line. */
+const packLanesVertical = (nodes) => {
+  const sorted = [...nodes].sort((a, b) => a.y - b.y);
+  const laneLast = [];
+  return sorted.map((n) => {
+    let lane = 0;
+    while (laneLast[lane] && Math.abs(n.y - laneLast[lane].y) < (n.halfHeight + laneLast[lane].halfHeight)) lane++;
+    laneLast[lane] = n;
+    return { ...n, lane };
+  });
+};
+
+const AAOverviewVertical = ({ clusters, allItems, topScore, hoverCluster, onHoverCluster, hoverModel, onHoverModel }) => {
+  const W = 360, axisX = 168, marginTop = 28, marginBottom = 32, pointSpan = 52;
+  const scores = allItems.map((m) => m.score);
+  const domainMin = Math.floor(Math.min(...scores)) - 1;
+  const domainMax = Math.ceil(Math.max(...scores)) + 1;
+  const usableH = (domainMax - domainMin) * pointSpan;
+  const H = marginTop + usableH + marginBottom;
+  const yScale = (s) => marginTop + usableH - ((s - domainMin) / (domainMax - domainMin)) * usableH;
+  const ticks = [];
+  for (let t = domainMin; t <= domainMax; t++) ticks.push(t);
+
+  const nodes = clusters.map((c) => {
+    if (c.items.length === 1) {
+      const it = c.items[0];
+      const { base, sub } = splitModelName(it.model);
+      return { kind: "single", item: it, base, sub, y: yScale(it.score), halfHeight: 12 };
+    }
+    const mid = (c.min + c.max) / 2;
+    return { kind: "cluster", cluster: c, y: yScale(mid), y0: yScale(c.max), y1: yScale(c.min), halfHeight: 14 };
+  });
+  const laid = packLanesVertical(nodes);
+  const laneStep = 92;
+
+  return (
+    <div style={{ width: "100%", height: Math.min(H, 540), minHeight: 380 }}>
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
+        <line x1={axisX} y1={marginTop} x2={axisX} y2={H - marginBottom} stroke={INK} strokeWidth={1} />
+        {ticks.map((t) => (
+          <g key={t}>
+            <line x1={axisX - 4} y1={yScale(t)} x2={axisX + 4} y2={yScale(t)} stroke={RULE_SOFT} />
+            <text x={axisX + 10} y={yScale(t) + 3.5} textAnchor="start" style={{ ...mono, fontSize: 10.5, fill: FAINT }}>{t}</text>
+          </g>
+        ))}
+        {laid.map((n) => {
+          const laneOffset = n.lane * laneStep;
+          if (n.kind === "single") {
+            const it = n.item;
+            const isLeader = it.score === topScore;
+            const on = hoverModel === it.model;
+            const r = isLeader ? 7.5 : 6;
+            const labelX = axisX - 10 - laneOffset;
+            return (
+              <g key={it.model} onMouseEnter={() => onHoverModel(it.model)} onMouseLeave={() => onHoverModel(null)}>
+                <line x1={labelX + 4} y1={n.y} x2={axisX - r - 1} y2={n.y} stroke={RULE_SOFT} strokeWidth={1} />
+                <circle cx={axisX} cy={n.y} r={on ? r + 1.5 : r} fill={dotFill(it)} stroke={INK} strokeWidth={on || isLeader ? 1.5 : 1} />
+                <text x={labelX} y={n.y + 4} textAnchor="end" style={{ ...mono, fontSize: 11, fontWeight: isLeader ? 500 : 400, fill: INK }}>{n.base}</text>
+                {on && n.sub && (
+                  <text x={labelX} y={n.y - 10} textAnchor="end" style={{ ...mono, fontSize: 9, fill: FAINT }}>{n.sub}</text>
+                )}
+                <circle cx={axisX} cy={n.y} r={18} fill="transparent" />
+                <title>{it.model}</title>
+              </g>
+            );
+          }
+          const c = n.cluster;
+          const hasLeader = c.items.some((it) => it.score === topScore);
+          const on = hoverCluster === c.letter;
+          const pillY = n.y0 - 9, pillH = Math.max(18, n.y1 - n.y0 + 18);
+          const badgeX = axisX + 14 + laneOffset;
+          return (
+            <g key={c.letter} onMouseEnter={() => onHoverCluster(c.letter)} onMouseLeave={() => onHoverCluster(null)}>
+              <rect x={axisX - 10} y={pillY} width={20} height={pillH} rx={9} fill={on ? C.neutral : C.paperDeep} stroke={INK} strokeWidth={on ? 2 : hasLeader ? 1.5 : 1} />
+              <line x1={badgeX - 9} y1={n.y} x2={axisX + 10} y2={n.y} stroke={RULE_SOFT} strokeWidth={1} />
+              <circle cx={badgeX} cy={n.y} r={9} fill={on ? INK : PAPER} stroke={INK} strokeWidth={on ? 1.75 : 1.25} />
+              <text x={badgeX} y={n.y + 3.5} textAnchor="middle" style={{ ...mono, fontSize: 10, fontWeight: 600, fill: on ? PAPER : INK }}>{c.letter}</text>
+              <text x={badgeX + 14} y={n.y + 4} textAnchor="start" style={{ ...mono, fontSize: 9.5, fill: on ? INK : FAINT }}>{c.items.length} models · {rangeLabel(c)}</text>
+              <rect x={axisX - 14} y={pillY - 4} width={badgeX + 90 - axisX} height={pillH + 8} fill="transparent" />
+              <title>{`Cluster ${c.letter} — ${c.items.map((i) => splitModelName(i.model).base).join(", ")}`}</title>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+};
+
 const AAClusterZoom = ({ cluster, topScore, hoverModel, onHoverModel }) => {
   const W = 800, marginX = 54, usableW = W - marginX * 2;
   const spread = cluster.max - cluster.min;
@@ -372,7 +564,7 @@ const AAClusterList = ({ cluster, topScore, hoverModel, onHoverModel }) => (
   </div>
 );
 
-const AASwarm = ({ items }) => {
+const AASwarm = ({ items, vertical = false }) => {
   /* Hover state lives here because both links cross component boundaries:
      a cluster mark on the line ↔ its section below, a zoomed dot ↔ its row. */
   const [hoverCluster, setHoverCluster] = useState(null);
@@ -383,10 +575,11 @@ const AASwarm = ({ items }) => {
   const spread = Math.round((topScore - Math.min(...scores)) * 10) / 10;
   const clusters = groupByPoint(items);
   const multi = clusters.filter((c) => c.items.length > 1);
+  const Overview = vertical ? AAOverviewVertical : AAOverview;
 
   return (
     <div>
-      <AAOverview
+      <Overview
         clusters={clusters} allItems={items} topScore={topScore}
         hoverCluster={hoverCluster} onHoverCluster={setHoverCluster}
         hoverModel={hoverModel} onHoverModel={setHoverModel}
@@ -485,17 +678,50 @@ const PaperTooltip = ({ active, payload, label, unit = "" }) => {
 const tick = { ...mono, fontSize: 11, fill: INK };
 const tickFaint = { ...mono, fontSize: 10.5, fill: FAINT };
 
+/* ——— The masthead line ———
+   Reads off the panels rather than off `updatedAt`, because `updatedAt` also
+   moves when a human edits the file by hand — which would report a nightly
+   job as healthy on a day it never ran. The newest successful panel check is
+   the honest answer to "when did this last refresh". */
+const runStamp = (lastRunAt, updatedAt, meta) => {
+  const panels = Object.values(meta || {}).map(panelTimes).filter(Boolean);
+  if (!panels.length) return { text: `Refreshed nightly · last successful check ${ago(updatedAt)}`, tone: "faint" };
+
+  const checks = panels.map((p) => p.checkedAt).filter(Boolean);
+  const newest = checks.length ? checks.reduce((a, b) => (a > b ? a : b)) : null;
+  const behind = panels.filter((p) => p.failed || isStale(p.checkedAt)).length;
+
+  /* The job fired and every panel came back empty. Worth its own sentence:
+     the fix is upstream — an API key, a rate limit — not in the data. */
+  if (lastRunAt && !isStale(lastRunAt) && behind === panels.length) {
+    return { text: `Nightly refresh ran ${ago(lastRunAt)} · every panel failed`, tone: "bad" };
+  }
+
+  if (isStale(newest)) {
+    return {
+      text: newest ? `Nightly refresh has not run in ${span(newest)}` : "Nightly refresh has not run yet",
+      tone: "warn",
+    };
+  }
+
+  const lead = `Refreshed nightly · last successful check ${ago(newest)}`;
+  return behind
+    ? { text: `${lead} · ${behind} of ${panels.length} panels behind`, tone: "warn" }
+    : { text: lead, tone: "faint" };
+};
+
+const STAMP_COLOR = { faint: FAINT, warn: TEXT_CLAY, bad: TEXT_BRICK };
+
 /* ——— Panel: card with read-only timestamp ——— */
 const Panel = ({ id, label, meta, children, sources }) => {
-  const stamp = meta && meta.at ? `Refreshed ${relTime(meta.at)}` : "Baseline data";
+  const stamp = refreshStamp(meta);
   return (
     <div style={{ border: `1px solid ${INK}`, borderRadius: 2, background: PAPER, padding: 22, marginBottom: 18, boxShadow: "3px 3px 0 rgba(25,23,20,0.08)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>
         <Eyebrow>{label}</Eyebrow>
         {meta !== null && (
-          <span title={meta && meta.failed && meta.error ? `Reason: ${meta.error}` : undefined}
-        style={{ ...mono, fontSize: 10, color: meta && meta.failed ? C.brick : FAINT }}>
-            {meta && meta.failed ? "Last refresh failed · showing prior values" : stamp}
+          <span title={stamp.title} style={{ ...mono, fontSize: 10, color: STAMP_COLOR[stamp.tone] }}>
+            {stamp.text}
           </span>
         )}
       </div>
@@ -507,9 +733,10 @@ const Panel = ({ id, label, meta, children, sources }) => {
 
 /* ————————————————— main ————————————————— */
 export default function App() {
-  const { data, meta, history, updatedAt, status: loadStatus } = useBriefingData();
+  const { data, meta, history, updatedAt, lastRunAt, status: loadStatus } = useBriefingData();
   const [showCN, setShowCN] = useState(true);
   const [tocOpen, setTocOpen] = useState(true);
+  const isMobile = useIsMobile();
 
   /* China filtering */
   const f = (arr) => (showCN ? arr : arr.filter((x) => !x.cn));
@@ -532,6 +759,7 @@ export default function App() {
   }, [showCN]);
 
   const hasTrend = history.length > 1;
+  const runLine = runStamp(lastRunAt, updatedAt, meta);
 
   return (
     <div style={{ background: PAPER, minHeight: "100vh", color: INK }}>
@@ -563,9 +791,9 @@ export default function App() {
               Chinese labs {showCN ? "shown" : "hidden"} ({cnCount})
             </label>
           </div>
-          <div style={{ ...mono, fontSize: 10, color: FAINT, marginTop: 10 }}>
+          <div style={{ ...mono, fontSize: 10, color: loadStatus === "ok" ? STAMP_COLOR[runLine.tone] : FAINT, marginTop: 10 }}>
             {loadStatus === "loading" && "Loading…"}
-            {loadStatus === "ok" && `Refreshed nightly · last run ${relTime(updatedAt)}`}
+            {loadStatus === "ok" && runLine.text}
             {loadStatus === "baseline" && "Showing compiled-in baseline — published data unavailable"}
           </div>
         </header>
@@ -634,18 +862,18 @@ export default function App() {
         {/* §02 Public markets */}
         <SectionHead id="sec-02" n="02" title="Public markets" sub="How Wall Street is pricing the picks, shovels, and platforms" />
         <Panel id="markets" label="Key AI equities" meta={meta.markets} sources={SRC.markets}>
-          <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 10 }}>
-            <thead><tr>{["Ticker", "Company", "Price", "Mkt cap", "Note"].map((h) => (
+          <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 10, tableLayout: "fixed" }}>
+            <thead><tr>{(isMobile ? ["Company", "Price", "Mkt cap", "Note"] : ["Ticker", "Company", "Price", "Mkt cap", "Note"]).map((h) => (
               <th key={h} style={{ ...mono, fontSize: 10, letterSpacing: "0.15em", textTransform: "uppercase", color: FAINT, textAlign: "left", padding: "6px 8px", borderBottom: `1px solid ${INK}` }}>{h}</th>
             ))}</tr></thead>
             <tbody>
               {data.stocks.map((s, i) => (
                 <tr key={s.ticker} style={{ background: i % 2 ? "transparent" : "rgba(25,23,20,0.025)" }}>
-                  <td style={{ ...mono, fontSize: 12.5, fontWeight: 500, padding: "9px 8px", borderBottom: `1px solid ${RULE_SOFT}` }}>{s.ticker}</td>
+                  {!isMobile && <td style={{ ...mono, fontSize: 12.5, fontWeight: 500, padding: "9px 8px", borderBottom: `1px solid ${RULE_SOFT}` }}>{s.ticker}</td>}
                   <td style={{ ...serif, fontSize: 14.5, padding: "9px 8px", borderBottom: `1px solid ${RULE_SOFT}` }}>{s.name}</td>
-                  <td style={{ ...mono, fontSize: 12.5, padding: "9px 8px", borderBottom: `1px solid ${RULE_SOFT}` }}>${s.price.toLocaleString()}</td>
-                  <td style={{ ...mono, fontSize: 12, color: FAINT, padding: "9px 8px", borderBottom: `1px solid ${RULE_SOFT}` }}>{s.cap}</td>
-                  <td style={{ ...serif, fontSize: 13.5, fontStyle: "italic", color: FAINT, padding: "9px 8px", borderBottom: `1px solid ${RULE_SOFT}` }}>{s.note}</td>
+                  <td style={{ ...mono, fontSize: 12.5, padding: "9px 8px", borderBottom: `1px solid ${RULE_SOFT}`, whiteSpace: "nowrap" }}>${s.price.toLocaleString()}</td>
+                  <td style={{ ...mono, fontSize: 12, color: FAINT, padding: "9px 8px", borderBottom: `1px solid ${RULE_SOFT}`, whiteSpace: "nowrap" }}>{s.cap}</td>
+                  <td style={{ ...serif, fontSize: 13.5, fontStyle: "italic", color: FAINT, padding: "9px 8px", borderBottom: `1px solid ${RULE_SOFT}`, wordBreak: "break-word" }}>{s.note}</td>
                 </tr>
               ))}
             </tbody>
@@ -654,8 +882,9 @@ export default function App() {
             Combined 2026 capex guidance across the big four hyperscalers now sits at roughly $720–745B, up 77% year
             over year, with the mix shifting: Amazon and Alphabet raised their budgets while Microsoft trimmed its
             guidance after extending the useful life of its data-center assets from 15 to 25 years — an accounting
-            change, not a spending pullback. Nvidia reports Q2 FY27 after the close today; consensus sits near $92B
-            in revenue, and options markets are pricing an 8–12% swing on the print.
+            change, not a spending pullback. Nvidia reported Q2 FY27 on 2026-09-07, against consensus near $92B in
+            revenue, with options markets having priced an 8–12% swing into the print; the result itself is not yet
+            reflected here.
           </Commentary>
         </Panel>
         <BackToTop />
@@ -663,8 +892,8 @@ export default function App() {
         {/* §03 Models */}
         <SectionHead id="sec-03" n="03" title="Model capability" sub="Where the frontier sits, per the four most-watched scoreboards" />
         <Panel id="models" label="Artificial Analysis Intelligence Index v4.2" meta={meta.models} sources={SRC.models}>
-          <AASwarm items={aaIndex} />
-          <div style={{ ...mono, fontSize: 10, color: C.brick, marginTop: 6 }}>
+          <AASwarm items={aaIndex} vertical={isMobile} />
+          <div style={{ ...mono, fontSize: 10, color: TEXT_BRICK, marginTop: 6 }}>
             ▲ scale change — v4.2 re-anchored the index, so these scores are not comparable to the v4.1.1 numbers in editions ≤ v2.3
           </div>
           <Commentary>
@@ -846,7 +1075,7 @@ export default function App() {
                 [data.china.costRatio, "cheaper output tokens: DeepSeek-V4-Pro ≈$0.87/M vs Claude Fable ≈$50/M"],
               ].map(([big, small]) => (
                 <div key={small} style={{ border: `1px solid ${INK}`, borderRadius: 2, padding: "16px 14px", background: PAPER, boxShadow: "3px 3px 0 rgba(25,23,20,0.08)" }}>
-                  <div style={{ ...serif, fontSize: 30, fontWeight: 600, letterSpacing: "-0.02em", color: C.clay }}>{big}</div>
+                  <div style={{ ...serif, fontSize: 30, fontWeight: 600, letterSpacing: "-0.02em", color: TEXT_CLAY }}>{big}</div>
                   <div style={{ ...serif, fontSize: 13, fontStyle: "italic", color: "#5C564B", lineHeight: 1.5, marginTop: 4 }}>{small}</div>
                 </div>
               ))}

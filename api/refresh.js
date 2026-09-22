@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { TypeSafeClient } from "@typesafe-ai/sdk";
 import {
-  BASELINE, JOBS, packValues, unpackValues,
+  BASELINE, JOBS, packValues, unpackValues, panelDigest,
   historyToCSV, csvToHistory, logHistory,
 } from "../src/briefing-data.js";
 import {
@@ -151,6 +151,107 @@ const persistJevLog = async (markdown) => {
   await ghWrite(JEV_LOG_PATH, markdown, existing.sha, `data: valuation trace ${new Date().toISOString().slice(0, 10)}`);
 };
 
+/* ——— Failure alerts ———
+   Email via AgentMail + wake a Cursor Grok Bot webhook routine. Both channels
+   are optional and best-effort: a notify failure must never mask the refresh
+   result. Alerts fire on total failure, partial panel failure, and crashes.
+   Set these in the Vercel project env (Settings → Environment Variables) —
+   there is no repo `.env`; cron only sees what Vercel injects at runtime. */
+
+const truncate = (s, n = 400) => {
+  const t = String(s || "");
+  return t.length > n ? `${t.slice(0, n - 1)}…` : t;
+};
+
+const buildAlert = ({ severity, runAt, failures = [], errors = {}, error }) => {
+  const stamp = (runAt || new Date().toISOString()).slice(0, 10);
+  const subject =
+    severity === "fatal" ? `State of AI refresh crashed · ${stamp}`
+    : severity === "all" ? `State of AI refresh failed (all panels) · ${stamp}`
+    : `State of AI refresh partial failure · ${stamp}`;
+
+  const lines = [
+    `severity: ${severity}`,
+    `runAt: ${runAt || "(unknown)"}`,
+  ];
+  if (failures.length) lines.push(`failures: ${failures.join(", ")}`);
+  if (error) lines.push(`error: ${truncate(error)}`);
+  for (const id of failures) {
+    if (errors[id]) lines.push(`  ${id}: ${truncate(errors[id], 240)}`);
+  }
+  lines.push("", "Dashboard keeps prior values until the next successful refresh.");
+
+  return {
+    source: "state-of-ai-briefing",
+    event: "refresh_failed",
+    severity,
+    runAt: runAt || null,
+    failures,
+    errors: Object.fromEntries(
+      Object.entries(errors).map(([k, v]) => [k, truncate(v, 500)]),
+    ),
+    error: error ? truncate(error, 500) : null,
+    subject,
+    message: lines.join("\n"),
+  };
+};
+
+const sendEmailAlert = async (alert) => {
+  const key = process.env.AGENTMAIL_API_KEY;
+  const inbox = process.env.AGENTMAIL_INBOX_ID;
+  const to = process.env.NOTIFY_EMAIL;
+  if (!key || !inbox || !to) return { skipped: "email unset" };
+
+  const res = await fetch(
+    `https://api.agentmail.to/v0/inboxes/${encodeURIComponent(inbox)}/messages/send`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${key}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        to: [to],
+        subject: alert.subject,
+        text: alert.message,
+        labels: ["state-of-ai", "refresh-failed", alert.severity],
+      }),
+    },
+  );
+  if (!res.ok) throw new Error(`agentmail ${res.status}: ${truncate(await res.text(), 200)}`);
+  return { ok: true };
+};
+
+const notifyGrokBot = async (alert) => {
+  const url = process.env.GROK_BOT_WEBHOOK_URL;
+  const key = process.env.GROK_BOT_WEBHOOK_KEY;
+  if (!url || !key) return { skipped: "grok bot unset" };
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json",
+      "User-Agent": "state-of-ai-briefing",
+    },
+    body: JSON.stringify(alert),
+  });
+  if (!res.ok) throw new Error(`grok bot ${res.status}: ${truncate(await res.text(), 200)}`);
+  return { ok: true };
+};
+
+const notifyFailure = async (payload) => {
+  const alert = buildAlert(payload);
+  const results = await Promise.allSettled([
+    sendEmailAlert(alert),
+    notifyGrokBot(alert),
+  ]);
+  return {
+    email: results[0].status === "fulfilled" ? results[0].value : { error: String(results[0].reason?.message || results[0].reason) },
+    grokBot: results[1].status === "fulfilled" ? results[1].value : { error: String(results[1].reason?.message || results[1].reason) },
+  };
+};
+
 export default async function handler(req, res) {
   /* Vercel Cron signs its requests with CRON_SECRET. Without this check the
      endpoint is a public button that spends money. */
@@ -165,6 +266,7 @@ export default async function handler(req, res) {
     if (!jevMarkdown) return;
     try { await persistJevLog(jevMarkdown); } catch (e) { /* the panel data still stands */ }
   };
+  const runAt = new Date().toISOString();
 
   try {
     /* 1 — current state from the repo, falling back to the baseline */
@@ -240,50 +342,98 @@ export default async function handler(req, res) {
       let why = r.status === "rejected" ? String(r.reason && r.reason.message || r.reason) : null;
       if (r.status === "fulfilled") {
         try {
+          /* A successful fetch always advances `checkedAt`; `changedAt` only
+             moves if the panel's slice of the wire format actually differs.
+             A panel checked nightly that finds no new number therefore reads
+             as current, not as abandoned — which is the whole point of the
+             split. `at` is still written as the old alias so anything reading
+             the previous shape keeps working. */
+          const before = panelDigest(data, id);
           data = JOBS[id].apply(data, r.value);
-          meta[id] = { at: new Date().toISOString(), failed: false };
+          const changed = panelDigest(data, id) !== before;
+          const prior = meta[id] || {};
+          const now = new Date().toISOString();
+          meta[id] = {
+            at: now,
+            checkedAt: now,
+            /* Falling back to `now` matters on a panel that has never been
+               seen to move: without it `changedAt` stays null forever and
+               the page can never say "checked nightly, still nothing new" —
+               which is the one message a genuinely steady panel needs. The
+               clock therefore starts at the first check we can vouch for,
+               and "no change in 9 days" means nine days of checks that all
+               came back with the same number. */
+            changedAt: changed ? now : (prior.changedAt || now),
+            failed: false,
+          };
           return;
         } catch (e) {
           /* Reply parsed but didn't fit the panel's shape. */
           why = `bad shape: ${String(e.message || e)}`;
         }
       }
-      /* Keep the last-good `at` so the panel can still say how old its
+      /* Keep the last-good timestamps so the panel can still say how old its
          numbers are, and record *why* this run failed — a bare boolean
-         left the markets panel undiagnosable for weeks. */
+         left the markets panel undiagnosable for weeks. `checkedAt` is
+         deliberately not advanced: the run happened, but it did not
+         successfully check this panel. */
       meta[id] = { ...(meta[id] || {}), failed: true, error: (why || "unknown").slice(0, 300), erroredAt: new Date().toISOString() };
       failures.push(id);
     });
 
     if (failures.length === ids.length) {
       /* Every job failed — almost certainly an API or network problem.
-         Don't commit the panel data; leave yesterday's good data in place.
-         The valuation trace is still written when that job produced one. */
+         Yesterday's values stay exactly as they are; `data` is untouched
+         because no `apply` succeeded, so this write moves only `meta` and
+         `lastRunAt`.
+
+         It is still worth writing. Bailing out entirely, which is what this
+         used to do, left a totally failed night with no trace anywhere in
+         the repo — indistinguishable from a cron that never fired, which is
+         the ambiguity the page is now trying to resolve. One commit a night
+         is a cheap price for being able to tell those apart. */
+      const errors = Object.fromEntries(failures.map((id) => [id, meta[id].error]));
+      try {
+        await ghWrite(
+          VALUES_PATH,
+          JSON.stringify(packValues(data, meta, runAt), null, 2) + "\n",
+          vFile.sha,
+          `data: refresh ${runAt.slice(0, 10)} (all panels failed, values unchanged)`,
+        );
+      } catch (e) { /* the run already failed; a failed write changes nothing */ }
       await saveTrace();
+      const notified = await notifyFailure({ severity: "all", runAt, failures, errors });
       return res.status(502).json({
-        ok: false, error: "all panels failed", failures,
-        errors: Object.fromEntries(failures.map((id) => [id, meta[id].error])),
+        ok: false, error: "all panels failed", failures, errors, notified,
       });
     }
 
     /* 3 — write both files back */
-    const nextValues = JSON.stringify(packValues(data, meta), null, 2) + "\n";
+    const nextValues = JSON.stringify(packValues(data, meta, runAt), null, 2) + "\n";
     const nextHistory = historyToCSV(logHistory(data, history)) + "\n";
-    const stamp = new Date().toISOString().slice(0, 10);
+    const stamp = runAt.slice(0, 10);
     const note = failures.length ? ` (${failures.join(", ")} kept prior values)` : "";
+    const errors = Object.fromEntries(failures.map((id) => [id, meta[id].error]));
 
     await ghWrite(VALUES_PATH, nextValues, vFile.sha, `data: refresh ${stamp}${note}`);
     await ghWrite(TREND_PATH, nextHistory, tFile.sha, `data: trend log ${stamp}`);
     await saveTrace();
 
+    const notified = failures.length
+      ? await notifyFailure({ severity: "partial", runAt, failures, errors })
+      : undefined;
+
     return res.status(200).json({
       ok: true,
       refreshed: ids.filter((id) => !failures.includes(id)),
       failures,
-      errors: Object.fromEntries(failures.map((id) => [id, meta[id].error])),
+      errors,
+      ...(notified ? { notified } : {}),
     });
   } catch (e) {
     await saveTrace();
-    return res.status(500).json({ ok: false, error: String(e.message || e) });
+    const error = String(e.message || e);
+    const notified = await notifyFailure({ severity: "fatal", runAt, error });
+    return res.status(500).json({ ok: false, error, notified });
   }
 }

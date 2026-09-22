@@ -13,7 +13,10 @@ export const EDITION = {
 
 export const INK = "#191714";
 export const PAPER = "#FAF7F0";
-export const FAINT = "#857D6F";
+/* #857D6F read at 4.19:1 on PAPER — under the 4.5:1 WCAG AA floor for text,
+   which this token is used as ~35 times (captions, ticks, table cells).
+   Darkened to hold ≥4.5:1 while keeping the same warm-gray hue. */
+export const FAINT = "#70685A";
 export const RULE_SOFT = "#E4DCCB";
 export const C = {
   blue: "#7A93AC", ochre: "#C8A24E", sage: "#8AA07B", brick: "#B06A55",
@@ -24,6 +27,13 @@ export const C = {
      `sage` (OpenAI) and `slate` (Perplexity) to read apart on the swarm. */
   teal: "#5F8A80",
 };
+
+/* `brick` and `clay` above are chart/dot fills (non-text, exempt from text
+   contrast rules) and stay as-is so bars keep matching their §04 brand
+   swatch. The few spots that set body text in those hues need darker,
+   text-only variants to clear 4.5:1 on PAPER. */
+export const TEXT_BRICK = "#965844";
+export const TEXT_CLAY = "#7A6556";
 
 /* ——— Brand colors, sourced from the web-traffic-share chart (§04) ———
    Every other bar/line/dot for a company or its product reuses this color,
@@ -71,7 +81,7 @@ export const BASELINE = {
     { t: "May ’26", OpenAI: 852, Anthropic: 965 },
   ],
   stocks: [
-    { ticker: "NVDA", name: "Nvidia", price: 213.05, cap: "≈ $5.16T", note: "reports Q2 FY27 after close today" },
+    { ticker: "NVDA", name: "Nvidia", price: 213.05, cap: "≈ $5.16T", note: "Q2 FY27 reported 2026-09-07" },
     { ticker: "MSFT", name: "Microsoft", price: 491.71, cap: "≈ $3.65T", note: "capex revised to ≈$175B on accounting change" },
     { ticker: "GOOG", name: "Alphabet", price: 349.90, cap: "≈ $4.28T", note: "capex guide raised to $195–205B" },
     { ticker: "META", name: "Meta", price: 570.05, cap: "≈ $1.45T", note: "volatile Aug; +4% premarket on $22B compute deal report" },
@@ -160,9 +170,14 @@ export const SRC = {
 
 /* ——— Refresh jobs, one per panel ———
    Unchanged from the artifact edition. These now run server-side in
-   api/refresh.js on a schedule; nothing in the browser ever calls the API. */
+   api/refresh.js on a schedule; nothing in the browser ever calls the API.
+
+   `keys` names the wire-format fields the job writes, which is what lets the
+   cron tell a check that found nothing new from a check that never happened.
+   See `panelDigest` below. */
 export const JOBS = {
   valuations: {
+    keys: ["val"],
     /* Cited passages are collected in api/refresh.js. Which amount is the
        company's completed price is decided in api/valuation-judgment.js.
        This panel does not ask a model to emit the number. */
@@ -179,6 +194,7 @@ export const JOBS = {
     },
   },
   markets: {
+    keys: ["stocks"],
     /* Quotes are the one job that reliably attracts a hedge ("prices are
        delayed and may not reflect real-time values"), and the hedge used
        to take the whole panel down with it. Say up front that a delayed
@@ -190,6 +206,7 @@ export const JOBS = {
     }) }),
   },
   models: {
+    keys: ["aa"],
     /* Two constraints that pull in opposite directions, both deliberate.
        Dedupe by family: an earlier run returned Claude Opus 5 three times at
        three effort settings, spending three of eight slots on one model. But
@@ -206,6 +223,7 @@ export const JOBS = {
     },
   },
   users: {
+    keys: ["users"],
     prompt: 'Search the web for the latest monthly active users in millions for AI assistants: Meta AI, ChatGPT, Gemini, Copilot, Claude, Grok. Respond ONLY with compact JSON, no prose or fences: {"users":{"Meta AI":0,"ChatGPT":0,"Gemini":0,"Copilot":0,"Claude":0,"Grok":0}}',
     apply: (d, j) => (!j.users ? d : { ...d, users: d.users.map((u) => {
       const n = Number(j.users[u.name]);
@@ -213,6 +231,7 @@ export const JOBS = {
     }).sort((a, b) => b.users - a.users) }),
   },
   share: {
+    keys: ["share"],
     prompt: 'Search the web for the latest global AI chatbot web-traffic share percentages (Similarweb) for ChatGPT, Gemini, Claude, Grok, Copilot, Perplexity. Respond ONLY with compact JSON, no prose or fences: {"share":{"ChatGPT":0,"Gemini":0,"Claude":0,"Grok":0,"Copilot":0,"Perplexity":0}}',
     apply: (d, j) => {
       if (!j.share) return d;
@@ -228,6 +247,7 @@ export const JOBS = {
     },
   },
   capital: {
+    keys: ["capex", "rev"],
     prompt: 'Search the web for (a) 2026 planned capital expenditure in billions USD for Alphabet, Amazon, Microsoft, Meta and (b) latest annualized revenue run-rates in billions USD for Anthropic, OpenAI, xAI. Respond ONLY with compact JSON, no prose or fences: {"capex":{"Alphabet":0,"Amazon":0,"Microsoft":0,"Meta":0},"revenue":{"Anthropic":0,"OpenAI":0,"xAI":0}}',
     apply: (d, j) => {
       let n = { ...d };
@@ -237,6 +257,7 @@ export const JOBS = {
     },
   },
   energy: {
+    keys: ["energy"],
     prompt: 'Search the web for the latest global data center electricity forecasts: total TWh for 2026, peak power demand in GW for 2026, the US share of global data center consumption as a percent, and the AI-optimized server share of data center power as a percent. Respond ONLY with compact JSON, no prose or fences: {"energy":{"totalTWh":0,"peakGW":0,"usShare":0,"aiShareOfDC":0}}',
     apply: (d, j) => {
       if (!j.energy) return d;
@@ -259,8 +280,14 @@ export const JOBS = {
 export const HIST_COLS = ["date", "anthropic", "openai", "nvda", "msft", "chatgpt", "claude", "gemini", "topScore", "scale"];
 const TEXT_COLS = new Set(["date", "scale"]);
 
-export const packValues = (d, meta) => ({
+export const packValues = (d, meta, lastRunAt) => ({
   updatedAt: new Date().toISOString(),
+  /* Written only by api/refresh.js, so it is evidence the cron actually
+     fired — including on a night when every panel failed and no value
+     moved. `updatedAt` can't do that job: it also advances when the file is
+     edited by hand, so a stale cron behind a recent hand edit reads as
+     healthy. */
+  ...(lastRunAt ? { lastRunAt } : {}),
   meta,
   val: Object.fromEntries(d.valuations.map((x) => [x.name, x.value])),
   stocks: Object.fromEntries(d.stocks.map((x) => [x.ticker, x.price])),
@@ -271,6 +298,42 @@ export const packValues = (d, meta) => ({
   energy: d.energyStats,
   aa: d.aaIndex.map((m) => [m.model, m.lab, m.score, m.cn ? 1 : 0]),
 });
+
+/* ——— Panel freshness ———
+
+   `at` used to be the only timestamp, and it moved on every successful run,
+   so a panel that had been checked faithfully every night but had found no
+   new number read exactly like a panel nobody had looked at in nine days.
+   The two are now recorded separately:
+
+     checkedAt — the last run that successfully fetched this panel
+     changedAt — the last run whose fetch actually moved a number
+
+   `panelDigest` is what decides "actually moved": the job's own slice of the
+   wire format, serialized. Comparing the published shape rather than the
+   in-memory objects means rounding and re-sorting are already applied, so a
+   value that survives a round trip unchanged doesn't register as news. */
+export const panelDigest = (d, id) => {
+  const job = JOBS[id];
+  if (!job || !job.keys) return null;
+  const packed = packValues(d, null);
+  return JSON.stringify(job.keys.map((k) => packed[k]));
+};
+
+/* Files written before the split carry only `at`, which meant "last
+   successful run" — that is `checkedAt`. There is no way to know when those
+   values last moved, so `changedAt` reads back null and the UI says how long
+   it has been since the check rather than inventing a change date. */
+export const panelTimes = (m) => {
+  if (!m || typeof m !== "object") return null;
+  return {
+    checkedAt: m.checkedAt || m.at || null,
+    changedAt: m.changedAt || null,
+    failed: !!m.failed,
+    error: m.error || null,
+    erroredAt: m.erroredAt || null,
+  };
+};
 
 export const unpackValues = (d, p) => {
   if (!p || typeof p !== "object") return d;

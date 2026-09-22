@@ -23,6 +23,7 @@ export function useBriefingData() {
     meta: {},
     history: BASE_HISTORY,
     updatedAt: null,
+    lastRunAt: null,
     status: "loading",
   });
 
@@ -41,10 +42,12 @@ export function useBriefingData() {
       let data = BASELINE;
       let meta = {};
       let updatedAt = null;
+      let lastRunAt = null;
       if (vRes.status === "fulfilled" && vRes.value) {
         data = unpackValues(BASELINE, vRes.value);
         meta = vRes.value.meta && typeof vRes.value.meta === "object" ? vRes.value.meta : {};
         updatedAt = vRes.value.updatedAt || null;
+        lastRunAt = vRes.value.lastRunAt || null;
       }
 
       let history = BASE_HISTORY;
@@ -58,6 +61,7 @@ export function useBriefingData() {
         meta,
         history,
         updatedAt,
+        lastRunAt,
         /* "baseline" means the published files couldn't be read and the page
            is showing compiled-in values — worth saying out loud rather than
            quietly rendering stale numbers as if they were live. */
