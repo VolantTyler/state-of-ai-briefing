@@ -1,0 +1,23 @@
+name: Try Jev
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [cursor/install-typesafe-skill]
+    paths:
+      - .github/workflows/try-jev.yml
+      - api/try-jev.js
+
+jobs:
+  try:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node api/try-jev.js
+        env:
+          TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
