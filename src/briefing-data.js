@@ -163,7 +163,9 @@ export const SRC = {
    api/refresh.js on a schedule; nothing in the browser ever calls the API. */
 export const JOBS = {
   valuations: {
-    prompt: 'Search the web for the latest reported valuations in billions USD for these AI companies: Anthropic, OpenAI, xAI, Databricks, Z.ai (Zhipu), DeepSeek, Anduril, Moonshot AI, MiniMax. Respond ONLY with compact JSON, no prose or fences: {"valuations":{"Anthropic":0,"OpenAI":0,"xAI":0,"Databricks":0,"Z.ai (Zhipu)":0,"DeepSeek":0,"Anduril":0,"Moonshot AI":0,"MiniMax":0}}',
+    /* Cited passages are collected in api/refresh.js. Which amount is the
+       company's completed price is decided in api/valuation-judgment.js.
+       This panel does not ask a model to emit the number. */
     apply: (d, j) => {
       if (!j.valuations) return d;
       const v = d.valuations.map((x) => {

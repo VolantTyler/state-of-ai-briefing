@@ -1,7 +1,12 @@
+import { mkdir, writeFile } from "node:fs/promises";
+import { TypeSafeClient } from "@typesafe-ai/sdk";
 import {
   BASELINE, JOBS, packValues, unpackValues,
   historyToCSV, csvToHistory, logHistory,
 } from "../src/briefing-data.js";
+import {
+  citationsFromContent, judgeValuations, renderJevActions,
+} from "./valuation-judgment.js";
 
 /* ————————————————————————————————————————————————
    Nightly refresh.
@@ -16,6 +21,11 @@ import {
 const GH = "https://api.github.com";
 const VALUES_PATH = "public/data/values.json";
 const TREND_PATH = "public/data/trend.csv";
+const JEV_LOG_PATH = "dev/jev-actions.md";
+
+const VALUATION_SEARCH = `Search the web for recent reporting, in US dollars, on what each of these companies is worth: Anthropic, OpenAI, xAI, Databricks, Z.ai (also called Zhipu), DeepSeek, Anduril, Moonshot AI, MiniMax.
+
+Cite the source passage for every dollar figure you mention, including funding-round valuations, the size of the round, market caps, and prices still being negotiated. Use the source's words for the figure. Cover every company.`;
 
 const env = (k) => {
   const v = process.env[k];
@@ -106,7 +116,7 @@ const extractJSON = (blocks) => {
   throw new Error("no parseable JSON object in reply");
 };
 
-const askClaude = async (prompt) => {
+const anthropicMessage = async (prompt, maxTokens) => {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -116,7 +126,7 @@ const askClaude = async (prompt) => {
     },
     body: JSON.stringify({
       model: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6",
-      max_tokens: 4000,
+      max_tokens: maxTokens,
       messages: [{ role: "user", content: prompt }],
       tools: [{ type: "web_search_20250305", name: "web_search" }],
     }),
@@ -124,7 +134,21 @@ const askClaude = async (prompt) => {
   if (!res.ok) throw new Error(`anthropic ${res.status}: ${await res.text()}`);
   const data = await res.json();
   if (!data.content) throw new Error("empty response");
-  return extractJSON(data.content);
+  return data.content;
+};
+
+const askClaude = async (prompt) => extractJSON(await anthropicMessage(prompt, 4000));
+
+/* The trace is for reading the judgments. It is not part of the site.
+   A local write helps a manual run; the GitHub write is what lasts on Vercel. */
+const persistJevLog = async (markdown) => {
+  if (!markdown) return;
+  try {
+    await mkdir("dev", { recursive: true });
+    await writeFile(JEV_LOG_PATH, markdown);
+  } catch (e) { /* the deployment filesystem may be read-only */ }
+  const existing = await ghRead(JEV_LOG_PATH);
+  await ghWrite(JEV_LOG_PATH, markdown, existing.sha, `data: valuation trace ${new Date().toISOString().slice(0, 10)}`);
 };
 
 export default async function handler(req, res) {
@@ -135,6 +159,12 @@ export default async function handler(req, res) {
   if (secret && auth !== `Bearer ${secret}`) {
     return res.status(401).json({ error: "unauthorized" });
   }
+
+  let jevMarkdown = null;
+  const saveTrace = async () => {
+    if (!jevMarkdown) return;
+    try { await persistJevLog(jevMarkdown); } catch (e) { /* the panel data still stands */ }
+  };
 
   try {
     /* 1 — current state from the repo, falling back to the baseline */
@@ -157,12 +187,45 @@ export default async function handler(req, res) {
        is usually malformed by luck, not by rule, and a second ask is far
        cheaper than a stale panel for 24 hours. */
     const ids = Object.keys(JOBS);
-    const runJob = async (id) => {
+    const runValuations = async () => {
+      const content = await anthropicMessage(VALUATION_SEARCH, 8000);
+      const passages = citationsFromContent(content);
+      const at = new Date().toISOString();
+      let client;
       try {
-        return await askClaude(JOBS[id].prompt);
+        client = new TypeSafeClient({ timeout: 30_000 });
+      } catch (e) {
+        jevMarkdown = renderJevActions({
+          ran: true, at, passageCount: passages.length,
+          error: String(e.message || e), results: [],
+        });
+        throw e;
+      }
+      try {
+        const judged = await judgeValuations({
+          companies: data.valuations.map((row) => ({ name: row.name, value: row.value })),
+          passages,
+          ask: (request) => client.systemOne(request),
+        });
+        jevMarkdown = renderJevActions({
+          ran: true, at, passageCount: passages.length, results: judged.results,
+        });
+        return { valuations: judged.accepted };
+      } catch (e) {
+        jevMarkdown = renderJevActions({
+          ran: true, at, passageCount: passages.length,
+          error: String(e.message || e), results: e.results || [],
+        });
+        throw e;
+      }
+    };
+    const runJob = async (id) => {
+      const once = () => (id === "valuations" ? runValuations() : askClaude(JOBS[id].prompt));
+      try {
+        return await once();
       } catch (first) {
         try {
-          return await askClaude(JOBS[id].prompt);
+          return await once();
         } catch (second) {
           throw new Error(`${first.message} (retry: ${second.message})`);
         }
@@ -194,7 +257,9 @@ export default async function handler(req, res) {
 
     if (failures.length === ids.length) {
       /* Every job failed — almost certainly an API or network problem.
-         Don't commit; leave yesterday's good data in place. */
+         Don't commit the panel data; leave yesterday's good data in place.
+         The valuation trace is still written when that job produced one. */
+      await saveTrace();
       return res.status(502).json({
         ok: false, error: "all panels failed", failures,
         errors: Object.fromEntries(failures.map((id) => [id, meta[id].error])),
@@ -209,6 +274,7 @@ export default async function handler(req, res) {
 
     await ghWrite(VALUES_PATH, nextValues, vFile.sha, `data: refresh ${stamp}${note}`);
     await ghWrite(TREND_PATH, nextHistory, tFile.sha, `data: trend log ${stamp}`);
+    await saveTrace();
 
     return res.status(200).json({
       ok: true,
@@ -217,6 +283,7 @@ export default async function handler(req, res) {
       errors: Object.fromEntries(failures.map((id) => [id, meta[id].error])),
     });
   } catch (e) {
+    await saveTrace();
     return res.status(500).json({ ok: false, error: String(e.message || e) });
   }
 }
