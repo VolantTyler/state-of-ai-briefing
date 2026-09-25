@@ -1,62 +1,48 @@
 {
-  "updatedAt": "2026-09-24T08:25:04.144Z",
-  "lastRunAt": "2026-09-24T08:25:02.921Z",
+  "updatedAt": "2026-09-25T08:26:24.487Z",
+  "lastRunAt": "2026-09-25T08:25:02.667Z",
   "meta": {
     "valuations": {
-      "at": "2026-09-21T08:26:13.546Z",
-      "checkedAt": "2026-09-21T08:26:13.546Z",
-      "changedAt": "2026-09-21T08:26:13.546Z",
-      "failed": true,
-      "error": "anthropic 400: {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.\"},\"request_id\":\"req_011CfMwjWM19nYgAjCua5pEX\"} (retry: anthropic 400: {\"type\":\"error\",\"error\":{\"t",
-      "erroredAt": "2026-09-24T08:25:04.144Z"
+      "at": "2026-09-25T08:26:24.486Z",
+      "checkedAt": "2026-09-25T08:26:24.486Z",
+      "changedAt": "2026-09-25T08:26:24.486Z",
+      "failed": false
     },
     "markets": {
-      "at": "2026-09-20T08:25:27.541Z",
-      "checkedAt": "2026-09-20T08:25:27.541Z",
-      "changedAt": "2026-09-20T08:25:27.541Z",
-      "failed": true,
-      "error": "anthropic 400: {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.\"},\"request_id\":\"req_011CfMwjWMVwdsZEEPfuYPPJ\"} (retry: anthropic 400: {\"type\":\"error\",\"error\":{\"t",
-      "erroredAt": "2026-09-24T08:25:04.144Z"
+      "at": "2026-09-25T08:26:24.486Z",
+      "checkedAt": "2026-09-25T08:26:24.486Z",
+      "changedAt": "2026-09-25T08:26:24.486Z",
+      "failed": false
     },
     "models": {
-      "at": "2026-09-21T08:26:13.546Z",
-      "checkedAt": "2026-09-21T08:26:13.546Z",
-      "changedAt": "2026-09-21T08:26:13.546Z",
-      "failed": true,
-      "error": "anthropic 400: {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.\"},\"request_id\":\"req_011CfMwjWSDGtnWQemjgnwfH\"} (retry: anthropic 400: {\"type\":\"error\",\"error\":{\"t",
-      "erroredAt": "2026-09-24T08:25:04.144Z"
+      "at": "2026-09-25T08:26:24.486Z",
+      "checkedAt": "2026-09-25T08:26:24.486Z",
+      "changedAt": "2026-09-25T08:26:24.486Z",
+      "failed": false
     },
     "users": {
-      "at": "2026-09-21T08:26:13.546Z",
-      "checkedAt": "2026-09-21T08:26:13.546Z",
+      "at": "2026-09-25T08:26:24.487Z",
+      "checkedAt": "2026-09-25T08:26:24.487Z",
       "changedAt": "2026-09-21T08:26:13.546Z",
-      "failed": true,
-      "error": "anthropic 400: {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.\"},\"request_id\":\"req_011CfMwjWM1JhPAcgLagTQet\"} (retry: anthropic 400: {\"type\":\"error\",\"error\":{\"t",
-      "erroredAt": "2026-09-24T08:25:04.144Z"
+      "failed": false
     },
     "share": {
-      "at": "2026-09-21T08:26:13.546Z",
-      "checkedAt": "2026-09-21T08:26:13.546Z",
+      "at": "2026-09-25T08:26:24.487Z",
+      "checkedAt": "2026-09-25T08:26:24.487Z",
       "changedAt": "2026-09-10T08:25:35.922Z",
-      "failed": true,
-      "error": "anthropic 400: {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.\"},\"request_id\":\"req_011CfMwjWMkeVkiaburz9NS3\"} (retry: anthropic 400: {\"type\":\"error\",\"error\":{\"t",
-      "erroredAt": "2026-09-24T08:25:04.144Z"
+      "failed": false
     },
     "capital": {
-      "at": "2026-09-21T08:26:13.546Z",
-      "checkedAt": "2026-09-21T08:26:13.546Z",
-      "changedAt": "2026-09-20T08:25:27.542Z",
-      "failed": true,
-      "error": "anthropic 400: {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.\"},\"request_id\":\"req_011CfMwjWMkXjo47ATLCpEB3\"} (retry: anthropic 400: {\"type\":\"error\",\"error\":{\"t",
-      "erroredAt": "2026-09-24T08:25:04.144Z"
+      "at": "2026-09-25T08:26:24.487Z",
+      "checkedAt": "2026-09-25T08:26:24.487Z",
+      "changedAt": "2026-09-25T08:26:24.487Z",
+      "failed": false
     },
     "energy": {
-      "at": "2026-09-21T08:26:13.546Z",
-      "checkedAt": "2026-09-21T08:26:13.546Z",
-      "changedAt": "2026-09-19T08:25:51.608Z",
-      "failed": true,
-      "error": "anthropic 400: {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.\"},\"request_id\":\"req_011CfMwjWPEbyD65VjYs2fhs\"} (retry: anthropic 400: {\"type\":\"error\",\"error\":{\"t",
-      "erroredAt": "2026-09-24T08:25:04.144Z"
+      "at": "2026-09-25T08:26:24.487Z",
+      "checkedAt": "2026-09-25T08:26:24.487Z",
+      "changedAt": "2026-09-25T08:26:24.487Z",
+      "failed": false
     }
   },
   "val": {
@@ -68,16 +54,16 @@
     "Anduril": 61,
     "Z.ai (Zhipu)": 40.4,
     "Moonshot AI": 35,
-    "MiniMax": 13.5
+    "MiniMax": 4
   },
   "stocks": {
-    "NVDA": 222.27,
-    "MSFT": 493.78,
-    "GOOG": 344.41,
-    "META": 665.75,
-    "AMZN": 253.71,
-    "AVGO": 357.61,
-    "TSM": 434.67
+    "NVDA": 224.58,
+    "MSFT": 424.82,
+    "GOOG": 348.52,
+    "META": 775.89,
+    "AMZN": 261.12,
+    "AVGO": 418.2,
+    "TSM": 404.98
   },
   "users": {
     "Meta AI": 1500,
@@ -97,7 +83,7 @@
     "Others": 4.7
   },
   "capex": {
-    "Alphabet": 200,
+    "Alphabet": 180,
     "Amazon": 220,
     "Microsoft": 190,
     "Meta": 138
@@ -110,7 +96,7 @@
   "energy": {
     "totalTWh": 565,
     "peakGW": 132,
-    "usShare": 43,
+    "usShare": 36,
     "aiShareOfDC": 31
   },
   "aa": [
@@ -158,7 +144,7 @@
     ],
     [
       "Kimi K3 (max)",
-      "Moonshot AI",
+      "Moonshot",
       50,
       1
     ]
