@@ -1,0 +1,28 @@
+{
+  "chart": "US overall top free",
+  "country": "us",
+  "list": "top-free",
+  "days": [
+    {
+      "date": "2026-09-26",
+      "iosDepth": 99,
+      "androidDepth": 100,
+      "ios": {
+        "muse": 1,
+        "chatgpt": 3,
+        "gemini": 7,
+        "claude": 13,
+        "grok": 45,
+        "copilot": 67,
+        "metaai": 77
+      },
+      "android": {
+        "muse": 1,
+        "chatgpt": 3,
+        "claude": 41,
+        "gemini": 90,
+        "grok": 93
+      }
+    }
+  ]
+}

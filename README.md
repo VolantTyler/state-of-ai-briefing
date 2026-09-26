@@ -9,10 +9,10 @@ with a nightly server-side refresh.
 Vercel Cron (daily, 08:00 UTC)
         │
         ▼
-  /api/refresh ──── Anthropic API (web search) ──── 7 panel jobs in parallel
-        │
+  /api/refresh ──── Anthropic API (web search) ──── panel jobs in parallel
+        │                 └── US App Store + Google Play charts (store ranks)
         ▼
-  commits public/data/values.json + public/data/trend.csv to this repo
+  commits public/data/values.json + trend.csv + store-ranks.json to this repo
         │
         ▼
   Vercel rebuilds ──── static files served from the CDN
@@ -24,7 +24,7 @@ Vercel Cron (daily, 08:00 UTC)
 The inversion is the point. In the artifact edition the browser did the
 refreshing, which on a public URL would mean either shipping an API key or
 exposing an endpoint any stranger could loop. Here the browser only ever reads
-two files, so page loads cost nothing and can't be abused.
+the published files, so page loads cost nothing and can't be abused.
 
 Git history *is* the trend log. Every refresh is a dated commit you can diff,
 replay or revert — the same job a database would do, for free, with better
@@ -38,7 +38,7 @@ auditability.
 | `src/briefing-data.js` | Baseline dataset, sources, refresh jobs, wire format. Shared by the app and the cron so they can't drift. |
 | `src/useBriefingData.js` | Reads the published files. Replaces `window.storage` + Drive sync. |
 | `api/refresh.js` | The nightly job. The only place the API key exists. |
-| `public/data/` | Published state, seeded from the existing Drive files. |
+| `public/data/` | Published state. `values.json` and `trend.csv` are the panel record; `store-ranks.json` is the daily US top-free chart for first-party AI apps. |
 | `public/icon.svg` | The mark — three lines converging on one exponential curve. Source of every raster icon. |
 | `public/site.webmanifest` | Homescreen name, colors and icon set. |
 
@@ -219,7 +219,8 @@ for each channel you configured.
   untouched — but the job now writes `meta` and `lastRunAt` anyway, so a
   totally failed night is visible in the repo instead of looking exactly like
   a cron that never fired. Configured failure alerts fire on that path too.
-- **Cost** is seven Sonnet calls with web search per day. Hosting is free on
+- **Cost** is one Sonnet call with web search per model-backed panel per day.
+  Store ranks are a direct chart fetch, not another model call. Hosting is free on
   Hobby.
 - **The commit loop is safe** — the cron only ever writes `public/data/`, and
   Vercel's build doesn't write to the repo, so there's no feedback loop.
@@ -253,7 +254,7 @@ look broken:
 | `Refresh failed 5 hours ago` | The check ran and errored. Brick-colored, reason in the tooltip. |
 | `Refresh has never succeeded` | No successful refresh on record; the card is showing seeded values. |
 
-The masthead summarizes the same thing across all seven panels, and reads
+The masthead summarizes the same thing across every panel, and reads
 from `lastRunAt`/`checkedAt` rather than `updatedAt`, because `updatedAt`
 also advances on a hand edit — which would report a dead cron as healthy.
 
