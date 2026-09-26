@@ -4,6 +4,7 @@ import {
   BASELINE, JOBS, packValues, unpackValues, panelDigest,
   historyToCSV, csvToHistory, logHistory,
 } from "../src/briefing-data.js";
+import { appendStoreRankDay, fetchStoreRanks } from "../src/store-ranks.js";
 import {
   citationsFromContent, judgeValuations, renderJevActions,
 } from "./valuation-judgment.js";
@@ -21,6 +22,7 @@ import {
 const GH = "https://api.github.com";
 const VALUES_PATH = "public/data/values.json";
 const TREND_PATH = "public/data/trend.csv";
+const STORE_RANKS_PATH = "public/data/store-ranks.json";
 const JEV_LOG_PATH = "dev/jev-actions.md";
 
 const VALUATION_SEARCH = `Search the web for recent reporting, in US dollars, on what each of these companies is worth: Anthropic, OpenAI, xAI, Databricks, Z.ai (also called Zhipu), DeepSeek, Anduril, Moonshot AI, MiniMax.
@@ -281,6 +283,7 @@ export default async function handler(req, res) {
       } catch (e) { /* corrupt file — fall through to baseline */ }
     }
     const history = tFile.text ? csvToHistory(tFile.text) : [];
+    const rankFile = await ghRead(STORE_RANKS_PATH);
 
     /* 2 — every panel in parallel. Each job is independent, so one failure
        keeps its prior values instead of aborting the run.
@@ -322,7 +325,11 @@ export default async function handler(req, res) {
       }
     };
     const runJob = async (id) => {
-      const once = () => (id === "valuations" ? runValuations() : askClaude(JOBS[id].prompt));
+      const once = () => {
+        if (id === "storeRanks") return fetchStoreRanks();
+        if (id === "valuations") return runValuations();
+        return askClaude(JOBS[id].prompt);
+      };
       try {
         return await once();
       } catch (first) {
@@ -337,6 +344,7 @@ export default async function handler(req, res) {
 
     const meta = { ...prevMeta };
     const failures = [];
+    let storeRankDay = null;
     results.forEach((r, i) => {
       const id = ids[i];
       let why = r.status === "rejected" ? String(r.reason && r.reason.message || r.reason) : null;
@@ -350,6 +358,7 @@ export default async function handler(req, res) {
              the previous shape keeps working. */
           const before = panelDigest(data, id);
           data = JOBS[id].apply(data, r.value);
+          if (id === "storeRanks" && r.value && r.value.day) storeRankDay = r.value.day;
           const changed = panelDigest(data, id) !== before;
           const prior = meta[id] || {};
           const now = new Date().toISOString();
@@ -417,6 +426,14 @@ export default async function handler(req, res) {
 
     await ghWrite(VALUES_PATH, nextValues, vFile.sha, `data: refresh ${stamp}${note}`);
     await ghWrite(TREND_PATH, nextHistory, tFile.sha, `data: trend log ${stamp}`);
+    if (storeRankDay) {
+      let prevRanks = { days: [] };
+      if (rankFile.text) {
+        try { prevRanks = JSON.parse(rankFile.text); } catch (e) { prevRanks = { days: [] }; }
+      }
+      const nextRanks = JSON.stringify(appendStoreRankDay(prevRanks, storeRankDay), null, 2) + "\n";
+      await ghWrite(STORE_RANKS_PATH, nextRanks, rankFile.sha, `data: store ranks ${stamp}`);
+    }
     await saveTrace();
 
     const notified = failures.length

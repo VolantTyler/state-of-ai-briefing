@@ -1,7 +1,10 @@
+import { STORE_RANK_SOURCES } from "./store-ranks.js";
+
 export const EDITION = {
-  version: "v2.4",
-  date: "2026-09-07",
+  version: "v2.5",
+  date: "2026-09-26",
   changelog: [
+    ["v2.5", "2026-09-26", "App-store rankings: weekly US top-free rank for first-party AI apps on the iOS App Store and Google Play. Each point is the latest daily chart in that week. History starts when the nightly job began storing charts — earlier weeks were not reconstructed."],
     ["v2.4", "2026-09-07", "Model capability rebuilt around the September releases: Claude Fable 5.1 (Sep 1), GPT-6 Astra (Sep 3), Meta's Muse Spark 1.3 (Sep 3) and Gemini 3.8 Flash (Sep 2). The Artificial Analysis Intelligence Index moved to v4.2 — a re-anchored scale with two new evals and 40% private held-out data — so every score in §03 is restated on v4.2 and is NOT comparable to the v4.1.1 numbers in earlier editions. Meta joins the brand palette as it enters the frontier. Grok 4.7 is announced but unreleased and is deliberately absent."],
     ["v2.3", "2026-08-29", "Runtime state now syncs to Google Drive: current panel values and the dated trend log are written to ai-briefing-values.json and ai-briefing-trend.csv on every refresh, and pulled on load — so data accumulated in one place shows up everywhere the dashboard is opened. Local browser storage becomes a cache rather than the record."],
     ["v2.2", "2026-08-28", "Design pass: chart colors now match each company's brand color from the web-traffic-share chart throughout; Artificial Analysis Intelligence Index redrawn as a packed swarm on a zoomed axis to show frontier clustering; added a collapsible table of contents and per-section back-to-top buttons."],
@@ -46,7 +49,7 @@ export const BRAND_OF = {
   Google: "Google", Gemini: "Google", "Gemini 3.7 Flash": "Google", "Gemini 3.8 Flash": "Google", Alphabet: "Google", GOOG: "Google",
   xAI: "xAI", Grok: "xAI", "Grok 4.6": "xAI", SpaceXAI: "xAI",
   Microsoft: "Microsoft", Copilot: "Microsoft", MSFT: "Microsoft",
-  Meta: "Meta", "Meta AI": "Meta", "Muse Spark": "Meta", "Muse Spark 1.3": "Meta", META: "Meta",
+  Meta: "Meta", "Meta AI": "Meta", Muse: "Meta", "Muse Spark": "Meta", "Muse Spark 1.3": "Meta", META: "Meta",
   Perplexity: "Perplexity",
 };
 export const brandFill = (name, fallback) => (BRAND_OF[name] ? BRAND_COLOR[BRAND_OF[name]] : fallback);
@@ -149,6 +152,10 @@ export const BASELINE = {
     investRatio: "23×",
     costRatio: "≈57×",
   },
+  /* Latest US top-free ranks, filled by the nightly chart fetch. Empty until
+     a run succeeds — the chart itself reads public/data/store-ranks.json,
+     which is the daily record. Do not seed invented ranks here. */
+  storeRanks: { ios: {}, android: {} },
 };
 
 export const TRACKERS = [
@@ -166,6 +173,7 @@ export const SRC = {
   capital: [["TechCrunch — Anthropic ARR to $65B", "https://techcrunch.com/2026/08/17/anthropics-annualized-revenue-surges-to-65b/"], ["Bloomberg — OpenAI ARR tops $40B", "https://www.bloomberg.com/news/articles/2026-08-13/openai-s-revenue-run-rate-tops-40-billion-ahead-of-ipo"], ["MLQ.ai — capex roundup", "https://mlq.ai/news/big-techs-2026-capex-range-reaches-720-billion-to-745-billion/"]],
   energy: [["Gartner — data center power", "https://www.gartner.com/en/newsroom/press-releases/2026-06-10-gartner-says-data-center-electricity-demand-to-grow-26-percent-in-2026"], ["Forbes — US ~40% of global data-center power", "https://www.forbes.com/sites/rrapier/2026/08/23/the-us-now-uses-nearly-40-of-the-worlds-data-center-electricity/"], ["IEA — Energy and AI", "https://www.iea.org/reports/energy-and-ai/energy-demand-from-ai"], ["Goldman Sachs — US power demand", "https://www.goldmansachs.com/insights/articles/us-data-center-power-demand-projected-to-double-by-2027"]],
   china: [["Dataconomy — Chinese models take top 5 on OpenRouter", "https://dataconomy.com/2026/07/29/chinese-ai-models-openrouter-top-five/"], ["Officechai — US models' OpenRouter share collapses 70%→30%", "https://officechai.com/ai/share-of-us-models-being-used-on-openrouter-has-collapsed-from-70-to-30-over-the-past-year/"], ["Stanford HAI — AI Index 2026", "https://hai.stanford.edu/ai-index/2026-ai-index-report"]],
+  storeRanks: STORE_RANK_SOURCES,
 };
 
 /* ——— Refresh jobs, one per panel ———
@@ -256,6 +264,24 @@ export const JOBS = {
       return n;
     },
   },
+  storeRanks: {
+    keys: ["ranks"],
+    /* No model prompt. api/refresh.js fetches the two charts directly and
+       passes `{ ranks, day }`. Ranks are already filtered to first-party apps. */
+    apply: (d, j) => {
+      if (!j.ranks || typeof j.ranks !== "object") return d;
+      const keep = (ranks) => {
+        const out = {};
+        if (!ranks || typeof ranks !== "object") return out;
+        for (const [id, rank] of Object.entries(ranks)) {
+          const n = Number(rank);
+          if (n > 0) out[id] = n;
+        }
+        return out;
+      };
+      return { ...d, storeRanks: { ios: keep(j.ranks.ios), android: keep(j.ranks.android) } };
+    },
+  },
   energy: {
     keys: ["energy"],
     prompt: 'Search the web for the latest global data center electricity forecasts: total TWh for 2026, peak power demand in GW for 2026, the US share of global data center consumption as a percent, and the AI-optimized server share of data center power as a percent. Respond ONLY with compact JSON, no prose or fences: {"energy":{"totalTWh":0,"peakGW":0,"usShare":0,"aiShareOfDC":0}}',
@@ -297,6 +323,10 @@ export const packValues = (d, meta, lastRunAt) => ({
   rev: Object.fromEntries(d.revenue.map((x) => [x.name, x.value])),
   energy: d.energyStats,
   aa: d.aaIndex.map((m) => [m.model, m.lab, m.score, m.cn ? 1 : 0]),
+  ranks: {
+    ios: (d.storeRanks && d.storeRanks.ios) || {},
+    android: (d.storeRanks && d.storeRanks.android) || {},
+  },
 });
 
 /* ——— Panel freshness ———
@@ -356,6 +386,18 @@ export const unpackValues = (d, p) => {
     n.aaIndex = p.aa.filter((r) => Array.isArray(r) && r[0] && Number(r[2]) > 0)
       .map((r) => ({ model: String(r[0]), lab: String(r[1] || "—"), score: Number(r[2]), cn: !!r[3] }))
       .sort((a, b) => b.score - a.score);
+  }
+  if (p.ranks && typeof p.ranks === "object") {
+    const keep = (ranks) => {
+      const out = {};
+      if (!ranks || typeof ranks !== "object") return out;
+      for (const [id, rank] of Object.entries(ranks)) {
+        const v = Number(rank);
+        if (v > 0) out[id] = v;
+      }
+      return out;
+    };
+    n.storeRanks = { ios: keep(p.ranks.ios), android: keep(p.ranks.android) };
   }
   const race = [...n.race];
   const a = n.valuations.find((x) => x.name === "Anthropic"), o = n.valuations.find((x) => x.name === "OpenAI");
