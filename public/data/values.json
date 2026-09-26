@@ -1,56 +1,56 @@
 {
-  "updatedAt": "2026-09-25T08:26:24.487Z",
-  "lastRunAt": "2026-09-25T08:25:02.667Z",
+  "updatedAt": "2026-09-26T08:26:24.719Z",
+  "lastRunAt": "2026-09-26T08:25:02.866Z",
   "meta": {
     "valuations": {
-      "at": "2026-09-25T08:26:24.486Z",
-      "checkedAt": "2026-09-25T08:26:24.486Z",
-      "changedAt": "2026-09-25T08:26:24.486Z",
+      "at": "2026-09-26T08:26:24.718Z",
+      "checkedAt": "2026-09-26T08:26:24.718Z",
+      "changedAt": "2026-09-26T08:26:24.718Z",
       "failed": false
     },
     "markets": {
-      "at": "2026-09-25T08:26:24.486Z",
-      "checkedAt": "2026-09-25T08:26:24.486Z",
-      "changedAt": "2026-09-25T08:26:24.486Z",
+      "at": "2026-09-26T08:26:24.718Z",
+      "checkedAt": "2026-09-26T08:26:24.718Z",
+      "changedAt": "2026-09-26T08:26:24.718Z",
       "failed": false
     },
     "models": {
-      "at": "2026-09-25T08:26:24.486Z",
-      "checkedAt": "2026-09-25T08:26:24.486Z",
-      "changedAt": "2026-09-25T08:26:24.486Z",
+      "at": "2026-09-26T08:26:24.718Z",
+      "checkedAt": "2026-09-26T08:26:24.718Z",
+      "changedAt": "2026-09-26T08:26:24.718Z",
       "failed": false
     },
     "users": {
-      "at": "2026-09-25T08:26:24.487Z",
-      "checkedAt": "2026-09-25T08:26:24.487Z",
-      "changedAt": "2026-09-21T08:26:13.546Z",
+      "at": "2026-09-26T08:26:24.719Z",
+      "checkedAt": "2026-09-26T08:26:24.719Z",
+      "changedAt": "2026-09-26T08:26:24.719Z",
       "failed": false
     },
     "share": {
-      "at": "2026-09-25T08:26:24.487Z",
-      "checkedAt": "2026-09-25T08:26:24.487Z",
+      "at": "2026-09-26T08:26:24.719Z",
+      "checkedAt": "2026-09-26T08:26:24.719Z",
       "changedAt": "2026-09-10T08:25:35.922Z",
       "failed": false
     },
     "capital": {
-      "at": "2026-09-25T08:26:24.487Z",
-      "checkedAt": "2026-09-25T08:26:24.487Z",
-      "changedAt": "2026-09-25T08:26:24.487Z",
+      "at": "2026-09-26T08:26:24.719Z",
+      "checkedAt": "2026-09-26T08:26:24.719Z",
+      "changedAt": "2026-09-26T08:26:24.719Z",
       "failed": false
     },
     "energy": {
-      "at": "2026-09-25T08:26:24.487Z",
-      "checkedAt": "2026-09-25T08:26:24.487Z",
+      "at": "2026-09-26T08:26:24.719Z",
+      "checkedAt": "2026-09-26T08:26:24.719Z",
       "changedAt": "2026-09-25T08:26:24.487Z",
       "failed": false
     }
   },
   "val": {
-    "Anthropic": 965,
     "OpenAI": 852,
-    "xAI": 250,
+    "xAI": 230,
     "Databricks": 134,
     "DeepSeek": 74,
+    "Anthropic": 65,
     "Anduril": 61,
     "Z.ai (Zhipu)": 40.4,
     "Moonshot AI": 35,
@@ -60,7 +60,7 @@
     "NVDA": 224.58,
     "MSFT": 424.82,
     "GOOG": 348.52,
-    "META": 775.89,
+    "META": 753.18,
     "AMZN": 261.12,
     "AVGO": 418.2,
     "TSM": 404.98
@@ -71,7 +71,7 @@
     "Gemini": 950,
     "Copilot": 420,
     "Grok": 117,
-    "Claude": 56
+    "Claude": 30
   },
   "share": {
     "ChatGPT": 55.5,
@@ -83,7 +83,7 @@
     "Others": 4.7
   },
   "capex": {
-    "Alphabet": 180,
+    "Alphabet": 205,
     "Amazon": 220,
     "Microsoft": 190,
     "Meta": 138
@@ -91,7 +91,7 @@
   "rev": {
     "Anthropic": 65,
     "OpenAI": 40,
-    "xAI": 3.3
+    "xAI": 2
   },
   "energy": {
     "totalTWh": 565,
@@ -101,7 +101,7 @@
   },
   "aa": [
     [
-      "Claude Fable 5.1 (max with fallback)",
+      "Claude Fable 5.1 (Adaptive Reasoning, Max Effort, Default Fallback)",
       "Anthropic",
       57,
       0
@@ -126,7 +126,7 @@
     ],
     [
       "Muse Spark 1.3 (max)",
-      "Meta",
+      "Meta Superintelligence Labs",
       53,
       0
     ],
@@ -144,7 +144,7 @@
     ],
     [
       "Kimi K3 (max)",
-      "Moonshot",
+      "Moonshot AI",
       50,
       1
     ]
