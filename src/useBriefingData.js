@@ -22,6 +22,7 @@ export function useBriefingData() {
     data: BASELINE,
     meta: {},
     history: BASE_HISTORY,
+    storeRankDays: [],
     updatedAt: null,
     lastRunAt: null,
     status: "loading",
@@ -33,9 +34,10 @@ export function useBriefingData() {
     (async () => {
       /* Cache-bust so a fresh deploy is never served a stale edge copy. */
       const bust = `?v=${Date.now()}`;
-      const [vRes, tRes] = await Promise.allSettled([
+      const [vRes, tRes, rRes] = await Promise.allSettled([
         fetch(`/data/values.json${bust}`).then((r) => (r.ok ? r.json() : Promise.reject(r.status))),
         fetch(`/data/trend.csv${bust}`).then((r) => (r.ok ? r.text() : Promise.reject(r.status))),
+        fetch(`/data/store-ranks.json${bust}`).then((r) => (r.ok ? r.json() : Promise.reject(r.status))),
       ]);
       if (!live) return;
 
@@ -56,10 +58,15 @@ export function useBriefingData() {
         if (rows.length) history = rows;
       }
 
+      const storeRankDays = rRes.status === "fulfilled" && rRes.value && Array.isArray(rRes.value.days)
+        ? rRes.value.days
+        : [];
+
       setState({
         data,
         meta,
         history,
+        storeRankDays,
         updatedAt,
         lastRunAt,
         /* "baseline" means the published files couldn't be read and the page

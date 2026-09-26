@@ -9,6 +9,9 @@ import {
   BRAND_COLOR, BRAND_OF, brandFill,
   BASELINE, TRACKERS, SRC, snapshot, panelTimes,
 } from "./briefing-data.js";
+import {
+  DEFAULT_STORE_APP_IDS, STORE_APP_BY_ID, STORE_RANK_DEPTH, weeklyRankSeries,
+} from "./store-ranks.js";
 
 /* ——— How old is it? ———
    One vocabulary for every timestamp on the page. `span` is the bare
@@ -712,6 +715,34 @@ const runStamp = (lastRunAt, updatedAt, meta) => {
 
 const STAMP_COLOR = { faint: FAINT, warn: TEXT_CLAY, bad: TEXT_BRICK };
 
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const shortDate = (iso) => {
+  if (!iso || String(iso).length < 10) return iso || "";
+  const [y, m, d] = String(iso).slice(0, 10).split("-");
+  const month = MONTHS[Number(m) - 1];
+  return month ? `${month} ${Number(d)}, ${y}` : iso;
+};
+
+const RankTooltip = ({ active, payload }) => {
+  if (!active || !payload || !payload.length) return null;
+  const row = payload[0] && payload[0].payload;
+  if (!row) return null;
+  const weekNote = row.week && row.week !== row.asOf ? ` · week ending ${row.week}` : "";
+  return (
+    <div style={{ background: PAPER, border: `1px solid ${INK}`, padding: "8px 12px", boxShadow: "2px 2px 0 rgba(25,23,20,0.12)" }}>
+      <div style={{ ...mono, fontSize: 11, marginBottom: 2 }}>{row.asOf}{weekNote}</div>
+      {payload.filter((p) => p.value != null).map((p) => (
+        <div key={p.dataKey} style={{ ...mono, fontSize: 12, color: p.color }}>{p.name}: #{Number(p.value)}</div>
+      ))}
+    </div>
+  );
+};
+
+const chip = (on) => ({
+  ...mono, fontSize: 11, display: "flex", alignItems: "center", gap: 7, cursor: "pointer",
+  border: `1px solid ${on ? INK : RULE_SOFT}`, padding: "8px 12px", borderRadius: 2, background: PAPER,
+});
+
 /* ——— Panel: card with read-only timestamp ——— */
 const Panel = ({ id, label, meta, children, sources }) => {
   const stamp = refreshStamp(meta);
@@ -733,9 +764,11 @@ const Panel = ({ id, label, meta, children, sources }) => {
 
 /* ————————————————— main ————————————————— */
 export default function App() {
-  const { data, meta, history, updatedAt, lastRunAt, status: loadStatus } = useBriefingData();
+  const { data, meta, history, storeRankDays, updatedAt, lastRunAt, status: loadStatus } = useBriefingData();
   const [showCN, setShowCN] = useState(true);
   const [tocOpen, setTocOpen] = useState(true);
+  const [store, setStore] = useState("ios");
+  const [rankOn, setRankOn] = useState(() => new Set(DEFAULT_STORE_APP_IDS));
   const isMobile = useIsMobile();
 
   /* China filtering */
@@ -750,16 +783,30 @@ export default function App() {
       { n: "02", id: "sec-02", title: "Public markets" },
       { n: "03", id: "sec-03", title: "Model capability" },
       { n: "04", id: "sec-04", title: "Who's actually using this" },
-      { n: "05", id: "sec-05", title: "The capital behind it" },
-      { n: "06", id: "sec-06", title: "Energy & data centers" },
+      { n: "05", id: "sec-05", title: "App store rankings" },
+      { n: "06", id: "sec-06", title: "The capital behind it" },
+      { n: "07", id: "sec-07", title: "Energy & data centers" },
     ];
-    if (showCN) items.push({ n: "07", id: "sec-07", title: "The China position" });
-    items.push({ n: showCN ? "08" : "07", id: "sec-08", title: "Trend log" });
+    if (showCN) items.push({ n: "08", id: "sec-08", title: "The China position" });
+    items.push({ n: showCN ? "09" : "08", id: "sec-09", title: "Trend log" });
     return items;
   }, [showCN]);
 
   const hasTrend = history.length > 1;
   const runLine = runStamp(lastRunAt, updatedAt, meta);
+  const rankSeries = useMemo(() => weeklyRankSeries(storeRankDays), [storeRankDays]);
+  const rankApps = useMemo(
+    () => rankSeries.appIds.map((id) => STORE_APP_BY_ID[id]).filter((app) => app && (showCN || !app.cn)),
+    [rankSeries, showCN],
+  );
+  const rankRows = rankSeries[store] || [];
+  const rankShown = rankApps.filter((app) => rankOn.has(app.id));
+  const rankUnlisted = rankShown.filter((app) => rankRows.every((row) => row[app.id] == null));
+  const toggleRankApp = (id) => setRankOn((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
 
   return (
     <div style={{ background: PAPER, minHeight: "100vh", color: INK }}>
@@ -782,7 +829,7 @@ export default function App() {
           </div>
           <h1 style={{ ...serif, fontSize: "clamp(38px, 7vw, 58px)", fontWeight: 600, margin: "10px 0 6px", letterSpacing: "-0.02em", lineHeight: 1.02 }}>The State of AI</h1>
           <p style={{ ...serif, fontStyle: "italic", fontSize: 16.5, color: FAINT, margin: 0, maxWidth: 640 }}>
-            Valuations, public markets, model capability, user bases, energy, and the capital behind it all —
+            Valuations, public markets, model capability, user bases, store ranks, energy, and the capital behind it all —
             compiled like a report, updated panel by panel.
           </p>
           <div style={{ marginTop: 16, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
@@ -980,8 +1027,82 @@ export default function App() {
         </Panel>
         <BackToTop />
 
-        {/* §05 Capital */}
-        <SectionHead id="sec-05" n="05" title="The capital behind it" sub="What the industry is spending and earning" />
+        {/* §05 Store rankings */}
+        <SectionHead id="sec-05" n="05" title="App store rankings" sub="Where each lab's own app sits on the US free charts" />
+        <Panel id="storeRanks" label="US top free · one point per week" meta={meta.storeRanks || null} sources={SRC.storeRanks}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "8px 0 10px" }}>
+            {[["ios", "iOS App Store"], ["android", "Google Play"]].map(([id, label]) => (
+              <button key={id} type="button" onClick={() => setStore(id)} style={{ ...chip(store === id), background: store === id ? C.paperDeep : PAPER }}>
+                {label}
+              </button>
+            ))}
+          </div>
+          {rankApps.length > 0 && (
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+              {rankApps.map((app) => {
+                const on = rankOn.has(app.id);
+                const color = brandFill(app.name, app.cn ? C.clay : C.neutral);
+                return (
+                  <label key={app.id} style={chip(on)}>
+                    <input type="checkbox" checked={on} onChange={() => toggleRankApp(app.id)} style={{ accentColor: INK }} />
+                    <span style={{ width: 18, height: 0, borderTop: `2px ${app.defaultOn ? "solid" : "dashed"} ${color}`, display: "inline-block" }} />
+                    {app.name}
+                  </label>
+                );
+              })}
+            </div>
+          )}
+          {!rankRows.length ? (
+            <div style={{ padding: "26px 4px" }}>
+              <p style={{ ...serif, fontSize: 15.5, lineHeight: 1.6, margin: 0 }}>
+                No store-rank snapshots are on file yet. The nightly job records the US top-free chart each day;
+                weekly points are drawn from those days. A year of earlier ranks was not available to backfill.
+              </p>
+            </div>
+          ) : (
+            <div style={{ height: 300 }}>
+              <ResponsiveContainer>
+                <LineChart data={rankRows} margin={{ left: 0, right: 12, top: 12, bottom: 0 }}>
+                  <CartesianGrid stroke={RULE_SOFT} vertical={false} />
+                  <XAxis dataKey="asOf" tickFormatter={shortDate} minTickGap={28} tick={tickFaint} axisLine={{ stroke: INK }} tickLine={false} />
+                  <YAxis reversed domain={[1, STORE_RANK_DEPTH]} allowDecimals={false} ticks={[1, 25, 50, 75, 100]} tick={tickFaint} axisLine={{ stroke: INK }} tickLine={false} width={32} />
+                  <Tooltip content={<RankTooltip />} />
+                  {rankShown.map((app) => (
+                    <Line key={app.id} type="monotone" dataKey={app.id} name={app.name}
+                      stroke={brandFill(app.name, app.cn ? C.clay : C.neutral)}
+                      strokeWidth={2} strokeDasharray={app.defaultOn ? undefined : "5 4"}
+                      connectNulls={false}
+                      dot={{ r: 3, fill: PAPER, stroke: INK, strokeWidth: 1 }}
+                      isAnimationActive={false} />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+          {!rankShown.length && rankRows.length > 0 && (
+            <p style={{ ...serif, fontSize: 14.5, fontStyle: "italic", color: FAINT, margin: "8px 0 0" }}>
+              Select an app above to draw its rank.
+            </p>
+          )}
+          <div style={{ ...mono, fontSize: 10, color: FAINT, marginTop: 6, lineHeight: 1.5 }}>
+            Rank 1 is the top of the chart. Each point is the latest daily reading in that week, not an average.
+            A gap means the app was outside the published top {STORE_RANK_DEPTH}.
+            {rankUnlisted.length ? ` ${rankUnlisted.map((app) => app.name).join(", ")} ${rankUnlisted.length === 1 ? "is" : "are"} outside this store's published chart.` : ""}
+            {rankRows.length === 1 ? " One week is on file — earlier weeks were not backfilled." : ""}
+          </div>
+          <Commentary>
+            US overall free chart, separately for the App Store and Google Play — not a category list and not a
+            download estimate. The lines are each lab's own assistant: Muse, not Facebook or Instagram; Gemini, not
+            the Google app; Grok, not X; Copilot, not Teams or Word. Aggregator clients such as OpenRouter are left
+            off even when they chart. The nightly job stores that day's list. Weeks before collection started are
+            absent on purpose: neither store publishes a year of this chart, and no archive already wired into the
+            briefing had one.
+          </Commentary>
+        </Panel>
+        <BackToTop />
+
+        {/* §06 Capital */}
+        <SectionHead id="sec-06" n="06" title="The capital behind it" sub="What the industry is spending and earning" />
         <Panel id="capital" label="2026 capex plans & lab run-rates · $ billions" meta={meta.capital} sources={SRC.capital}>
           <div style={{ height: 210 }}>
             <ResponsiveContainer>
@@ -1022,7 +1143,7 @@ export default function App() {
         <BackToTop />
 
         {/* §06 Energy */}
-        <SectionHead id="sec-06" n="06" title="Energy & data centers" sub="The physical constraint that now sets the pace" />
+        <SectionHead id="sec-07" n="07" title="Energy & data centers" sub="The physical constraint that now sets the pace" />
         <Panel id="energy" label="Global data center electricity by workload · TWh" meta={meta.energy} sources={SRC.energy}>
           <div style={{ height: 250 }}>
             <ResponsiveContainer>
@@ -1066,7 +1187,7 @@ export default function App() {
         {/* §07 China */}
         {showCN && (
           <>
-            <SectionHead id="sec-07" n="07" title="The China position" sub="Cheaper, closer, and increasingly the default in developer tooling" />
+            <SectionHead id="sec-08" n="08" title="The China position" sub="Cheaper, closer, and increasingly the default in developer tooling" />
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14, marginBottom: 18 }}>
               {[
                 [`${data.china.tokenShare}%`, "of OpenRouter token traffic now runs on Chinese models — up from under 2% a year ago, and now above 45% within a few months"],
@@ -1101,7 +1222,7 @@ export default function App() {
         )}
 
         {/* §08 Trend log */}
-        <SectionHead id="sec-08" n={showCN ? "08" : "07"} title="Trend log" sub="Accumulated from nightly refreshes — one point per day" />
+        <SectionHead id="sec-09" n={showCN ? "09" : "08"} title="Trend log" sub="Accumulated from nightly refreshes — one point per day" />
         <Panel id="trend" label={`${history.length} snapshot${history.length === 1 ? "" : "s"} on file`} meta={null}>
           {!hasTrend ? (
             <div style={{ padding: "26px 4px" }}>
