@@ -1,47 +1,57 @@
 {
-  "updatedAt": "2026-09-26T08:26:24.719Z",
-  "lastRunAt": "2026-09-26T08:25:02.866Z",
+  "updatedAt": "2026-09-27T08:26:23.078Z",
+  "lastRunAt": "2026-09-27T08:25:02.761Z",
   "meta": {
     "valuations": {
       "at": "2026-09-26T08:26:24.718Z",
       "checkedAt": "2026-09-26T08:26:24.718Z",
       "changedAt": "2026-09-26T08:26:24.718Z",
-      "failed": false
+      "failed": true,
+      "error": "anthropic 400: {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.\"},\"request_id\":\"req_011CfTdAFQqUEQzV26jcqS9X\"} (retry: anthropic 400: {\"type\":\"error\",\"error\":{\"t",
+      "erroredAt": "2026-09-27T08:26:23.077Z"
     },
     "markets": {
-      "at": "2026-09-26T08:26:24.718Z",
-      "checkedAt": "2026-09-26T08:26:24.718Z",
-      "changedAt": "2026-09-26T08:26:24.718Z",
+      "at": "2026-09-27T08:26:23.077Z",
+      "checkedAt": "2026-09-27T08:26:23.077Z",
+      "changedAt": "2026-09-27T08:26:23.077Z",
       "failed": false
     },
     "models": {
       "at": "2026-09-26T08:26:24.718Z",
       "checkedAt": "2026-09-26T08:26:24.718Z",
       "changedAt": "2026-09-26T08:26:24.718Z",
-      "failed": false
+      "failed": true,
+      "error": "anthropic 400: {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.\"},\"request_id\":\"req_011CfTdAFQqaGDoY7GtsxaeG\"} (retry: anthropic 400: {\"type\":\"error\",\"error\":{\"t",
+      "erroredAt": "2026-09-27T08:26:23.077Z"
     },
     "users": {
-      "at": "2026-09-26T08:26:24.719Z",
-      "checkedAt": "2026-09-26T08:26:24.719Z",
-      "changedAt": "2026-09-26T08:26:24.719Z",
+      "at": "2026-09-27T08:26:23.077Z",
+      "checkedAt": "2026-09-27T08:26:23.077Z",
+      "changedAt": "2026-09-27T08:26:23.077Z",
       "failed": false
     },
     "share": {
-      "at": "2026-09-26T08:26:24.719Z",
-      "checkedAt": "2026-09-26T08:26:24.719Z",
+      "at": "2026-09-27T08:26:23.077Z",
+      "checkedAt": "2026-09-27T08:26:23.077Z",
       "changedAt": "2026-09-10T08:25:35.922Z",
       "failed": false
     },
     "capital": {
-      "at": "2026-09-26T08:26:24.719Z",
-      "checkedAt": "2026-09-26T08:26:24.719Z",
-      "changedAt": "2026-09-26T08:26:24.719Z",
+      "at": "2026-09-27T08:26:23.077Z",
+      "checkedAt": "2026-09-27T08:26:23.077Z",
+      "changedAt": "2026-09-27T08:26:23.077Z",
       "failed": false
     },
     "energy": {
-      "at": "2026-09-26T08:26:24.719Z",
-      "checkedAt": "2026-09-26T08:26:24.719Z",
+      "at": "2026-09-27T08:26:23.078Z",
+      "checkedAt": "2026-09-27T08:26:23.078Z",
       "changedAt": "2026-09-25T08:26:24.487Z",
+      "failed": false
+    },
+    "storeRanks": {
+      "at": "2026-09-27T08:26:23.077Z",
+      "checkedAt": "2026-09-27T08:26:23.077Z",
+      "changedAt": "2026-09-27T08:26:23.077Z",
       "failed": false
     }
   },
@@ -57,10 +67,10 @@
     "MiniMax": 4
   },
   "stocks": {
-    "NVDA": 224.58,
+    "NVDA": 225.07,
     "MSFT": 424.82,
     "GOOG": 348.52,
-    "META": 753.18,
+    "META": 751.66,
     "AMZN": 261.12,
     "AVGO": 418.2,
     "TSM": 404.98
@@ -71,7 +81,7 @@
     "Gemini": 950,
     "Copilot": 420,
     "Grok": 117,
-    "Claude": 30
+    "Claude": 56
   },
   "share": {
     "ChatGPT": 55.5,
@@ -86,12 +96,12 @@
     "Alphabet": 205,
     "Amazon": 220,
     "Microsoft": 190,
-    "Meta": 138
+    "Meta": 140
   },
   "rev": {
     "Anthropic": 65,
     "OpenAI": 40,
-    "xAI": 2
+    "xAI": 3.3
   },
   "energy": {
     "totalTWh": 565,
@@ -148,5 +158,22 @@
       50,
       1
     ]
-  ]
+  ],
+  "ranks": {
+    "ios": {
+      "muse": 1,
+      "chatgpt": 3,
+      "gemini": 14,
+      "claude": 23,
+      "grok": 46,
+      "metaai": 80
+    },
+    "android": {
+      "muse": 1,
+      "chatgpt": 3,
+      "claude": 31,
+      "gemini": 88,
+      "grok": 91
+    }
+  }
 }
