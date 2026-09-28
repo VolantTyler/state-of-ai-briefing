@@ -1,0 +1,7 @@
+---
+description: Follow the paid-call-cost skill when these files add or change a paid model call, web search, or other metered API.
+globs: api/**, src/briefing-data.js, src/refresh-policy.js, src/store-ranks.js, src/market-quotes.js
+alwaysApply: false
+---
+
+When these files add or change a paid model call, web search, or other metered API, follow `.agents/skills/paid-call-cost/SKILL.md`. Also read `.agents/skills/paid-call-cost/why.md` for this repo's tool ids, caps, and the nightly-refresh incident.
