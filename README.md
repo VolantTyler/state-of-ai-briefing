@@ -9,8 +9,9 @@ with a nightly server-side refresh.
 Vercel Cron (daily, 08:00 UTC)
         │
         ▼
-  /api/refresh ──── Anthropic API (web search) ──── panel jobs in parallel
+  /api/refresh ──── Anthropic API (filtered web search) ──── nightly panels, web-share weekly
         │                 └── US App Store + Google Play charts (store ranks)
+        │                 └── Yahoo Finance daily charts (regular-session closes)
         ▼
   commits public/data/values.json + trend.csv + store-ranks.json to this repo
         │
@@ -219,9 +220,12 @@ for each channel you configured.
   untouched — but the job now writes `meta` and `lastRunAt` anyway, so a
   totally failed night is visible in the repo instead of looking exactly like
   a cron that never fired. Configured failure alerts fire on that path too.
-- **Cost** is one Sonnet call with web search per model-backed panel per day.
-  Store ranks are a direct chart fetch, not another model call. Hosting is free on
-  Hobby.
+- **Cost** is one Sonnet call with filtered web search per model-backed
+  panel per day: `web_search_20260318`, `max_uses` 12 on valuations and 5 on
+  models, users, capital, and energy. Web-share uses that same cap, and only
+  when seven days have passed since its last successful check; a skipped
+  night is not a failure. Public closes and store ranks are direct chart
+  fetches, not model calls. Hosting is free on Hobby.
 - **The commit loop is safe** — the cron only ever writes `public/data/`, and
   Vercel's build doesn't write to the repo, so there's no feedback loop.
 - **`CRON_SECRET` is not optional.** Without it `/api/refresh` is a public

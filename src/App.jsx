@@ -12,6 +12,7 @@ import {
 import {
   DEFAULT_STORE_APP_IDS, STORE_APP_BY_ID, STORE_RANK_DEPTH, weeklyRankSeries,
 } from "./store-ranks.js";
+import { SHARE_REFRESH_DAYS } from "./refresh-policy.js";
 
 /* ——— How old is it? ———
    One vocabulary for every timestamp on the page. `span` is the bare
@@ -37,9 +38,12 @@ const ago = (iso) => {
 
 /* The nightly cron fires at 08:00 UTC, and Vercel fires it within the hour,
    so a panel checked inside the last two days is on schedule — one late run
-   is not a fault. Past that, something is actually wrong. */
+   is not a fault. Past that, something is actually wrong. Web-share is
+   checked weekly, so its line is that week plus the same two-day grace. */
 const STALE_MS = 2 * 24 * 60 * 60 * 1000;
-const isStale = (iso) => !iso || Date.now() - new Date(iso).getTime() > STALE_MS;
+const SHARE_STALE_MS = (SHARE_REFRESH_DAYS + 2) * 24 * 60 * 60 * 1000;
+const staleLimit = (id) => (id === "share" ? SHARE_STALE_MS : STALE_MS);
+const isStale = (iso, id) => !iso || Date.now() - new Date(iso).getTime() > staleLimit(id);
 
 /* ——— What the corner of a panel says ———
 
@@ -58,7 +62,7 @@ const isStale = (iso) => !iso || Date.now() - new Date(iso).getTime() > STALE_MS
    Tone carries the same split as the words, so the distinction survives a
    glance that doesn't stop to read: faint for the two healthy states, clay
    for a stalled check, brick for an outright failure. */
-const refreshStamp = (meta) => {
+const refreshStamp = (meta, id) => {
   const t = panelTimes(meta);
   if (!t) return { text: "Baseline data", tone: "faint" };
 
@@ -83,11 +87,13 @@ const refreshStamp = (meta) => {
 
   if (!t.checkedAt) return { text: "Awaiting first refresh", tone: "warn" };
 
-  if (isStale(t.checkedAt)) {
+  if (isStale(t.checkedAt, id)) {
     return {
       text: `Last checked ${ago(t.checkedAt)}`,
       tone: "warn",
-      title: "The nightly refresh has not successfully checked this panel since then — the values shown are that old.",
+      title: id === "share"
+        ? "Web-share is checked weekly. This panel has not had a successful check since then — the values shown are that old."
+        : "The nightly refresh has not successfully checked this panel since then — the values shown are that old.",
     };
   }
 
@@ -105,7 +111,7 @@ const refreshStamp = (meta) => {
   return {
     text: `Refreshed ${ago(t.checkedAt)}${held ? ` · no change in ${held}` : ""}`,
     tone: "faint",
-    title: held ? `Checked nightly. The last time any figure in this panel moved was ${ago(heldSince)}.` : undefined,
+    title: held ? `Checked ${id === "share" ? "weekly" : "nightly"}. The last time any figure in this panel moved was ${ago(heldSince)}.` : undefined,
   };
 };
 
@@ -687,12 +693,15 @@ const tickFaint = { ...mono, fontSize: 10.5, fill: FAINT };
    job as healthy on a day it never ran. The newest successful panel check is
    the honest answer to "when did this last refresh". */
 const runStamp = (lastRunAt, updatedAt, meta) => {
-  const panels = Object.values(meta || {}).map(panelTimes).filter(Boolean);
+  const panels = Object.entries(meta || {}).flatMap(([id, entry]) => {
+    const t = panelTimes(entry);
+    return t ? [{ id, ...t }] : [];
+  });
   if (!panels.length) return { text: `Refreshed nightly · last successful check ${ago(updatedAt)}`, tone: "faint" };
 
   const checks = panels.map((p) => p.checkedAt).filter(Boolean);
   const newest = checks.length ? checks.reduce((a, b) => (a > b ? a : b)) : null;
-  const behind = panels.filter((p) => p.failed || isStale(p.checkedAt)).length;
+  const behind = panels.filter((p) => p.failed || isStale(p.checkedAt, p.id)).length;
 
   /* The job fired and every panel came back empty. Worth its own sentence:
      the fix is upstream — an API key, a rate limit — not in the data. */
@@ -745,7 +754,7 @@ const chip = (on) => ({
 
 /* ——— Panel: card with read-only timestamp ——— */
 const Panel = ({ id, label, meta, children, sources }) => {
-  const stamp = refreshStamp(meta);
+  const stamp = refreshStamp(meta, id);
   return (
     <div style={{ border: `1px solid ${INK}`, borderRadius: 2, background: PAPER, padding: 22, marginBottom: 18, boxShadow: "3px 3px 0 rgba(25,23,20,0.08)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>

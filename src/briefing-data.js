@@ -203,11 +203,10 @@ export const JOBS = {
   },
   markets: {
     keys: ["stocks"],
-    /* Quotes are the one job that reliably attracts a hedge ("prices are
-       delayed and may not reflect real-time values"), and the hedge used
-       to take the whole panel down with it. Say up front that a delayed
-       last close is the wanted answer, so there is nothing to hedge. */
-    prompt: 'Search the web for the most recent share price in USD for each of NVDA, MSFT, GOOG, META, AMZN, AVGO, TSM. The most recent regular-session close is exactly what is wanted — delayed or end-of-day quotes are fine and no real-time data is needed. Do not add disclaimers. Use the last known close for any ticker whose market is currently shut. Respond ONLY with compact JSON, no prose or fences: {"stocks":{"NVDA":0,"MSFT":0,"GOOG":0,"META":0,"AMZN":0,"AVGO":0,"TSM":0}}',
+    /* No model prompt. api/refresh.js fetches the seven regular-session
+       closes directly (src/market-quotes.js) and passes `{ stocks }` keyed
+       by ticker. A missing or non-positive price keeps that ticker's prior
+       close — a price is never filled in. */
     apply: (d, j) => (!j.stocks ? d : { ...d, stocks: d.stocks.map((s) => {
       const p = Number(j.stocks[s.ticker]);
       return p > 0 ? { ...s, price: Math.round(p * 100) / 100 } : s;
