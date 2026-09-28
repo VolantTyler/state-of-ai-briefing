@@ -5,6 +5,8 @@ import {
   historyToCSV, csvToHistory, logHistory,
 } from "../src/briefing-data.js";
 import { appendStoreRankDay, fetchStoreRanks } from "../src/store-ranks.js";
+import { fetchMarketQuotes } from "../src/market-quotes.js";
+import { SHARE_SKIPPED, shareRefreshDue, webSearchTool } from "../src/refresh-policy.js";
 import {
   citationsFromContent, judgeValuations, renderJevActions,
 } from "./valuation-judgment.js";
@@ -118,7 +120,7 @@ const extractJSON = (blocks) => {
   throw new Error("no parseable JSON object in reply");
 };
 
-const anthropicMessage = async (prompt, maxTokens) => {
+const anthropicMessage = async (prompt, maxTokens, jobId) => {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -130,7 +132,7 @@ const anthropicMessage = async (prompt, maxTokens) => {
       model: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6",
       max_tokens: maxTokens,
       messages: [{ role: "user", content: prompt }],
-      tools: [{ type: "web_search_20250305", name: "web_search" }],
+      tools: [webSearchTool(jobId)],
     }),
   });
   if (!res.ok) throw new Error(`anthropic ${res.status}: ${await res.text()}`);
@@ -139,7 +141,7 @@ const anthropicMessage = async (prompt, maxTokens) => {
   return data.content;
 };
 
-const askClaude = async (prompt) => extractJSON(await anthropicMessage(prompt, 4000));
+const askClaude = async (prompt, jobId) => extractJSON(await anthropicMessage(prompt, 4000, jobId));
 
 /* The trace is for reading the judgments. It is not part of the site.
    A local write helps a manual run; the GitHub write is what lasts on Vercel. */
@@ -293,7 +295,7 @@ export default async function handler(req, res) {
        cheaper than a stale panel for 24 hours. */
     const ids = Object.keys(JOBS);
     const runValuations = async () => {
-      const content = await anthropicMessage(VALUATION_SEARCH, 8000);
+      const content = await anthropicMessage(VALUATION_SEARCH, 8000, "valuations");
       const passages = citationsFromContent(content);
       const at = new Date().toISOString();
       let client;
@@ -325,10 +327,15 @@ export default async function handler(req, res) {
       }
     };
     const runJob = async (id) => {
+      /* A share week that is not due never calls Sonnet. The sentinel is
+         not a result and not an error — the panel's prior values and
+         timestamps stay where the last successful check left them. */
+      if (id === "share" && !shareRefreshDue(prevMeta, runAt)) return SHARE_SKIPPED;
       const once = () => {
         if (id === "storeRanks") return fetchStoreRanks();
+        if (id === "markets") return fetchMarketQuotes();
         if (id === "valuations") return runValuations();
-        return askClaude(JOBS[id].prompt);
+        return askClaude(JOBS[id].prompt, id);
       };
       try {
         return await once();
@@ -344,9 +351,14 @@ export default async function handler(req, res) {
 
     const meta = { ...prevMeta };
     const failures = [];
+    const skipped = [];
     let storeRankDay = null;
     results.forEach((r, i) => {
       const id = ids[i];
+      if (r.status === "fulfilled" && r.value === SHARE_SKIPPED) {
+        skipped.push(id);
+        return;
+      }
       let why = r.status === "rejected" ? String(r.reason && r.reason.message || r.reason) : null;
       if (r.status === "fulfilled") {
         try {
@@ -390,8 +402,11 @@ export default async function handler(req, res) {
       failures.push(id);
     });
 
-    if (failures.length === ids.length) {
-      /* Every job failed — almost certainly an API or network problem.
+    const attempted = ids.length - skipped.length;
+    if (attempted > 0 && failures.length === attempted) {
+      /* Every attempted job failed — almost certainly an API or network
+         problem. A skipped web-share week is not an attempt and not a
+         failure, so it is not in this list.
          Yesterday's values stay exactly as they are; `data` is untouched
          because no `apply` succeeded, so this write moves only `meta` and
          `lastRunAt`.
@@ -414,6 +429,7 @@ export default async function handler(req, res) {
       const notified = await notifyFailure({ severity: "all", runAt, failures, errors });
       return res.status(502).json({
         ok: false, error: "all panels failed", failures, errors, notified,
+        ...(skipped.length ? { skipped } : {}),
       });
     }
 
@@ -442,9 +458,10 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       ok: true,
-      refreshed: ids.filter((id) => !failures.includes(id)),
+      refreshed: ids.filter((id) => !failures.includes(id) && !skipped.includes(id)),
       failures,
       errors,
+      ...(skipped.length ? { skipped } : {}),
       ...(notified ? { notified } : {}),
     });
   } catch (e) {
