@@ -5,7 +5,9 @@ import {
   citationsFromContent,
   decide,
   extractCandidates,
+  gateWrittenValuation,
   judgeValuations,
+  misplacedAmount,
   renderJevActions,
 } from "./valuation-judgment.js";
 
@@ -84,6 +86,74 @@ test("code copies the parsed amount only when Choice and Noul agree", () => {
   });
   assert.equal(none.action, "kept");
   assert.equal(none.reason, "none");
+});
+
+const SERIES_H = "Anthropic has raised $65 billion in Series H funding led by Altimeter Capital, Dragoneer, Greenoaks, and Sequoia Capital, valuing the company at $965 ...";
+const SERIES_H_FULL = "Anthropic has raised $65 billion in Series H funding led by Altimeter Capital, Dragoneer, Greenoaks, and Sequoia Capital, valuing the company at $965 billion post-money.";
+const ARR = "Bloomberg reported that Anthropic disclosed to investors that it was on track to generate annualized revenue of more than $65 billion.";
+
+function accept(choice, ids) {
+  const answers = {
+    latest: { choice, confidence: 0.7, probabilities: { [choice]: 0.7 } },
+  };
+  for (const id of ids) answers[`completed_${id}`] = { noul: id === choice ? 0.9 : 0.1 };
+  return { answers, model: "jev-1.13.0" };
+}
+
+test("a round size beside a higher mark is not written, including when the unit was cut off", async () => {
+  for (const text of [SERIES_H, SERIES_H_FULL]) {
+    const { accepted, results } = await judgeValuations({
+      companies: [{ name: "Anthropic", value: 965 }],
+      passages: [{ url: "https://www.anthropic.com/news/series-h", title: "Series H", text }],
+      ask: async () => accept("c1", ["c1"]),
+    });
+    assert.deepEqual(accepted, {});
+    assert.equal(results[0].reason, "round-size");
+    assert.equal(results[0].billions, 65);
+    assert.equal(misplacedAmount(results[0].candidates[0]), "round-size");
+  }
+});
+
+test("the post-money mark in that same sentence can still be written", async () => {
+  const { accepted, results } = await judgeValuations({
+    companies: [{ name: "Anthropic", value: 380 }],
+    passages: [{ url: "https://www.anthropic.com/news/series-h", title: "Series H", text: SERIES_H_FULL }],
+    ask: async () => accept("c2", ["c1", "c2"]),
+  });
+  assert.deepEqual(accepted, { Anthropic: 965 });
+  assert.equal(results[0].action, "wrote");
+  assert.equal(results[0].billions, 965);
+});
+
+test("a run rate is not written into the valuation, even when it matches the prior", async () => {
+  const { accepted, results } = await judgeValuations({
+    companies: [{ name: "Anthropic", value: 65 }],
+    passages: [{ url: "https://example.test/arr", title: "ARR", text: ARR }],
+    ask: async () => accept("c1", ["c1"]),
+  });
+  assert.deepEqual(accepted, {});
+  assert.equal(results[0].reason, "revenue");
+});
+
+test("a drop to under a third of the prior mark is refused", () => {
+  const candidate = { id: "c1", span: "$65 billion", billions: 65, snippet: "Anthropic is now valued at $65 billion." };
+  const gated = gateWrittenValuation(
+    { action: "wrote", reason: "accepted", picked: "c1", noul: 0.9, billions: 65 },
+    candidate,
+    965,
+  );
+  assert.equal(gated.action, "kept");
+  assert.equal(gated.reason, "absurd-drop");
+  assert.equal(misplacedAmount(candidate), null);
+});
+
+test("a modest repricing of a real mark still writes", async () => {
+  const { accepted } = await judgeValuations({
+    companies: [{ name: "Databricks", value: 190 }],
+    passages: [{ url: "https://example.test/d", title: "D", text: DATABRICKS }],
+    ask: async () => accept("c1", ["c1", "c2"]),
+  });
+  assert.deepEqual(accepted, { Databricks: 190 });
 });
 
 test("a company with no cited amount does not call Jev", async () => {

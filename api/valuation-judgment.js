@@ -11,6 +11,9 @@ export const NONE = "none";
 export const NOUL_YES = 0.8;
 export const MIN_BILLIONS = 1;
 export const MAX_CANDIDATES = 12;
+/* A completed price does not fall by 3× overnight. Round size and run rate
+   sit in the same sentence as the mark and are smaller than it. */
+export const ABSURD_DROP = 3;
 
 export const LATEST_PRICE_QUESTION =
   "Which candidate is the latest completed price for the company in `company`? A completed price is a completed funding round's post-money valuation of that company, or the market capitalization of that company on an exchange where that company itself is listed.";
@@ -160,6 +163,63 @@ export function decide(candidates, answers) {
   return { action: "kept", reason: "noul-below-gate", picked, noul: probability };
 }
 
+const NEAR = 48;
+const MARK_WORD = /\b(?:valu(?:e|ed|ing|ation)|post-money|market cap(?:italization)?)\b/i;
+const RAISE_WORD = /\b(?:rais(?:e|ed|es|ing)|round|funding)\b/i;
+const REVENUE_WORD = /\b(?:annualized|run[- ]?rate|ARR|revenue)\b/i;
+const DOLLAR_RE = /(?:\$|USD)\s*(\d{1,3}(?:,\d{3})+|\d+(?:\.\d+)?)(?:\s*(trillion|billion|million|bn|tn|[BMTbmt]))?/gi;
+
+function windowAround(text, index, length) {
+  return text.slice(Math.max(0, index - NEAR), Math.min(text.length, index + length + NEAR));
+}
+
+/* A bare `$965` is only treated as billions when the citation cut the unit
+   off. It is used to refuse a smaller figure, never written on its own. */
+function billionsNear(n, unit) {
+  if (unit) return toBillions(n, unit);
+  if (n >= 100) return roundBillions(n);
+  return null;
+}
+
+/* Choice and Noul can still agree on a nearby dollar figure that is not the
+   mark: the size of the round, or revenue. Refuse those before anything is
+   copied. `null` means the snippet does not show that mix-up. */
+export function misplacedAmount(candidate) {
+  const snippet = String(candidate && candidate.snippet || "");
+  const span = String(candidate && candidate.span || "");
+  const billions = candidate && candidate.billions;
+  if (!snippet || !span || !(billions > 0)) return null;
+  const at = snippet.indexOf(span);
+  if (at < 0) return null;
+  const around = windowAround(snippet, at, span.length);
+  const isMark = MARK_WORD.test(around);
+  if (REVENUE_WORD.test(around) && !isMark) return "revenue";
+  const before = snippet.slice(Math.max(0, at - 80), at);
+  if (isMark || !RAISE_WORD.test(before)) return null;
+  for (const match of snippet.matchAll(new RegExp(DOLLAR_RE.source, "gi"))) {
+    if (match.index === at) continue;
+    const n = Number(String(match[1]).replace(/,/g, ""));
+    const other = billionsNear(n, match[2]);
+    if (!other || other <= billions) continue;
+    if (MARK_WORD.test(windowAround(snippet, match.index, match[0].length))) return "round-size";
+  }
+  return null;
+}
+
+/* Last gate on a figure Choice and Noul already accepted. */
+export function gateWrittenValuation(decision, candidate, prior) {
+  if (!decision || decision.action !== "wrote") return decision;
+  const why = candidate && misplacedAmount(candidate);
+  if (why) {
+    return { action: "kept", reason: why, picked: decision.picked, noul: decision.noul, billions: decision.billions };
+  }
+  const next = decision.billions;
+  if (typeof prior === "number" && prior > 0 && typeof next === "number" && next > 0 && prior / next >= ABSURD_DROP) {
+    return { action: "kept", reason: "absurd-drop", picked: decision.picked, noul: decision.noul, billions: next };
+  }
+  return decision;
+}
+
 export async function judgeValuations({ companies, passages, ask }) {
   const results = await Promise.all(companies.map(async (company) => {
     const { candidates, omitted } = extractCandidates(passages, company.name);
@@ -186,7 +246,12 @@ export async function judgeValuations({ companies, passages, ask }) {
         questions: questionsFor(candidates),
         model: MODEL,
       });
-      const decision = decide(candidates, response.answers);
+      const pickedId = response.answers && response.answers.latest && response.answers.latest.choice;
+      const decision = gateWrittenValuation(
+        decide(candidates, response.answers),
+        candidates.find((c) => c.id === pickedId),
+        company.value,
+      );
       const nouls = {};
       for (const c of candidates) {
         const answer = response.answers[`completed_${c.id}`];
@@ -241,6 +306,15 @@ function actionSentence(result) {
   if (result.reason === "noul-below-gate") {
     return `Kept ${money(result.prior)}. Choice selected ${result.picked}, and the Noul on that snippet was ${pct(result.noul)}, which is not above ${NOUL_YES}.`;
   }
+  if (result.reason === "round-size") {
+    return `Kept ${money(result.prior)}. Choice selected ${result.picked} (${money(result.billions)}), and that amount is the size of the round in a snippet that also states a higher valuation.`;
+  }
+  if (result.reason === "revenue") {
+    return `Kept ${money(result.prior)}. Choice selected ${result.picked} (${money(result.billions)}), and that amount is revenue or a run rate, which is not a valuation.`;
+  }
+  if (result.reason === "absurd-drop") {
+    return `Kept ${money(result.prior)}. Choice selected ${result.picked} (${money(result.billions)}), which is under 1/${ABSURD_DROP} of the prior mark, so code left the valuation unchanged.`;
+  }
   return `Wrote ${money(result.billions)}. Choice selected ${result.picked} and the Noul on that snippet was ${pct(result.noul)}, above ${NOUL_YES}, so code copied the amount the regex had parsed.`;
 }
 
@@ -279,6 +353,10 @@ export function renderJevActions(report = {}) {
   lines.push("## What code does before Jev");
   lines.push("");
   lines.push(`A regex pulls dollar amounts out of cited passages that name the company. Amounts under $${MIN_BILLIONS} billion are dropped. At most ${MAX_CANDIDATES} candidates are sent. The number later written on the panel is one of those regex matches, normalized to billions of USD.`);
+  lines.push("");
+  lines.push("## What code does after Jev");
+  lines.push("");
+  lines.push("Code still refuses the chosen amount when its snippet shows a round size beside a higher valuation, or when the amount is revenue or a run rate. Code also refuses a drop to less than one third of the prior mark. The panel keeps its previous number. A bare dollar figure with the unit cut off is used only to notice the higher valuation, and is never written.");
   lines.push("");
   lines.push("## Latest run");
   lines.push("");
