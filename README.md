@@ -13,7 +13,7 @@ Vercel Cron (daily, 08:00 UTC)
         │                 └── US App Store + Google Play charts (store ranks)
         │                 └── Yahoo Finance daily charts (regular-session closes)
         ▼
-  commits public/data/values.json + trend.csv + store-ranks.json to this repo
+  commits public/data/values.json + trend.csv + store-ranks.json + usage.json to this repo
         │
         ▼
   Vercel rebuilds ──── static files served from the CDN
@@ -39,7 +39,7 @@ auditability.
 | `src/briefing-data.js` | Baseline dataset, sources, refresh jobs, wire format. Shared by the app and the cron so they can't drift. |
 | `src/useBriefingData.js` | Reads the published files. Replaces `window.storage` + Drive sync. |
 | `api/refresh.js` | The nightly job. The only place the API key exists. |
-| `public/data/` | Published state. `values.json` and `trend.csv` are the panel record; `store-ranks.json` is the daily US top-free chart for first-party AI apps. |
+| `public/data/` | Published state. `values.json` and `trend.csv` are the panel record; `store-ranks.json` is the daily US top-free chart for first-party AI apps. `usage.json` is the latest nightly Anthropic usage and list-price estimate. |
 | `public/icon.svg` | The mark — three lines converging on one exponential curve. Source of every raster icon. |
 | `public/site.webmanifest` | Homescreen name, colors and icon set. |
 
@@ -225,7 +225,15 @@ for each channel you configured.
   models, users, capital, and energy. Web-share uses that same cap, and only
   when seven days have passed since its last successful check; a skipped
   night is not a failure. Public closes and store ranks are direct chart
-  fetches, not model calls. Hosting is free on Hobby.
+  fetches, not model calls. A call that already returned (including a reply
+  that did not parse) is not retried; only a transient unpaid failure is,
+  and only when the time budget can hold it. Hosting is free on Hobby.
+  After a run, `public/data/usage.json` (and the `usage` field on
+  `values.json`) has each call's tokens, `server_tool_use`, `stop_reason`,
+  and an estimated USD cost from the list-price table in
+  `src/refresh-usage.js`. Git history of that file is the log. The same
+  summary is on the refresh JSON response and on the `refresh_failed` /
+  `refresh_succeeded` webhook bodies.
 - **The commit loop is safe** — the cron only ever writes `public/data/`, and
   Vercel's build doesn't write to the repo, so there's no feedback loop.
 - **`CRON_SECRET` is not optional.** Without it `/api/refresh` is a public
