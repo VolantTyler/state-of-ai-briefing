@@ -50,6 +50,7 @@ export const createBudget = ({
 export const shouldRetry = ({
   billed = false,
   aborted = false,
+  spendCap = false,
   httpStatus = null,
   attemptDurationMs = 0,
   remainingMs = 0,
@@ -57,6 +58,7 @@ export const shouldRetry = ({
   minModelRetryMs = MIN_MODEL_RETRY_MS,
   minFastRetryMs = MIN_FAST_RETRY_MS,
 } = {}) => {
+  if (spendCap) return { retry: false, reason: "spend-cap" };
   if (aborted) return { retry: false, reason: "aborted" };
   if (billed || (typeof httpStatus === "number" && httpStatus >= 200 && httpStatus < 300)) {
     return { retry: false, reason: "billed" };
@@ -81,6 +83,7 @@ export const attemptWithRetry = async (run, { decide, remainingMs, now = Date.no
     const decision = decide({
       billed: Boolean(first && first.billed),
       aborted: Boolean(first && (first.aborted || first.timedOut)),
+      spendCap: Boolean(first && first.spendCap),
       httpStatus: first && first.httpStatus != null ? first.httpStatus : null,
       attemptDurationMs: Math.max(0, now() - started),
       remainingMs: remainingMs(),

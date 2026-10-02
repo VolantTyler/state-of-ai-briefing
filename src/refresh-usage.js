@@ -5,7 +5,7 @@
    provider usage object, prices the fields Anthropic publishes, and says
    so when a field has no rate in the table. */
 
-import { SEARCH_MAX_USES } from "./refresh-policy.js";
+import { MODEL_JOB_ORDER, SEARCH_MAX_USES, SIMPLE_MODEL_JOBS } from "./refresh-policy.js";
 
 /* Claude API list prices, standard global inference.
    Not batch, and not the 1.1× US-only inference multiplier.
@@ -17,6 +17,14 @@ export const PRICE_CHECKED = "2026-10-02";
 export const PRICE_SOURCE = "https://platform.claude.com/docs/en/about-claude/pricing";
 export const WEB_SEARCH_PRICE_SOURCE = "https://platform.claude.com/docs/en/agents-and-tools/tool-use/web-search-tool";
 
+const HAIKU_RATES = {
+  inputPerMTok: 1,
+  cacheWrite5mPerMTok: 1.25,
+  cacheWrite1hPerMTok: 2,
+  cacheReadPerMTok: 0.1,
+  outputPerMTok: 5,
+};
+
 export const MODEL_PRICES = {
   "claude-sonnet-4-6": {
     inputPerMTok: 3,
@@ -25,15 +33,18 @@ export const MODEL_PRICES = {
     cacheReadPerMTok: 0.3,
     outputPerMTok: 15,
   },
-  /* Optional per-job override target. Not selected unless an env var says so. */
-  "claude-haiku-4-5": {
-    inputPerMTok: 1,
-    cacheWrite5mPerMTok: 1.25,
-    cacheWrite1hPerMTok: 2,
-    cacheReadPerMTok: 0.1,
-    outputPerMTok: 5,
-  },
+  /* Haiku 4.5 list price. The dated id is the snapshot modelForJob sends.
+     The alias is the id an ANTHROPIC_MODEL_<JOB> override often uses.
+     Same rates, checked on the pricing page above. */
+  "claude-haiku-4-5": HAIKU_RATES,
+  "claude-haiku-4-5-20251001": HAIKU_RATES,
 };
+
+export const SONNET_MODEL = "claude-sonnet-4-6";
+/* Claude API id from the models overview. The alias `claude-haiku-4-5`
+   points at this snapshot. Haiku 4.5 is the current Haiku, and it is the
+   one that can call `web_search_20260318` (as a direct caller). */
+export const HAIKU_MODEL = "claude-haiku-4-5-20251001";
 
 export const WEB_SEARCH_USD_PER_REQUEST = 10 / 1000;
 
@@ -66,12 +77,99 @@ const finiteOrZero = (value) => {
   return Number.isFinite(n) ? n : 0;
 };
 
+/* Per-job env wins. Simple panels then default to Haiku even when
+   ANTHROPIC_MODEL is set to Sonnet — that variable still selects valuations
+   and any other non-simple model job. */
 export const modelForJob = (jobId, env = process.env) => {
   const specific = env[`ANTHROPIC_MODEL_${String(jobId || "").toUpperCase()}`];
   if (typeof specific === "string" && specific.trim()) return specific.trim();
+  if (SIMPLE_MODEL_JOBS.includes(jobId)) return HAIKU_MODEL;
   if (typeof env.ANTHROPIC_MODEL === "string" && env.ANTHROPIC_MODEL.trim()) return env.ANTHROPIC_MODEL.trim();
-  return "claude-sonnet-4-6";
+  return SONNET_MODEL;
 };
+
+export const DEFAULT_REFRESH_MAX_USD = 1;
+
+export const refreshMaxUsd = (env = process.env) => {
+  const raw = env.REFRESH_MAX_USD;
+  if (raw == null || String(raw).trim() === "") return DEFAULT_REFRESH_MAX_USD;
+  const n = Number(String(raw).trim());
+  if (!Number.isFinite(n) || n < 0) {
+    throw new Error(`REFRESH_MAX_USD must be a non-negative number, got ${JSON.stringify(raw)}`);
+  }
+  return n;
+};
+
+export const spendCapBlocks = (estimatedUsd, maxUsd) => Number(estimatedUsd) >= Number(maxUsd);
+
+export const spendCapReason = (estimatedUsd, maxUsd) => {
+  const spent = Number(estimatedUsd);
+  const cap = Number(maxUsd);
+  return `spend cap: running estimate $${spent.toFixed(4)} >= REFRESH_MAX_USD ${cap}; prior values kept`;
+};
+
+/* One continuation re-sends the whole paused context, which is where today's
+   pause_turn calls picked up hundreds of thousands of input tokens. Stop
+   after one, and don't start it when the partial reply is already usable. */
+export const MAX_PAUSE_CONTINUATIONS = 1;
+
+const billError = (error) => {
+  const billed = error instanceof Error ? error : new Error(String(error));
+  billed.billed = true;
+  if (billed.httpStatus == null) billed.httpStatus = 200;
+  return billed;
+};
+
+export async function callWithPauseCap({
+  initialMessages,
+  request,
+  accept,
+  maxContinuations = MAX_PAUSE_CONTINUATIONS,
+  allowContinuation = () => ({ ok: true }),
+}) {
+  let messages = initialMessages;
+  let continued = 0;
+  for (;;) {
+    let result;
+    try {
+      result = await request({ messages, continuation: continued });
+    } catch (error) {
+      /* A continuation is a second billed request. If it fails unpaid, the
+         first request already was paid, so the job must not be searched again. */
+      if (continued > 0 && error && typeof error === "object") {
+        error.billed = true;
+        if (error.httpStatus == null) error.httpStatus = 200;
+      }
+      throw error;
+    }
+    const content = result && result.content;
+    const stopReason = result && result.stopReason;
+    if (stopReason !== "pause_turn") {
+      try {
+        return await accept(content, stopReason);
+      } catch (error) {
+        throw billError(error);
+      }
+    }
+    let usable = null;
+    try { usable = await accept(content, stopReason); } catch (error) { usable = null; }
+    if (usable != null) return usable;
+    if (continued >= maxContinuations) {
+      throw billError(new Error("anthropic pause_turn; continuation cap reached with no usable answer"));
+    }
+    const decision = await allowContinuation();
+    if (!decision || decision.ok === false) {
+      const error = billError(new Error(
+        (decision && decision.message) || "anthropic pause_turn; continuation not started",
+      ));
+      if (decision && decision.aborted) error.aborted = true;
+      if (decision && decision.spendCap) error.spendCap = true;
+      throw error;
+    }
+    continued += 1;
+    messages = [...messages, { role: "assistant", content }];
+  }
+}
 
 /* `cache_creation_input_tokens` is the total. The 5-minute / 1-hour split
    lives on `cache_creation` when Anthropic sends it. Pricing the total and
@@ -254,6 +352,7 @@ export const summarizeUsage = (calls, {
   wallClockMs = null,
   fatal = false,
   budget = null,
+  spendCap = null,
 } = {}) => {
   const jobs = {};
   const totals = blankJob();
@@ -289,6 +388,7 @@ export const summarizeUsage = (calls, {
     budget,
     timedOut: [...timedOut],
     priceTable: priceTableStamp(),
+    ...(spendCap ? { spendCap } : {}),
     calls,
     jobs,
     totals: {
@@ -311,26 +411,34 @@ export const summarizeUsage = (calls, {
 };
 
 /* Search-fee and output-token ceiling for one attempt and no retry.
-   Output assumes every search iteration emits a full max_tokens and that
+   Each job is priced on the model it will actually call. Output assumes
+   every search iteration emits a full max_tokens and that
    usage.output_tokens sums those iterations. Input tokens are not capped
    by this code and are not in the figure. */
-export const nightlyCapCeiling = ({ includeShare = false, model = "claude-sonnet-4-6" } = {}) => {
-  const jobs = ["valuations", "models", "users", "capital", "energy"];
-  if (includeShare) jobs.push("share");
+export const nightlyCapCeiling = ({ includeShare = false, env = {} } = {}) => {
+  const jobs = MODEL_JOB_ORDER.filter((id) => includeShare || id !== "share");
+  const byJob = {};
   let searches = 0;
   let outputTokensAtCap = 0;
+  let outputUsdRaw = 0;
+  let outputKnown = true;
   for (const id of jobs) {
+    const model = modelForJob(id, env);
+    const rates = MODEL_PRICES[model];
     const uses = SEARCH_MAX_USES[id];
     const maxTokens = JOB_MAX_TOKENS[id];
+    const outputTokens = uses * maxTokens;
     searches += uses;
-    outputTokensAtCap += uses * maxTokens;
+    outputTokensAtCap += outputTokens;
+    if (!rates) outputKnown = false;
+    else outputUsdRaw += outputTokens * rates.outputPerMTok / MTOK;
+    byJob[id] = { model, searches: uses, outputTokensAtCap: outputTokens };
   }
-  const rates = MODEL_PRICES[model];
   const searchUsd = round6(searches * WEB_SEARCH_USD_PER_REQUEST);
-  const outputUsd = rates ? round6(outputTokensAtCap * rates.outputPerMTok / MTOK) : null;
+  const outputUsd = outputKnown ? round6(outputUsdRaw) : null;
   return {
-    model,
     jobs,
+    byJob,
     searches,
     searchUsd,
     outputTokensAtCap,
@@ -350,16 +458,19 @@ const usageLogLine = (record) => JSON.stringify({
 export const createUsageLog = ({ now = Date.now, log = (line) => console.log(line) } = {}) => {
   const calls = [];
   const open = new Map();
-  const keyOf = (record) => `${record.jobId}:${record.attempt}`;
+  const keyOf = (record) => `${record.jobId}:${record.attempt}:${record.continuation || 0}`;
   return {
     calls,
+    estimatedUsd() {
+      return round6(calls.reduce((sum, call) => sum + (Number(call.estimatedUsd) || 0), 0));
+    },
     start(partial) {
-      open.set(keyOf(partial), { ...partial, startedAt: now() });
+      open.set(keyOf(partial), { continuation: 0, ...partial, startedAt: now() });
     },
     finish(record) {
       const key = keyOf(record);
       open.delete(key);
-      if (calls.some((call) => call.jobId === record.jobId && call.attempt === record.attempt)) return;
+      if (calls.some((call) => keyOf(call) === key)) return;
       calls.push(record);
       log(usageLogLine(record));
     },
@@ -368,6 +479,7 @@ export const createUsageLog = ({ now = Date.now, log = (line) => console.log(lin
         const record = {
           jobId: partial.jobId,
           attempt: partial.attempt,
+          continuation: partial.continuation || 0,
           model: partial.model || null,
           durationMs: Math.max(0, now() - partial.startedAt),
           stopReason: null,
@@ -415,18 +527,24 @@ export const postAnthropicMessage = async ({
   tool,
   jobId,
   attempt,
+  continuation = 0,
+  messages = null,
   signal,
   usageLog,
   now = Date.now,
 }) => {
   const started = now();
-  usageLog.start({ jobId, attempt, model });
+  const wireMessages = Array.isArray(messages) && messages.length
+    ? messages
+    : [{ role: "user", content: prompt }];
+  usageLog.start({ jobId, attempt, continuation, model });
   const finishError = (fields) => {
     const normalized = normalizeAnthropicUsage(fields.data);
     const cost = estimateCallCost({ model, ...normalized });
     const record = {
       jobId,
       attempt,
+      continuation,
       model,
       durationMs: Math.max(0, now() - started),
       stopReason: fields.data && fields.data.stop_reason || null,
@@ -459,7 +577,7 @@ export const postAnthropicMessage = async ({
       body: JSON.stringify({
         model,
         max_tokens: maxTokens,
-        messages: [{ role: "user", content: prompt }],
+        messages: wireMessages,
         tools: [tool],
       }),
     });
@@ -505,6 +623,7 @@ export const postAnthropicMessage = async ({
   const record = {
     jobId,
     attempt,
+    continuation,
     model,
     durationMs: Math.max(0, now() - started),
     stopReason: data.stop_reason || null,
