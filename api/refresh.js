@@ -7,7 +7,9 @@ import {
 import { appendStoreRankDay, fetchStoreRanks } from "../src/store-ranks.js";
 import { fetchMarketQuotes } from "../src/market-quotes.js";
 import {
-  MODEL_JOB_ORDER, SHARE_SKIPPED, orderedModelJobs, parseJobsQuery, shareRefreshDue, webSearchTool,
+  MODEL_JOB_ORDER, SHARE_SKIPPED, VALUATIONS_FULL_RUN_SKIP, VALUATIONS_MIN_START_MS,
+  orderedModelJobs, parseJobsQuery, shareRefreshDue, shareSkipReason, valuationsTimeSkipReason,
+  webSearchTool,
 } from "../src/refresh-policy.js";
 import {
   attemptWithRetry, createBudget, settleWithinBudget, shouldRetry,
@@ -44,9 +46,9 @@ const USAGE_PATH = "public/data/usage.json";
    retry on a much shorter remainder. */
 const MODEL_JOBS = new Set(MODEL_JOB_ORDER);
 
-export const VALUATION_SEARCH = `Search the web for recent reporting, in US dollars, on what each of these companies is worth: Anthropic, OpenAI, xAI, Databricks, Z.ai (also called Zhipu), DeepSeek, Anduril, Moonshot AI, MiniMax.
+export const VALUATION_SEARCH = `Search the web for one recent US-dollar figure for each company: Anthropic, OpenAI, xAI, Databricks, Z.ai (also called Zhipu), DeepSeek, Anduril, Moonshot AI, MiniMax.
 
-Cite the source passage for every dollar figure you mention, including funding-round valuations, the size of the round, market caps, and prices still being negotiated. Use the source's words for the figure. Cover every company. Batch several companies into each query. Stop when every company has a cited dollar figure. Do not search again only to cross-check.`;
+For each company report only the company name, the dollar figure, and whether it is a valuation, a round size, a market cap, or a price still being negotiated. Cite the source passage for that figure, in the source's words. Batch several companies into each query. Stop when every company has one cited figure. Do not search again to cross-check or add background.`;
 
 const env = (k) => {
   const v = process.env[k];
@@ -116,25 +118,18 @@ const ghWrite = (path, text, message) => writeWithFreshSha({
 
 /* ——— Anthropic ——— */
 
-/* Scan for balanced top-level {...} spans and return the last one that
-   parses.
+/* Text the model actually wrote. Tool-result blocks are not included: those
+   are search pages, and a brace inside one is not the panel's answer. */
+const textPieces = (blocks) => (blocks || [])
+  .filter((block) => block && typeof block.text === "string" && block.text)
+  .map((block) => block.text);
 
-   The naive version of this — first "{" to last "}" — is what kept the
-   markets panel dark. With web search on, the reply is interleaved text
-   blocks, and models hedge around financial figures ("prices are delayed
-   and may not reflect…"). Any stray brace in that prose, before or after
-   the real object, makes the slice span text that isn't JSON, and the
-   whole job fails even though the model answered correctly. Taking the
-   last *parseable* object tolerates prose on both sides. */
-const extractJSON = (blocks) => {
-  const text = (blocks || [])
-    .filter((b) => b.type === "text")
-    .map((b) => b.text)
-    .join("\n")
-    .replace(/```json|```/g, "");
-
+const balancedObjects = (text) => {
   const found = [];
-  let depth = 0, start = -1, inStr = false, esc = false;
+  let depth = 0;
+  let start = -1;
+  let inStr = false;
+  let esc = false;
   for (let i = 0; i < text.length; i++) {
     const ch = text[i];
     if (inStr) {
@@ -151,13 +146,129 @@ const extractJSON = (blocks) => {
       else if (depth < 0) depth = 0;
     }
   }
-  if (depth > 0) throw new Error("truncated JSON in reply (raise max_tokens?)");
-  if (!found.length) throw new Error("no JSON in reply");
+  return { found, open: depth > 0 || inStr };
+};
 
-  for (let i = found.length - 1; i >= 0; i--) {
-    try { return JSON.parse(found[i]); } catch (e) { /* try the next one out */ }
+const fencedBodies = (text) => {
+  const out = [];
+  const re = /```(?:json)?\s*([\s\S]*?)```/gi;
+  let match = re.exec(text);
+  while (match) {
+    if (match[1] && match[1].trim()) out.push(match[1].trim());
+    match = re.exec(text);
   }
-  throw new Error("no parseable JSON object in reply");
+  return out;
+};
+
+/* Last parseable object across every text block, a ```json fence, and the
+   blocks joined together. Joining alone drops a later object when an earlier
+   block leaves a quote open. A trailing unclosed brace does not throw away
+   an object that already parsed. */
+export const extractJSON = (blocks) => {
+  const pieces = textPieces(blocks);
+  const sources = pieces.length > 1 ? [...pieces, pieces.join("\n")] : pieces;
+  const candidates = [];
+  let open = false;
+  for (const source of sources) {
+    for (const body of fencedBodies(source)) {
+      const fenced = balancedObjects(body);
+      candidates.push(...(fenced.found.length ? fenced.found : [body]));
+      if (fenced.open) open = true;
+    }
+    const scan = balancedObjects(source.replace(/```json|```/gi, ""));
+    candidates.push(...scan.found);
+    if (scan.open) open = true;
+  }
+  for (let i = candidates.length - 1; i >= 0; i--) {
+    try { return JSON.parse(candidates[i]); } catch (e) { /* an earlier object may be the real one */ }
+  }
+  if (open) throw new Error("truncated JSON in reply (raise max_tokens?)");
+  throw new Error("no JSON in reply");
+};
+
+export const RAW_REPLY_LOG_CHARS = 300;
+
+export const replyPreview = (blocks, n = RAW_REPLY_LOG_CHARS) => {
+  const text = textPieces(blocks).join("\n");
+  const body = text || (blocks || []).map((block) => block && block.type).filter(Boolean).join(",");
+  return body.length > n ? body.slice(0, n) : body;
+};
+
+export const JSON_REFORMAT_MAX_TOKENS = 1500;
+
+export const jsonReformatPrompt = (raw, shape = "") => {
+  const hint = shape
+    ? `Use this shape, and only values the answer already states:\n${shape}\n\n`
+    : "";
+  return `Reformat the answer below as one JSON object and nothing else. No prose and no markdown fence. Use only facts already in the answer. Do not search.\n\n${hint}${raw}`;
+};
+
+const jsonShape = (prompt) => {
+  const match = String(prompt || "").match(/\{[\s\S]*\}\s*$/);
+  return match ? match[0].trim() : "";
+};
+
+/* One cheap follow-up when the searched reply has no parseable object.
+   `reformat` is omitted on pause_turn so the caller can continue the search
+   first. The follow-up must not call web search. */
+export const recoverJsonReply = async ({ blocks, stopReason, reformat, onUnparsed }) => {
+  try {
+    return { value: extractJSON(blocks), reformatted: false };
+  } catch (error) {
+    if (stopReason === "pause_turn") return { value: null, reformatted: false };
+    const rawReply = replyPreview(blocks);
+    error.rawReply = rawReply;
+    if (onUnparsed) onUnparsed(error);
+    if (!reformat) throw error;
+    const raw = textPieces(blocks).join("\n").slice(0, 12_000);
+    if (!raw.trim()) throw error;
+    let secondBlocks;
+    try {
+      secondBlocks = await reformat(raw, error);
+    } catch (reformatError) {
+      const wrapped = new Error(`${error.message}; reformat failed (${reformatError.message}); raw: ${rawReply}`);
+      wrapped.billed = true;
+      wrapped.aborted = Boolean(reformatError && reformatError.aborted);
+      wrapped.spendCap = Boolean(reformatError && reformatError.spendCap);
+      wrapped.rawReply = rawReply;
+      throw wrapped;
+    }
+    try {
+      return { value: extractJSON(secondBlocks), reformatted: true };
+    } catch (second) {
+      const wrapped = new Error(`${error.message}; reformat failed (${second.message}); raw: ${rawReply}`);
+      wrapped.billed = true;
+      wrapped.rawReply = replyPreview(secondBlocks) || rawReply;
+      throw wrapped;
+    }
+  }
+};
+
+/* Every selected id is in exactly one of the three. A hole is a bug, not
+   a quiet success. `ok` is true only when nothing failed. `partial` is
+   true when at least one selected panel was refreshed and at least one
+   failed. A weekly skip is not a failure. */
+export const partitionRefreshJobs = ({ ids, refreshed, failures, skipped }) => {
+  const skipIds = Object.keys(skipped || {});
+  const listed = [...refreshed, ...failures, ...skipIds];
+  const counts = new Map();
+  for (const id of listed) counts.set(id, (counts.get(id) || 0) + 1);
+  const duplicates = [...counts].filter(([, n]) => n > 1).map(([id]) => id);
+  const missing = ids.filter((id) => !counts.has(id));
+  const extra = [...new Set(listed.filter((id) => !ids.includes(id)))];
+  if (duplicates.length || missing.length || extra.length) {
+    throw new Error(
+      `selected jobs must be in exactly one of refreshed, failures, skipped; missing=${missing.join(",") || "-"}; extra=${extra.join(",") || "-"}; duplicates=${duplicates.join(",") || "-"}`,
+    );
+  }
+  return {
+    ok: failures.length === 0,
+    partial: failures.length > 0 && refreshed.length > 0,
+    jobs: [...ids],
+    refreshed: [...refreshed],
+    failures: [...failures],
+    skipped: { ...skipped },
+  };
 };
 
 const fetchWithSignal = (signal) => (url, options = {}) => fetch(url, { ...options, signal });
@@ -172,9 +283,20 @@ const billError = (error) => {
 /* `pause_turn` means the server-side search loop stopped. Continuing
    re-sends the whole assistant message, including search results, as input.
    At most one continuation, and none when the partial reply already parses
-   or the spend cap / time budget says not to start another call. */
+   or the spend cap / time budget says not to start another call.
+   A finished reply that still has no JSON gets one Haiku reformat with no
+   tools. That second call is logged on its own. It is not another search. */
 const askClaude = async ({ prompt, jobId, attempt, signal, usageLog, allowContinuation }) => {
   const model = modelForJob(jobId);
+  const logUnparsed = (error) => {
+    console.log(JSON.stringify({
+      source: "state-of-ai-briefing",
+      event: "refresh_json_unparsed",
+      jobId,
+      error: String(error && error.message || error),
+      rawReply: error && error.rawReply || "",
+    }));
+  };
   return callWithPauseCap({
     initialMessages: [{ role: "user", content: prompt }],
     allowContinuation,
@@ -191,12 +313,35 @@ const askClaude = async ({ prompt, jobId, attempt, signal, usageLog, allowContin
       signal,
       usageLog,
     }),
-    accept: (content, stopReason) => {
-      try { return extractJSON(content); }
-      catch (e) {
-        if (stopReason === "pause_turn") return null;
-        throw e;
+    accept: async (content, stopReason) => {
+      if (stopReason === "pause_turn") {
+        try { return extractJSON(content); } catch (e) { return null; }
       }
+      const decision = await allowContinuation();
+      const outcome = await recoverJsonReply({
+        blocks: content,
+        stopReason,
+        onUnparsed: logUnparsed,
+        reformat: decision && decision.ok !== false
+          ? async (raw) => {
+            const reformatted = await postAnthropicMessage({
+              fetchImpl: fetch,
+              apiKey: env("ANTHROPIC_API_KEY"),
+              model,
+              messages: [{ role: "user", content: jsonReformatPrompt(raw, jsonShape(prompt)) }],
+              maxTokens: JSON_REFORMAT_MAX_TOKENS,
+              tool: null,
+              jobId,
+              attempt,
+              continuation: "reformat",
+              signal,
+              usageLog,
+            });
+            return reformatted.content;
+          }
+          : null,
+      });
+      return outcome.value;
     },
   });
 };
@@ -228,7 +373,7 @@ const truncate = (s, n = 400) => {
   return t.length > n ? `${t.slice(0, n - 1)}…` : t;
 };
 
-export const buildAlert = ({ severity, runAt, failures = [], errors = {}, error, usage = null, timedOut = [] }) => {
+export const buildAlert = ({ severity, runAt, failures = [], errors = {}, error, usage = null, timedOut = [], skipped = null }) => {
   const stamp = (runAt || new Date().toISOString()).slice(0, 10);
   const subject =
     severity === "fatal" ? `State of AI refresh crashed · ${stamp}`
@@ -240,6 +385,7 @@ export const buildAlert = ({ severity, runAt, failures = [], errors = {}, error,
     `runAt: ${runAt || "(unknown)"}`,
   ];
   if (failures.length) lines.push(`failures: ${failures.join(", ")}`);
+  if (skipped && Object.keys(skipped).length) lines.push(`skipped: ${JSON.stringify(skipped)}`);
   if (timedOut.length) lines.push(`timedOut: ${timedOut.join(", ")}`);
   if (error) lines.push(`error: ${truncate(error)}`);
   if (usage && usage.totals && usage.totals.estimatedUsd != null) {
@@ -265,6 +411,7 @@ export const buildAlert = ({ severity, runAt, failures = [], errors = {}, error,
     message: lines.join("\n"),
     usage,
     timedOut,
+    ...(skipped && Object.keys(skipped).length ? { skipped } : {}),
   };
 };
 
@@ -314,17 +461,18 @@ const notifyGrokBot = async (body) => {
 
 /* Webhook only. Email stays on the failure path. Errors are swallowed so a
    bad webhook cannot turn a finished refresh into a 500. */
-export const successWebhookBody = ({ runAt, panels, usage }) => ({
+export const successWebhookBody = ({ runAt, panels, usage, skipped = null }) => ({
   source: "state-of-ai-briefing",
   event: "refresh_succeeded",
   runAt,
   panels,
   usage: usage || null,
+  ...(skipped && Object.keys(skipped).length ? { skipped } : {}),
 });
 
-const notifySuccess = async ({ runAt, panels, usage }) => {
+const notifySuccess = async ({ runAt, panels, usage, skipped = null }) => {
   try {
-    await notifyGrokBot(successWebhookBody({ runAt, panels, usage }));
+    await notifyGrokBot(successWebhookBody({ runAt, panels, usage, skipped }));
   } catch (e) { /* a notify error must never change the refresh result or response */ }
 };
 
@@ -497,9 +645,10 @@ export default async function handler(req, res) {
 
     /* 2 — panels. Fast HTTP jobs run together. Model jobs run one at a time
        so the spend cap can refuse the next Claude call after the estimate
-       crosses REFRESH_MAX_USD. A default run does simple panels first and
-       valuations last; `?jobs=` keeps the caller's order and can be a single
-       panel, which is how valuations gets the whole time budget.
+       crosses REFRESH_MAX_USD. A default run does the simple panels and does
+       not start valuations: that call did not finish inside the shared 240s
+       budget. `?jobs=valuations` runs it alone and gives it the whole budget.
+       An explicit `?jobs=` list keeps the caller's order.
 
        The wall clock is capped under maxDuration. Whatever is still running
        at that deadline is aborted, written as `time budget exhausted`, and
@@ -638,21 +787,29 @@ export default async function handler(req, res) {
       { remainingMs: () => budget.remainingMs() },
     );
     const modelSettled = {};
+    const skipReasons = {};
+    const rememberSkip = (id, reason) => {
+      skipReasons[id] = reason;
+      modelSettled[id] = { status: "fulfilled", value: { skipped: id }, error: null, timedOut: false };
+    };
     for (const id of modelIds) {
       if (id === "share" && !shareRefreshDue(prevMeta, runAt)) {
-        modelSettled[id] = { status: "fulfilled", value: SHARE_SKIPPED, error: null, timedOut: false };
+        rememberSkip(id, shareSkipReason(prevMeta, runAt));
+        continue;
+      }
+      if (id === "valuations" && !selected.explicit) {
+        rememberSkip(id, VALUATIONS_FULL_RUN_SKIP);
+        continue;
+      }
+      if (id === "valuations" && budget.remainingMs() < VALUATIONS_MIN_START_MS) {
+        rememberSkip(id, valuationsTimeSkipReason(budget.remainingMs()));
         continue;
       }
       const spent = usageLog.estimatedUsd();
       if (spendCapBlocks(spent, maxUsd)) {
         const reason = spendCapReason(spent, maxUsd);
         noteSpendSkip(id, spent, reason);
-        modelSettled[id] = {
-          status: "rejected",
-          value: undefined,
-          error: Object.assign(new Error(reason), { spendCap: true }),
-          timedOut: false,
-        };
+        rememberSkip(id, reason);
         continue;
       }
       const slot = await settleWithinBudget(
@@ -661,7 +818,9 @@ export default async function handler(req, res) {
       );
       modelSettled[id] = slot[id];
       if (slot[id] && slot[id].error && slot[id].error.spendCap) {
-        noteSpendSkip(id, usageLog.estimatedUsd(), slot[id].error.message);
+        const reason = slot[id].error.message;
+        noteSpendSkip(id, usageLog.estimatedUsd(), reason);
+        skipReasons[id] = reason;
       }
     }
     const fastSettled = await fastSettledPromise;
@@ -671,12 +830,23 @@ export default async function handler(req, res) {
 
     meta = { ...prevMeta };
     const failures = [];
-    const skipped = [];
+    const refreshed = [];
+    const skipped = { ...skipReasons };
     let storeRankDay = null;
     ids.forEach((id) => {
+      if (Object.prototype.hasOwnProperty.call(skipped, id)) return;
       const slot = settled[id];
+      if (!slot) {
+        failures.push(id);
+        meta[id] = { ...(meta[id] || {}), failed: true, error: "no result recorded", erroredAt: new Date().toISOString() };
+        return;
+      }
       if (slot.status === "fulfilled" && slot.value === SHARE_SKIPPED) {
-        skipped.push(id);
+        skipped[id] = shareSkipReason(prevMeta, runAt);
+        return;
+      }
+      if (slot.error && slot.error.spendCap) {
+        skipped[id] = slot.error.message;
         return;
       }
       let why = slot.status === "rejected" ? String(slot.error && slot.error.message || slot.error) : null;
@@ -708,6 +878,7 @@ export default async function handler(req, res) {
             changedAt: changed ? now : (prior.changedAt || now),
             failed: false,
           };
+          refreshed.push(id);
           return;
         } catch (e) {
           /* Reply parsed but didn't fit the panel's shape. The model call,
@@ -724,11 +895,11 @@ export default async function handler(req, res) {
       failures.push(id);
     });
 
-    const attempted = ids.length - skipped.length;
-    if (attempted > 0 && failures.length === attempted) {
+    const outcome = partitionRefreshJobs({ ids, refreshed, failures, skipped });
+    if (failures.length > 0 && refreshed.length === 0) {
       /* Every attempted job failed — almost certainly an API or network
-         problem. A skipped web-share week is not an attempt and not a
-         failure, so it is not in this list.
+         problem. A skipped web-share week, a spend-cap stop, and a
+         valuations skip are not attempts and not failures.
          Yesterday's values stay exactly as they are; `data` is untouched
          because no `apply` succeeded, so this write moves only `meta` and
          `lastRunAt`.
@@ -748,10 +919,16 @@ export default async function handler(req, res) {
         );
       } catch (e) { /* the run already failed; a failed write changes nothing */ }
       await saveTrace();
-      const notified = await notifyFailure({ severity: "all", runAt, failures, errors, usage: summary, timedOut });
+      const notified = await notifyFailure({
+        severity: "all", runAt, failures, errors, usage: summary, timedOut, skipped: outcome.skipped,
+      });
       return res.status(502).json({
-        ok: false, error: "all panels failed", jobs: selected.ids, failures, errors, timedOut, usage: summary, notified,
-        ...(skipped.length ? { skipped } : {}),
+        ...outcome,
+        error: "all panels failed",
+        errors,
+        timedOut,
+        usage: summary,
+        notified,
       });
     }
 
@@ -776,20 +953,20 @@ export default async function handler(req, res) {
     await saveTrace();
 
     const notified = failures.length
-      ? await notifyFailure({ severity: "partial", runAt, failures, errors, usage: summary, timedOut })
+      ? await notifyFailure({
+        severity: "partial", runAt, failures, errors, usage: summary, timedOut, skipped: outcome.skipped,
+      })
       : undefined;
 
-    if (!failures.length) await notifySuccess({ runAt, panels: ids.length, usage: summary });
+    if (!failures.length) {
+      await notifySuccess({ runAt, panels: ids.length, usage: summary, skipped: outcome.skipped });
+    }
 
     return res.status(200).json({
-      ok: true,
-      jobs: selected.ids,
-      refreshed: ids.filter((id) => !failures.includes(id) && !skipped.includes(id)),
-      failures,
+      ...outcome,
       errors,
       timedOut,
       usage: summary,
-      ...(skipped.length ? { skipped } : {}),
       ...(notified ? { notified } : {}),
     });
   } catch (e) {

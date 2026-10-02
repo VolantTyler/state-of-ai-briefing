@@ -219,7 +219,7 @@ export const JOBS = {
        three effort settings, spending three of eight slots on one model. But
        KEEP the parenthesised configuration — §03 splits it off and shows it
        as the variant qualifier, so stripping it would blank a real column. */
-    prompt: 'Search the web for the current top 8 models on the Artificial Analysis Intelligence Index, version 4.2 (v4.2), with their scores and labs. Use v4.2 scores only — v4.1.1 scores are on a different, higher scale and must not be mixed in. Search only the Artificial Analysis leaderboard. List each model family at most once, choosing its highest-scoring configuration; do not return the same model at several effort levels. Keep the scored configuration in parentheses after the model name exactly as the leaderboard writes it, e.g. "Claude Fable 5.1 (Adaptive Reasoning, Max Effort)" or "GPT-6 Astra (max)"; if the leaderboard names no configuration, give the model name alone. Include Chinese models if they rank. Stop when eight distinct model families are in hand. Do not search again to confirm a score you already have. Respond ONLY with compact JSON, no prose or fences: {"models":[{"model":"","lab":"","score":0,"cn":false}]}',
+    prompt: 'Search the web for the current top 8 models on the Artificial Analysis Intelligence Index, version 4.2 (v4.2), with their scores and labs. Use v4.2 scores only — v4.1.1 scores are on a different, higher scale and must not be mixed in. Search only the Artificial Analysis leaderboard. List each model family at most once, choosing its highest-scoring configuration; do not return the same model at several effort levels. Keep the scored configuration in parentheses after the model name exactly as the leaderboard writes it, e.g. "Claude Fable 5.1 (Adaptive Reasoning, Max Effort)" or "GPT-6 Astra (max)"; if the leaderboard names no configuration, give the model name alone. Include Chinese models if they rank. Stop when eight distinct model families are in hand. Do not search again to confirm a score you already have. Your final text block must be a single JSON object and no other characters: {"models":[{"model":"","lab":"","score":0,"cn":false}]}',
     apply: (d, j) => {
       if (!Array.isArray(j.models) || !j.models.length) return d;
       const clean = j.models
@@ -231,7 +231,7 @@ export const JOBS = {
   },
   users: {
     keys: ["users"],
-    prompt: 'Search the web for the latest monthly active users in millions for AI assistants: Meta AI, ChatGPT, Gemini, Copilot, Claude, Grok. Stop when each assistant has a monthly-active figure. Do not search again to confirm a number you already have. Respond ONLY with compact JSON, no prose or fences: {"users":{"Meta AI":0,"ChatGPT":0,"Gemini":0,"Copilot":0,"Claude":0,"Grok":0}}',
+    prompt: 'Search the web for the latest monthly active users in millions for AI assistants: Meta AI, ChatGPT, Gemini, Copilot, Claude, Grok. Stop when each assistant has a monthly-active figure. Do not search again to confirm a number you already have. Your final text block must be a single JSON object and no other characters: {"users":{"Meta AI":0,"ChatGPT":0,"Gemini":0,"Copilot":0,"Claude":0,"Grok":0}}',
     apply: (d, j) => (!j.users ? d : { ...d, users: d.users.map((u) => {
       const n = Number(j.users[u.name]);
       return n > 0 ? { ...u, users: Math.round(n) } : u;
@@ -239,7 +239,7 @@ export const JOBS = {
   },
   share: {
     keys: ["share"],
-    prompt: 'Search the web for the latest global AI chatbot web-traffic share percentages (Similarweb) for ChatGPT, Gemini, Claude, Grok, Copilot, Perplexity. Stop when each product has a share percentage. Do not search again to confirm a number you already have. Respond ONLY with compact JSON, no prose or fences: {"share":{"ChatGPT":0,"Gemini":0,"Claude":0,"Grok":0,"Copilot":0,"Perplexity":0}}',
+    prompt: 'Search the web for the latest global AI chatbot web-traffic share percentages (Similarweb) for ChatGPT, Gemini, Claude, Grok, Copilot, Perplexity. Stop when each product has a share percentage. Do not search again to confirm a number you already have. Your final text block must be a single JSON object and no other characters: {"share":{"ChatGPT":0,"Gemini":0,"Claude":0,"Grok":0,"Copilot":0,"Perplexity":0}}',
     apply: (d, j) => {
       if (!j.share) return d;
       let sum = 0;
@@ -255,7 +255,7 @@ export const JOBS = {
   },
   capital: {
     keys: ["capex", "rev"],
-    prompt: 'Search the web for (a) 2026 planned capital expenditure in billions USD for Alphabet, Amazon, Microsoft, Meta and (b) latest annualized revenue run-rates in billions USD for Anthropic, OpenAI, xAI. Stop when each company has its figure. Do not search again to confirm a number you already have. Respond ONLY with compact JSON, no prose or fences: {"capex":{"Alphabet":0,"Amazon":0,"Microsoft":0,"Meta":0},"revenue":{"Anthropic":0,"OpenAI":0,"xAI":0}}',
+    prompt: 'Search the web for (a) 2026 planned capital expenditure in billions USD for Alphabet, Amazon, Microsoft, Meta and (b) latest annualized revenue run-rates in billions USD for Anthropic, OpenAI, xAI. Stop when each company has its figure. Do not search again to confirm a number you already have. Your final text block must be a single JSON object and no other characters: {"capex":{"Alphabet":0,"Amazon":0,"Microsoft":0,"Meta":0},"revenue":{"Anthropic":0,"OpenAI":0,"xAI":0}}',
     apply: (d, j) => {
       let n = { ...d };
       if (j.capex) n.capex = n.capex.map((c) => { const v = Number(j.capex[c.name]); return v > 0 ? { ...c, value: v, range: `≈${v}` } : c; });
@@ -283,7 +283,7 @@ export const JOBS = {
   },
   energy: {
     keys: ["energy"],
-    prompt: 'Search the web for the latest global data center electricity forecasts: total TWh for 2026, peak power demand in GW for 2026, the US share of global data center consumption as a percent, and the AI-optimized server share of data center power as a percent. Stop when all four figures are in hand. Do not search again to confirm a number you already have. Respond ONLY with compact JSON, no prose or fences: {"energy":{"totalTWh":0,"peakGW":0,"usShare":0,"aiShareOfDC":0}}',
+    prompt: 'Search the web for the latest global data center electricity forecasts: total TWh for 2026, peak power demand in GW for 2026, the US share of global data center consumption as a percent, and the AI-optimized server share of data center power as a percent. Stop when all four figures are in hand. Do not search again to confirm a number you already have. Your final text block must be a single JSON object and no other characters: {"energy":{"totalTWh":0,"peakGW":0,"usShare":0,"aiShareOfDC":0}}',
     apply: (d, j) => {
       if (!j.energy) return d;
       const e = { ...d.energyStats };

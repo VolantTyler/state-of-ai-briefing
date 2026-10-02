@@ -2,15 +2,16 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JOBS } from "./briefing-data.js";
 import {
-  SEARCH_MAX_USES, SHARE_REFRESH_DAYS, SHARE_SKIPPED, WEB_SEARCH_TOOL,
-  orderedModelJobs, parseJobsQuery, shareRefreshDue, webSearchTool,
+  SEARCH_MAX_USES, SHARE_REFRESH_DAYS, SHARE_SKIPPED, VALUATIONS_FULL_RUN_SKIP,
+  VALUATIONS_MIN_START_MS, WEB_SEARCH_TOOL, orderedModelJobs, parseJobsQuery,
+  shareRefreshDue, shareSkipReason, valuationsTimeSkipReason, webSearchTool,
 } from "./refresh-policy.js";
 
 const SINGLE_TOPIC = ["models", "users", "share", "capital", "energy"];
 
 test("web search uses the filtered tool and caps each call", () => {
   assert.equal(WEB_SEARCH_TOOL, "web_search_20260318");
-  assert.equal(SEARCH_MAX_USES.valuations, 8);
+  assert.equal(SEARCH_MAX_USES.valuations, 4);
   assert.equal(SEARCH_MAX_USES.models, 2);
   assert.equal(SEARCH_MAX_USES.share, 2);
   assert.equal(SEARCH_MAX_USES.energy, 2);
@@ -27,6 +28,7 @@ test("web search uses the filtered tool and caps each call", () => {
     assert.equal(tool.user_location, undefined);
     assert.equal(tool.max_content_tokens, undefined);
     assert.match(JOBS[id].prompt, /Do not search again/);
+    assert.match(JOBS[id].prompt, /final text block must be a single JSON object/);
   }
   const models = webSearchTool("models");
   assert.deepEqual(models.allowed_domains, ["artificialanalysis.ai"]);
@@ -36,7 +38,7 @@ test("web search uses the filtered tool and caps each call", () => {
   assert.deepEqual(webSearchTool("energy", "claude-haiku-4-5").allowed_callers, ["direct"]);
   const valuations = webSearchTool("valuations", "claude-sonnet-4-6");
   assert.equal(valuations.type, "web_search_20260318");
-  assert.equal(valuations.max_uses, 8);
+  assert.equal(valuations.max_uses, 4);
   assert.equal(valuations.response_inclusion, undefined);
   assert.equal(valuations.allowed_callers, undefined);
   assert.equal(valuations.allowed_domains, undefined);
@@ -82,6 +84,24 @@ test("web-share is skipped until seven UTC days after the last success", () => {
      morning run is still short of 7×24h, and it is due anyway. */
   assert.equal(shareRefreshDue(meta, "2026-10-04T08:00:00.000Z"), true);
   assert.equal(shareRefreshDue(meta, "2026-10-05T08:00:00.000Z"), true);
+});
+
+test("the 21:00Z share skip names the last success and the next due date", () => {
+  const meta = {
+    share: {
+      at: "2026-09-27T08:26:23.077Z",
+      checkedAt: "2026-09-27T08:26:23.077Z",
+      changedAt: "2026-09-10T08:25:35.922Z",
+    },
+  };
+  assert.equal(shareRefreshDue(meta, "2026-10-02T21:00:03.208Z"), false);
+  assert.equal(
+    shareSkipReason(meta, "2026-10-02T21:00:03.208Z"),
+    "weekly; last run 2026-09-27, next due 2026-10-04",
+  );
+  assert.match(VALUATIONS_FULL_RUN_SKIP, /\?jobs=valuations/);
+  assert.equal(VALUATIONS_MIN_START_MS, 120_000);
+  assert.match(valuationsTimeSkipReason(30_000), /30000ms/);
 });
 
 test("a skipped share night is not a failure and does not move the clock", () => {

@@ -22,10 +22,11 @@ export const DIRECT_WEB_SEARCH_MODELS = new Set([
 
 /* Simple panels are one topic. 2 is a single page; 3 covers a list that
    may not fit on one. Valuations names nine companies and is asked to batch
-   them, so 8 is under the old per-company cap of 12 without dropping to one
-   search per name. */
+   them. The 2026-10-02 full run started that call with max_uses 8 and it was
+   still going at 198s when the 240s budget aborted it, so the solo call is
+   capped at 4. A full run does not start it at all. */
 export const SEARCH_MAX_USES = {
-  valuations: 8,
+  valuations: 4,
   models: 2,
   users: 3,
   share: 2,
@@ -115,3 +116,30 @@ export const shareRefreshDue = (meta, now = new Date()) => {
 /* Identity check in the cron: a skipped share call returns this object and
    nothing else, so it cannot be applied as data or recorded as a failure. */
 export const SHARE_SKIPPED = Object.freeze({ skipped: "share" });
+
+/* A full run does not start valuations. On 2026-10-02 it began about 40s
+   in, on Sonnet with max_uses 8, and was aborted unread at 198s. The solo
+   `?jobs=valuations` call gets the whole 240s budget and the lower cap. */
+export const VALUATIONS_FULL_RUN_SKIP =
+  "skipped on a full run; it does not finish inside the shared 240s budget. Call ?jobs=valuations";
+
+/* Do not start the Sonnet search when the remaining job budget is shorter
+   than this. Aborting an in-flight non-streaming Messages call never
+   returns usage, so a start that cannot finish is a likely bill with no
+   meter reading. 120s matches the model-retry floor. */
+export const VALUATIONS_MIN_START_MS = 120_000;
+
+export const valuationsTimeSkipReason = (remainingMs) =>
+  `not started; ${remainingMs}ms left is not enough to finish and read usage`;
+
+/* `next due` is the UTC date on which shareRefreshDue flips true: seven
+   midnights after the last successful check's UTC date. */
+export const shareSkipReason = (meta, now = new Date()) => {
+  const share = meta && meta.share;
+  const checked = share && (share.checkedAt || share.at);
+  const then = checked ? Date.parse(checked) : NaN;
+  if (!Number.isFinite(then)) return "weekly; no successful check on record";
+  const last = new Date(then).toISOString().slice(0, 10);
+  const next = new Date(utcDay(then) + SHARE_REFRESH_DAYS * DAY_MS).toISOString().slice(0, 10);
+  return `weekly; last run ${last}, next due ${next}`;
+};

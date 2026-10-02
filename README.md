@@ -224,24 +224,36 @@ for each channel you configured.
   a cron that never fired. Configured failure alerts fire on that path too.
 - **Cost.** Valuations stay on Sonnet (`claude-sonnet-4-6` unless
   `ANTHROPIC_MODEL` or `ANTHROPIC_MODEL_VALUATIONS` says otherwise) with
-  filtered web search, `web_search_20260318`, `max_uses` 8. Models, users,
-  share, capital, and energy default to Haiku 4.5
+  filtered web search, `web_search_20260318`, `max_uses` 4, and `max_tokens`
+  4000. A full refresh does not start that call. Models, users, share,
+  capital, and energy default to Haiku 4.5
   (`claude-haiku-4-5-20251001`), which can use that same tool only as a
   direct caller — Haiku 4.5 does not support the dynamic filtering Sonnet
   uses, so those panels set `allowed_callers` to `direct`. Their `max_uses`
   is 2 for models, share, and energy, and 3 for users and capital. The
-  models panel searches `artificialanalysis.ai` only. Web-share still runs
-  only when seven days have passed since its last successful check; a
-  skipped night is not a failure. Public closes and store ranks are direct
-  chart fetches, not model calls. A `pause_turn` is continued at most once,
-  and not at all when the partial reply is already usable or the running
-  estimate has hit `REFRESH_MAX_USD` (default `$1`). Past that ceiling the
-  remaining Claude panels keep their prior values and `usage.json` records
-  why. A second refresh that starts while one is in progress gets `409`
-  and does not call Claude. A call that already returned (including a reply
-  that did not parse) is not retried; only a transient unpaid failure is,
-  and only when the time budget can hold it. `ANTHROPIC_MODEL_<JOB>` still
-  overrides the model for that panel. Hosting is free on Hobby.
+  models panel searches `artificialanalysis.ai` only. Each of those prompts
+  asks for one JSON object as the final text block. If that reply has no
+  parseable object, one Haiku follow-up with no web search reformats it.
+  The first ~300 characters of the unparsed reply are logged. Web-share
+  still runs only when seven days have passed since its last successful
+  check. A skipped job is not a failure: the response `skipped` map gives
+  the reason (weekly cadence, spend cap, or valuations left for its own
+  call). `ok` is true only when every selected job was refreshed or
+  skipped. Any failure sets `ok` to false, and `partial` to true when at
+  least one selected panel did refresh. Public closes and store ranks are
+  direct chart fetches, not model calls. A `pause_turn` is continued at
+  most once, and not at all when the partial reply is already usable or
+  the running estimate has hit `REFRESH_MAX_USD` (default `$1`). Past that
+  ceiling the remaining Claude panels keep their prior values and
+  `usage.json` records why. A second refresh that starts while one is in
+  progress gets `409` and does not call Claude. A call that already
+  returned (including a reply that did not parse, and including the
+  reformat) is not searched again; only a transient unpaid failure is,
+  and only when the time budget can hold it. An aborted call records its
+  elapsed time and that it was likely billed. The non-streaming Messages
+  API does not return usage after a cancel, so that cost is not stored as
+  $0. `ANTHROPIC_MODEL_<JOB>` still overrides the model for that panel.
+  Hosting is free on Hobby.
   After a run, `public/data/usage.json` (and the `usage` field on
   `values.json`) has each call's tokens, `server_tool_use`, `stop_reason`,
   and an estimated USD cost from the list-price table in
@@ -290,23 +302,22 @@ daily and Vercel fires it within the hour, so one late run is not a fault.
 ## Running valuations on their own
 
 Valuations does not finish inside the shared 240-second job budget when it
-runs beside the other panels. `/api/refresh` accepts a `jobs` query, still
-behind `CRON_SECRET`. One call for the fast panels and the Haiku panels, and
-a later call for valuations alone, so valuations gets the whole budget:
+runs beside the other panels. On 2026-10-02 it was still searching at 198
+seconds when that budget aborted the request, and the usage body was never
+read. A full refresh therefore skips it and records the reason in `skipped`.
+`/api/refresh?jobs=valuations` (still behind `CRON_SECRET`) runs it alone, with
+`max_uses` 4, so it gets the whole budget. It is not started at all when
+fewer than 120 seconds remain.
 
 ```bash
-curl -X POST "https://<your-app>.vercel.app/api/refresh?jobs=models,users,share,capital,energy,markets,storeRanks" \
-  -H "Authorization: Bearer $CRON_SECRET"
-
-curl -X POST "https://<your-app>.vercel.app/api/refresh?jobs=valuations" \
-  -H "Authorization: Bearer $CRON_SECRET"
+curl -X POST "https://state-of-ai-briefing.vercel.app/api/refresh?jobs=valuations" -H "Authorization: Bearer $CRON_SECRET"
 ```
 
-Omit `jobs` and the endpoint still runs every panel, simple ones first and
-valuations last. A refresh that arrives while another holds the lock returns
-`409` with `error: "refresh already in progress"` and does not call Claude.
-The lock is a file on the repo (`dev/refresh-lock.json`) and is treated as
-abandoned after about 6 minutes.
+Omit `jobs` and the endpoint runs every panel except valuations. A refresh
+that arrives while another holds the lock returns `409` with
+`error: "refresh already in progress"` and does not call Claude. The lock is
+a file on the repo (`dev/refresh-lock.json`) and is treated as abandoned
+after about 6 minutes.
 
 Hobby cron runs once a day, so two schedules need a second project or a Pro
 plan. This repo's `vercel.json` cron is not changed here. Example entries,

@@ -1,13 +1,16 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import handler, { VALUATION_SEARCH, buildAlert, jobsQueryFromRequest, successWebhookBody } from "../api/refresh.js";
+import handler, {
+  JSON_REFORMAT_MAX_TOKENS, VALUATION_SEARCH, buildAlert, extractJSON, jobsQueryFromRequest,
+  jsonReformatPrompt, partitionRefreshJobs, recoverJsonReply, successWebhookBody,
+} from "../api/refresh.js";
 import { lockText } from "./refresh-lock.js";
 import {
   MAX_DURATION_MS, MIN_FAST_RETRY_MS, MIN_MODEL_RETRY_MS, TAIL_RESERVE_MS,
   attemptWithRetry, createBudget, settleWithinBudget, shouldRetry,
 } from "./refresh-budget.js";
-import { SEARCH_MAX_USES } from "./refresh-policy.js";
+import { SEARCH_MAX_USES, VALUATIONS_FULL_RUN_SKIP, shareSkipReason } from "./refresh-policy.js";
 import {
   DEFAULT_REFRESH_MAX_USD, HAIKU_MODEL, JOB_MAX_TOKENS, MODEL_PRICES, WEB_SEARCH_USD_PER_REQUEST,
   callWithPauseCap, createUsageLog, estimateCallCost, modelForJob, nightlyCapCeiling,
@@ -113,24 +116,25 @@ test("a missing 5m/1h split is priced as a 5-minute write and an unknown tool is
 
 test("one nightly ceiling is the search cap plus max_tokens on every iteration, input excluded", () => {
   const quiet = nightlyCapCeiling({ includeShare: false });
-  assert.equal(quiet.searches, 8 + 2 + 3 + 3 + 2);
-  assert.equal(SEARCH_MAX_USES.valuations, 8);
-  assert.equal(JOB_MAX_TOKENS.valuations, 8000);
-  assert.equal(quiet.outputTokensAtCap, 8 * 8000 + (2 + 3 + 3 + 2) * 4000);
+  assert.equal(quiet.searches, 4 + 2 + 3 + 3 + 2);
+  assert.equal(SEARCH_MAX_USES.valuations, 4);
+  assert.equal(JOB_MAX_TOKENS.valuations, 4000);
+  assert.equal(quiet.outputTokensAtCap, 4 * 4000 + (2 + 3 + 3 + 2) * 4000);
   assert.equal(quiet.byJob.valuations.model, "claude-sonnet-4-6");
   assert.equal(quiet.byJob.models.model, HAIKU_MODEL);
   assert.equal(quiet.byJob.energy.model, HAIKU_MODEL);
-  /* Valuations stay on Sonnet output rates. Simple panels are Haiku. */
-  assert.equal(quiet.searchUsd, 0.18);
-  assert.equal(quiet.outputUsd, 1.16);
-  assert.equal(quiet.usdExcludingInput, 1.34);
+  /* Valuations stay on Sonnet output rates. Simple panels are Haiku.
+     16_000 Sonnet tokens × $15 plus 40_000 Haiku tokens × $5, per million. */
+  assert.equal(quiet.searchUsd, 0.14);
+  assert.equal(quiet.outputUsd, 0.44);
+  assert.equal(quiet.usdExcludingInput, 0.58);
   assert.equal(quiet.inputTokens, "uncapped");
 
   const withShare = nightlyCapCeiling({ includeShare: true });
-  assert.equal(withShare.searches, 20);
-  assert.equal(withShare.searchUsd, 0.2);
-  assert.equal(withShare.outputUsd, 1.2);
-  assert.equal(withShare.usdExcludingInput, 1.4);
+  assert.equal(withShare.searches, 16);
+  assert.equal(withShare.searchUsd, 0.16);
+  assert.equal(withShare.outputUsd, 0.48);
+  assert.equal(withShare.usdExcludingInput, 0.64);
   assert.equal(withShare.byJob.share.model, HAIKU_MODEL);
 });
 
@@ -310,10 +314,17 @@ test("an aborted call is recorded once, with the bill unknown", async () => {
   assert.equal(usageLog.calls.length, 1);
   assert.equal(lines.length, 1);
   assert.equal(usageLog.calls[0].billed, null);
+  assert.equal(usageLog.calls[0].likelyBilled, true);
   assert.equal(usageLog.calls[0].aborted, true);
+  assert.equal(usageLog.calls[0].estimatedUsd, null);
   assert.equal(usageLog.calls[0].durationMs, 30);
+  assert.match(usageLog.calls[0].error, /likely billed/);
+  assert.match(usageLog.calls[0].error, /30ms/);
   const summary = summarizeUsage(usageLog.calls, { timedOut: ["valuations"] });
   assert.equal(summary.totals.estimateComplete, false);
+  assert.equal(summary.totals.estimatedUsd, 0);
+  assert.equal(summary.totals.likelyBilledAttempts, 1);
+  assert.ok(summary.totals.unpriced.includes("aborted-likely-billed"));
   assert.ok(summary.totals.unpriced.includes("timed-out") || summary.totals.unpriced.includes("usage-not-reported"));
 });
 
@@ -473,6 +484,27 @@ test("webhook bodies keep their old fields and add usage", () => {
   assert.equal(success.panels, 8);
   assert.equal(success.usage, usage);
   assert.equal(success.failures, undefined);
+  assert.equal(success.skipped, undefined);
+
+  const withSkip = buildAlert({
+    severity: "partial",
+    runAt: "2026-10-02T21:00:03.208Z",
+    failures: ["capital"],
+    errors: { capital: "no JSON in reply" },
+    skipped: { share: "weekly; last run 2026-09-27, next due 2026-10-04" },
+  });
+  assert.equal(withSkip.event, "refresh_failed");
+  assert.match(withSkip.message, /weekly; last run 2026-09-27/);
+  assert.match(withSkip.skipped.share, /next due 2026-10-04/);
+
+  const successSkip = successWebhookBody({
+    runAt: "2026-10-02T21:00:03.208Z",
+    panels: 8,
+    usage,
+    skipped: { valuations: VALUATIONS_FULL_RUN_SKIP },
+  });
+  assert.equal(successSkip.event, "refresh_succeeded");
+  assert.match(successSkip.skipped.valuations, /\?jobs=valuations/);
 });
 
 test("pause_turn continues at most once, and a usable partial answer is not continued", async () => {
@@ -629,6 +661,132 @@ test("jobs can be read from the query object or the request URL", () => {
   assert.equal(jobsQueryFromRequest({ url: "/api/refresh?jobs=models,users" }), "models,users");
   assert.equal(jobsQueryFromRequest({ query: {}, url: "/api/refresh?jobs=energy" }), "energy");
   assert.equal(jobsQueryFromRequest({ url: "/api/refresh" }), null);
+});
+
+test("JSON extraction takes a fence or the last object in any text block", () => {
+  assert.equal(
+    extractJSON([{ type: "text", text: "note first {\"nope\":1} then {\"capex\":{\"Alphabet\":185}}" }]).capex.Alphabet,
+    185,
+  );
+  assert.equal(
+    extractJSON([{ type: "text", text: "```json\n{\"energy\":{\"totalTWh\":565}}\n```" }]).energy.totalTWh,
+    565,
+  );
+  /* An unclosed quote in an earlier block must not swallow the object in the next one. */
+  const split = extractJSON([
+    { type: "text", text: "still quoting \"" },
+    { type: "text", text: "{\"users\":{\"ChatGPT\":1000}}" },
+  ]);
+  assert.equal(split.users.ChatGPT, 1000);
+  assert.throws(() => extractJSON([{ type: "text", text: "Alphabet planned about 185 billion, no object" }]), /no JSON in reply/);
+});
+
+test("a JSON miss is reformatted once from the reply text, with no second search", async () => {
+  let raw = null;
+  const outcome = await recoverJsonReply({
+    blocks: [{ type: "text", text: "Alphabet capex is 185. Anthropic revenue is 3." }],
+    stopReason: "end_turn",
+    reformat: async (text) => {
+      raw = text;
+      return [{ type: "text", text: "{\"capex\":{\"Alphabet\":185},\"revenue\":{\"Anthropic\":3}}" }];
+    },
+  });
+  assert.equal(outcome.reformatted, true);
+  assert.match(raw, /Alphabet capex is 185/);
+  assert.equal(outcome.value.revenue.Anthropic, 3);
+  assert.match(jsonReformatPrompt("x"), /Do not search/);
+  assert.equal(JSON_REFORMAT_MAX_TOKENS, 1500);
+
+  let reformats = 0;
+  const paused = await recoverJsonReply({
+    blocks: [{ type: "text", text: "still looking" }],
+    stopReason: "pause_turn",
+    reformat: async () => { reformats += 1; return []; },
+  });
+  assert.equal(paused.value, null);
+  assert.equal(reformats, 0);
+
+  const bodies = [];
+  const usageLog = createUsageLog({ log: () => {} });
+  const fetchImpl = async (_url, opts) => {
+    bodies.push(JSON.parse(opts.body));
+    return message({
+      input_tokens: 40,
+      output_tokens: 20,
+      server_tool_use: { web_search_requests: 0 },
+      service_tier: "standard",
+    }, { content: [{ type: "text", text: "{\"ok\":true}" }] });
+  };
+  await postAnthropicMessage({
+    fetchImpl,
+    apiKey: "test-key",
+    model: "claude-haiku-4-5-20251001",
+    messages: [{ role: "user", content: jsonReformatPrompt("prose") }],
+    maxTokens: JSON_REFORMAT_MAX_TOKENS,
+    tool: null,
+    jobId: "capital",
+    attempt: 1,
+    continuation: "reformat",
+    usageLog,
+  });
+  assert.equal(bodies[0].tools, undefined);
+  assert.equal(bodies[0].max_tokens, 1500);
+  assert.equal(usageLog.calls[0].continuation, "reformat");
+  assert.equal(usageLog.calls[0].serverToolUse.web_search_requests, 0);
+  assert.equal(usageLog.calls[0].estimatedUsd > 0, true);
+});
+
+test("every selected job is refreshed, failed, or skipped with a reason", () => {
+  const ids = ["valuations", "models", "users", "share", "capital", "energy", "markets", "storeRanks"];
+  const shareReason = shareSkipReason(
+    { share: { checkedAt: "2026-09-27T08:26:23.077Z" } },
+    "2026-10-02T21:00:03.208Z",
+  );
+  const partial = partitionRefreshJobs({
+    ids,
+    refreshed: ["models", "users", "energy", "markets", "storeRanks"],
+    failures: ["capital"],
+    skipped: { share: shareReason, valuations: VALUATIONS_FULL_RUN_SKIP },
+  });
+  assert.equal(partial.ok, false);
+  assert.equal(partial.partial, true);
+  for (const id of ids) {
+    const places = [
+      partial.refreshed.includes(id),
+      partial.failures.includes(id),
+      Object.prototype.hasOwnProperty.call(partial.skipped, id),
+    ].filter(Boolean);
+    assert.equal(places.length, 1, id);
+  }
+  assert.equal(partial.skipped.share, "weekly; last run 2026-09-27, next due 2026-10-04");
+
+  const clean = partitionRefreshJobs({
+    ids,
+    refreshed: ids.filter((id) => id !== "share" && id !== "valuations"),
+    failures: [],
+    skipped: { share: shareReason, valuations: VALUATIONS_FULL_RUN_SKIP },
+  });
+  assert.equal(clean.ok, true);
+  assert.equal(clean.partial, false);
+
+  assert.throws(
+    () => partitionRefreshJobs({
+      ids,
+      refreshed: ["models"],
+      failures: ["capital"],
+      skipped: { share: shareReason },
+    }),
+    /missing=/,
+  );
+  assert.throws(
+    () => partitionRefreshJobs({
+      ids: ["share"],
+      refreshed: ["share"],
+      failures: [],
+      skipped: { share: shareReason },
+    }),
+    /duplicates=share/,
+  );
 });
 
 const mockRes = () => ({
