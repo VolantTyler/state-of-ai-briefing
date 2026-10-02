@@ -159,6 +159,10 @@ const persistJevLog = async (markdown) => {
    Email via AgentMail + wake a Cursor Grok Bot webhook routine. Both channels
    are optional and best-effort: a notify failure must never mask the refresh
    result. Alerts fire on total failure, partial panel failure, and crashes.
+   When every panel succeeds, the same Grok Bot webhook gets a
+   `refresh_succeeded` ping (same auth, silent skip when unset, and a notify
+   error still must not change the refresh result or response) so a deduped
+   failure can clear. That ping does not send email.
    Set these in the Vercel project env (Settings → Environment Variables) —
    there is no repo `.env`; cron only sees what Vercel injects at runtime. */
 
@@ -226,7 +230,7 @@ const sendEmailAlert = async (alert) => {
   return { ok: true };
 };
 
-const notifyGrokBot = async (alert) => {
+const notifyGrokBot = async (body) => {
   const url = process.env.GROK_BOT_WEBHOOK_URL;
   const key = process.env.GROK_BOT_WEBHOOK_KEY;
   if (!url || !key) return { skipped: "grok bot unset" };
@@ -238,10 +242,23 @@ const notifyGrokBot = async (alert) => {
       "Content-Type": "application/json",
       "User-Agent": "state-of-ai-briefing",
     },
-    body: JSON.stringify(alert),
+    body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`grok bot ${res.status}: ${truncate(await res.text(), 200)}`);
   return { ok: true };
+};
+
+/* Webhook only. Email stays on the failure path. Errors are swallowed so a
+   bad webhook cannot turn a finished refresh into a 500. */
+const notifySuccess = async ({ runAt, panels }) => {
+  try {
+    await notifyGrokBot({
+      source: "state-of-ai-briefing",
+      event: "refresh_succeeded",
+      runAt,
+      panels,
+    });
+  } catch (e) { /* a notify error must never change the refresh result or response */ }
 };
 
 const notifyFailure = async (payload) => {
@@ -455,6 +472,8 @@ export default async function handler(req, res) {
     const notified = failures.length
       ? await notifyFailure({ severity: "partial", runAt, failures, errors })
       : undefined;
+
+    if (!failures.length) await notifySuccess({ runAt, panels: ids.length });
 
     return res.status(200).json({
       ok: true,
