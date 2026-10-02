@@ -1,27 +1,69 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { JOBS } from "./briefing-data.js";
 import {
-  SEARCH_MAX_USES, SHARE_REFRESH_DAYS, SHARE_SKIPPED, WEB_SEARCH_TOOL, shareRefreshDue, webSearchTool,
+  SEARCH_MAX_USES, SHARE_REFRESH_DAYS, SHARE_SKIPPED, WEB_SEARCH_TOOL,
+  orderedModelJobs, parseJobsQuery, shareRefreshDue, webSearchTool,
 } from "./refresh-policy.js";
 
 const SINGLE_TOPIC = ["models", "users", "share", "capital", "energy"];
 
 test("web search uses the filtered tool and caps each call", () => {
   assert.equal(WEB_SEARCH_TOOL, "web_search_20260318");
-  assert.equal(SEARCH_MAX_USES.valuations, 12);
+  assert.equal(SEARCH_MAX_USES.valuations, 8);
+  assert.equal(SEARCH_MAX_USES.models, 2);
+  assert.equal(SEARCH_MAX_USES.share, 2);
+  assert.equal(SEARCH_MAX_USES.energy, 2);
+  assert.equal(SEARCH_MAX_USES.users, 3);
+  assert.equal(SEARCH_MAX_USES.capital, 3);
   for (const id of SINGLE_TOPIC) {
-    assert.ok(SEARCH_MAX_USES[id] >= 3 && SEARCH_MAX_USES[id] <= 5, id);
+    assert.ok(SEARCH_MAX_USES[id] >= 2 && SEARCH_MAX_USES[id] <= 3, id);
     const tool = webSearchTool(id);
     assert.equal(tool.type, WEB_SEARCH_TOOL);
     assert.equal(tool.name, "web_search");
     assert.equal(tool.max_uses, SEARCH_MAX_USES[id]);
+    assert.equal(tool.response_inclusion, "excluded");
     assert.equal(tool.allowed_callers, undefined);
+    assert.equal(tool.user_location, undefined);
+    assert.equal(tool.max_content_tokens, undefined);
+    assert.match(JOBS[id].prompt, /Do not search again/);
   }
-  const valuations = webSearchTool("valuations");
+  const models = webSearchTool("models");
+  assert.deepEqual(models.allowed_domains, ["artificialanalysis.ai"]);
+  assert.equal(webSearchTool("users").allowed_domains, undefined);
+  const haiku = webSearchTool("models", "claude-haiku-4-5-20251001");
+  assert.deepEqual(haiku.allowed_callers, ["direct"]);
+  assert.deepEqual(webSearchTool("energy", "claude-haiku-4-5").allowed_callers, ["direct"]);
+  const valuations = webSearchTool("valuations", "claude-sonnet-4-6");
   assert.equal(valuations.type, "web_search_20260318");
-  assert.equal(valuations.max_uses, 12);
+  assert.equal(valuations.max_uses, 8);
+  assert.equal(valuations.response_inclusion, undefined);
+  assert.equal(valuations.allowed_callers, undefined);
+  assert.equal(valuations.allowed_domains, undefined);
   assert.equal(SEARCH_MAX_USES.markets, undefined);
   assert.throws(() => webSearchTool("markets"), /no search cap/);
+});
+
+test("jobs query selects a subset and the default run puts valuations last", () => {
+  const all = Object.keys(JOBS);
+  const implicit = parseJobsQuery(undefined, all);
+  assert.equal(implicit.explicit, false);
+  assert.deepEqual(implicit.ids, all);
+  assert.deepEqual(orderedModelJobs(all, false), ["models", "users", "share", "capital", "energy", "valuations"]);
+
+  const only = parseJobsQuery(" valuations ", all);
+  assert.equal(only.explicit, true);
+  assert.deepEqual(only.ids, ["valuations"]);
+  assert.deepEqual(orderedModelJobs(only.ids, true), ["valuations"]);
+
+  const ordered = parseJobsQuery("valuations,models,models", all);
+  assert.deepEqual(ordered.ids, ["valuations", "models"]);
+  assert.deepEqual(orderedModelJobs(ordered.ids, true), ["valuations", "models"]);
+  assert.deepEqual(parseJobsQuery(["energy", "markets"], all).ids, ["energy", "markets"]);
+
+  const unknown = parseJobsQuery("models,nope", all);
+  assert.match(unknown.error, /unknown jobs: nope/);
+  assert.equal(parseJobsQuery("", all).explicit, false);
 });
 
 test("web-share is skipped until seven UTC days after the last success", () => {

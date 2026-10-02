@@ -6,13 +6,19 @@ import {
 } from "../src/briefing-data.js";
 import { appendStoreRankDay, fetchStoreRanks } from "../src/store-ranks.js";
 import { fetchMarketQuotes } from "../src/market-quotes.js";
-import { SHARE_SKIPPED, shareRefreshDue, webSearchTool } from "../src/refresh-policy.js";
+import {
+  MODEL_JOB_ORDER, SHARE_SKIPPED, orderedModelJobs, parseJobsQuery, shareRefreshDue, webSearchTool,
+} from "../src/refresh-policy.js";
 import {
   attemptWithRetry, createBudget, settleWithinBudget, shouldRetry,
 } from "../src/refresh-budget.js";
 import {
-  JOB_MAX_TOKENS, createUsageLog, modelForJob, postAnthropicMessage,
+  JOB_MAX_TOKENS, callWithPauseCap, createUsageLog, modelForJob, postAnthropicMessage,
+  refreshMaxUsd, spendCapBlocks, spendCapReason,
 } from "../src/refresh-usage.js";
+import {
+  LOCK_PATH, LOCK_STALE_MS, acquireRefreshLock, releaseRefreshLock, writeWithFreshSha,
+} from "../src/refresh-lock.js";
 import {
   citationsFromContent, judgeValuations, renderJevActions,
 } from "./valuation-judgment.js";
@@ -36,11 +42,11 @@ const USAGE_PATH = "public/data/usage.json";
 
 /* Model-backed panels. Markets and store ranks are plain HTTP and may
    retry on a much shorter remainder. */
-const MODEL_JOBS = new Set(["valuations", "models", "users", "share", "capital", "energy"]);
+const MODEL_JOBS = new Set(MODEL_JOB_ORDER);
 
-const VALUATION_SEARCH = `Search the web for recent reporting, in US dollars, on what each of these companies is worth: Anthropic, OpenAI, xAI, Databricks, Z.ai (also called Zhipu), DeepSeek, Anduril, Moonshot AI, MiniMax.
+export const VALUATION_SEARCH = `Search the web for recent reporting, in US dollars, on what each of these companies is worth: Anthropic, OpenAI, xAI, Databricks, Z.ai (also called Zhipu), DeepSeek, Anduril, Moonshot AI, MiniMax.
 
-Cite the source passage for every dollar figure you mention, including funding-round valuations, the size of the round, market caps, and prices still being negotiated. Use the source's words for the figure. Cover every company.`;
+Cite the source passage for every dollar figure you mention, including funding-round valuations, the size of the round, market caps, and prices still being negotiated. Use the source's words for the figure. Cover every company. Batch several companies into each query. Stop when every company has a cited dollar figure. Do not search again only to cross-check.`;
 
 const env = (k) => {
   const v = process.env[k];
@@ -70,20 +76,43 @@ const ghRead = async (path) => {
   return { sha: j.sha, text: Buffer.from(j.content, "base64").toString("utf8") };
 };
 
-const ghWrite = async (path, text, sha, message) => {
+const ghRequest = async (path, method, body) => {
   const res = await fetch(`${GH}/repos/${env("GITHUB_REPO")}/contents/${path}`, {
-    method: "PUT",
+    method,
     headers: { ...ghHeaders(), "Content-Type": "application/json" },
-    body: JSON.stringify({
-      message,
-      content: Buffer.from(text, "utf8").toString("base64"),
-      branch: process.env.GITHUB_BRANCH || "main",
-      ...(sha ? { sha } : {}),
-    }),
+    body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`GitHub write ${path}: ${res.status} ${await res.text()}`);
-  return res.json();
+  const text = await res.text();
+  if (!res.ok) {
+    const error = new Error(`GitHub ${method} ${path}: ${res.status} ${text}`);
+    error.status = res.status;
+    error.body = text;
+    throw error;
+  }
+  return text ? JSON.parse(text) : null;
 };
+
+const ghPut = (path, text, sha, message) => ghRequest(path, "PUT", {
+  message,
+  content: Buffer.from(text, "utf8").toString("base64"),
+  branch: process.env.GITHUB_BRANCH || "main",
+  ...(sha ? { sha } : {}),
+});
+
+const ghDelete = (path, sha, message) => ghRequest(path, "DELETE", {
+  message,
+  sha,
+  branch: process.env.GITHUB_BRANCH || "main",
+});
+
+/* Data files re-read the blob sha immediately before the PUT and retry once
+   on a 409 or a sha 422. The lock file does not use this: its create omits
+   the sha on purpose, and a retry that overwrote a just-created lock would
+   steal a live run. */
+const ghWrite = (path, text, message) => writeWithFreshSha({
+  read: () => ghRead(path),
+  write: (sha) => ghPut(path, text, sha, message),
+});
 
 /* ——— Anthropic ——— */
 
@@ -133,37 +162,43 @@ const extractJSON = (blocks) => {
 
 const fetchWithSignal = (signal) => (url, options = {}) => fetch(url, { ...options, signal });
 
-const markBilled = (error) => {
+const billError = (error) => {
   const billed = error instanceof Error ? error : new Error(String(error));
   billed.billed = true;
-  billed.httpStatus = 200;
+  if (billed.httpStatus == null) billed.httpStatus = 200;
   return billed;
 };
 
-/* `pause_turn` means the search loop stopped before a final answer. Continuing
-   it is another paid request, so a run that is already near the time budget
-   does not. The usage object from the paused response is already recorded. */
-const askClaude = async ({ prompt, jobId, attempt, signal, usageLog }) => {
-  const { content, stopReason } = await postAnthropicMessage({
-    fetchImpl: fetch,
-    apiKey: env("ANTHROPIC_API_KEY"),
-    model: modelForJob(jobId),
-    prompt,
-    maxTokens: JOB_MAX_TOKENS[jobId],
-    tool: webSearchTool(jobId),
-    jobId,
-    attempt,
-    signal,
-    usageLog,
+/* `pause_turn` means the server-side search loop stopped. Continuing
+   re-sends the whole assistant message, including search results, as input.
+   At most one continuation, and none when the partial reply already parses
+   or the spend cap / time budget says not to start another call. */
+const askClaude = async ({ prompt, jobId, attempt, signal, usageLog, allowContinuation }) => {
+  const model = modelForJob(jobId);
+  return callWithPauseCap({
+    initialMessages: [{ role: "user", content: prompt }],
+    allowContinuation,
+    request: ({ messages, continuation }) => postAnthropicMessage({
+      fetchImpl: fetch,
+      apiKey: env("ANTHROPIC_API_KEY"),
+      model,
+      messages,
+      maxTokens: JOB_MAX_TOKENS[jobId],
+      tool: webSearchTool(jobId, model),
+      jobId,
+      attempt,
+      continuation,
+      signal,
+      usageLog,
+    }),
+    accept: (content, stopReason) => {
+      try { return extractJSON(content); }
+      catch (e) {
+        if (stopReason === "pause_turn") return null;
+        throw e;
+      }
+    },
   });
-  if (stopReason === "pause_turn") {
-    throw markBilled(new Error("anthropic pause_turn before a final answer; not continued"));
-  }
-  try {
-    return extractJSON(content);
-  } catch (e) {
-    throw markBilled(e);
-  }
 };
 
 /* The trace is for reading the judgments. It is not part of the site.
@@ -174,8 +209,7 @@ const persistJevLog = async (markdown) => {
     await mkdir("dev", { recursive: true });
     await writeFile(JEV_LOG_PATH, markdown);
   } catch (e) { /* the deployment filesystem may be read-only */ }
-  const existing = await ghRead(JEV_LOG_PATH);
-  await ghWrite(JEV_LOG_PATH, markdown, existing.sha, `data: valuation trace ${new Date().toISOString().slice(0, 10)}`);
+  await ghWrite(JEV_LOG_PATH, markdown, `data: valuation trace ${new Date().toISOString().slice(0, 10)}`);
 };
 
 /* ——— Failure alerts ———
@@ -306,6 +340,19 @@ const notifyFailure = async (payload) => {
   };
 };
 
+export const jobsQueryFromRequest = (req) => {
+  if (req && req.query && Object.prototype.hasOwnProperty.call(req.query, "jobs")) {
+    return req.query.jobs;
+  }
+  const raw = req && req.url;
+  if (!raw) return null;
+  try {
+    return new URL(raw, "http://localhost").searchParams.get("jobs");
+  } catch (e) {
+    return null;
+  }
+};
+
 export default async function handler(req, res) {
   /* Vercel Cron signs its requests with CRON_SECRET. Without this check the
      endpoint is a public button that spends money. */
@@ -314,6 +361,10 @@ export default async function handler(req, res) {
   if (secret && auth !== `Bearer ${secret}`) {
     return res.status(401).json({ error: "unauthorized" });
   }
+
+  const allIds = Object.keys(JOBS);
+  const selected = parseJobsQuery(jobsQueryFromRequest(req), allIds);
+  if (selected.error) return res.status(400).json({ ok: false, error: selected.error });
 
   let jevMarkdown = null;
   const saveTrace = async () => {
@@ -324,6 +375,26 @@ export default async function handler(req, res) {
   const usageLog = createUsageLog();
   const budget = createBudget();
   let usageSummary = null;
+  let maxUsd = null;
+  const skippedForSpend = [];
+  const noteSpendSkip = (jobId, estimatedUsd, reason) => {
+    if (skippedForSpend.some((row) => row.jobId === jobId)) return;
+    skippedForSpend.push({ jobId, estimatedUsd, reason });
+    console.log(JSON.stringify({
+      source: "state-of-ai-briefing",
+      event: "refresh_spend_cap",
+      runAt,
+      jobId,
+      estimatedUsd,
+      maxUsd,
+      reason,
+    }));
+  };
+  const spendCapSummary = () => (maxUsd == null ? null : {
+    maxUsd,
+    estimatedUsd: usageLog.estimatedUsd(),
+    skipped: skippedForSpend,
+  });
   const publishUsage = (extra = {}) => {
     if (usageSummary) return usageSummary;
     usageLog.abortOpen();
@@ -335,6 +406,7 @@ export default async function handler(req, res) {
         tailReserveMs: budget.tailReserveMs,
         jobBudgetMs: budget.maxDurationMs - budget.tailReserveMs,
       },
+      spendCap: spendCapSummary(),
       ...extra,
     });
     console.log(JSON.stringify({
@@ -343,32 +415,25 @@ export default async function handler(req, res) {
       runAt,
       timedOut: usageSummary.timedOut,
       totals: usageSummary.totals,
+      spendCap: usageSummary.spendCap || null,
     }));
     return usageSummary;
   };
 
   let vFile = null;
   let tFile = null;
-  let usageFile = null;
   let rankFile = null;
   let data = null;
   let meta = null;
   let history = null;
   let usageWritten = false;
+  let lockHeld = false;
 
   const writeUsage = async (summary, note) => {
     if (usageWritten) return;
-    let sha = usageFile ? usageFile.sha : null;
-    if (!usageFile) {
-      try {
-        const existing = await ghRead(USAGE_PATH);
-        sha = existing.sha;
-      } catch (e) { sha = null; }
-    }
     await ghWrite(
       USAGE_PATH,
       JSON.stringify(summary, null, 2) + "\n",
-      sha,
       `data: usage ${runAt.slice(0, 10)}${note || ""}`,
     );
     usageWritten = true;
@@ -381,9 +446,42 @@ export default async function handler(req, res) {
   };
 
   try {
+    const lock = await acquireRefreshLock({
+      read: () => ghRead(LOCK_PATH),
+      create: (text) => ghPut(LOCK_PATH, text, null, `lock: refresh start ${runAt}`),
+      update: (sha, text) => ghPut(LOCK_PATH, text, sha, `lock: refresh steal ${runAt}`),
+      runAt,
+      nowMs: Date.now(),
+    });
+    if (!lock.acquired) {
+      console.log(JSON.stringify({
+        source: "state-of-ai-briefing",
+        event: "refresh_locked",
+        runAt,
+        lockedSince: lock.lockedSince,
+        staleAfterMs: LOCK_STALE_MS,
+      }));
+      return res.status(409).json({
+        ok: false,
+        error: "refresh already in progress",
+        lockedSince: lock.lockedSince,
+        staleAfterMs: LOCK_STALE_MS,
+        jobs: selected.ids,
+      });
+    }
+    lockHeld = true;
+    if (lock.stolen) {
+      console.log(JSON.stringify({
+        source: "state-of-ai-briefing",
+        event: "refresh_lock_stolen",
+        runAt,
+      }));
+    }
+    maxUsd = refreshMaxUsd();
+
     /* 1 — current state from the repo, falling back to the baseline */
-    [vFile, tFile, usageFile] = await Promise.all([
-      ghRead(VALUES_PATH), ghRead(TREND_PATH), ghRead(USAGE_PATH),
+    [vFile, tFile] = await Promise.all([
+      ghRead(VALUES_PATH), ghRead(TREND_PATH),
     ]);
     let prevMeta = {};
     data = BASELINE;
@@ -397,8 +495,11 @@ export default async function handler(req, res) {
     history = tFile.text ? csvToHistory(tFile.text) : [];
     rankFile = await ghRead(STORE_RANKS_PATH);
 
-    /* 2 — every panel in parallel. Each job is independent, so one failure
-       keeps its prior values instead of aborting the run.
+    /* 2 — panels. Fast HTTP jobs run together. Model jobs run one at a time
+       so the spend cap can refuse the next Claude call after the estimate
+       crosses REFRESH_MAX_USD. A default run does simple panels first and
+       valuations last; `?jobs=` keeps the caller's order and can be a single
+       panel, which is how valuations gets the whole time budget.
 
        The wall clock is capped under maxDuration. Whatever is still running
        at that deadline is aborted, written as `time budget exhausted`, and
@@ -411,25 +512,44 @@ export default async function handler(req, res) {
        as long as the first one. A 200 whose JSON or valuation judgment
        failed has already paid for its search; a second call would bill that
        job twice. A 400 such as the workspace limit or an empty credit
-       balance will not succeed on a retry either. */
-    const ids = Object.keys(JOBS);
-    const runValuations = async (attempt, signal) => {
-      const { content, stopReason } = await postAnthropicMessage({
-        fetchImpl: fetch,
-        apiKey: env("ANTHROPIC_API_KEY"),
-        model: modelForJob("valuations"),
-        prompt: VALUATION_SEARCH,
-        maxTokens: JOB_MAX_TOKENS.valuations,
-        tool: webSearchTool("valuations"),
-        jobId: "valuations",
-        attempt,
-        signal,
-        usageLog,
-      });
-      if (stopReason === "pause_turn") {
-        throw markBilled(new Error("anthropic pause_turn before a final answer; not continued"));
+       balance will not succeed on a retry either. A spend-cap refusal is
+       not a retry either. */
+    const ids = selected.ids;
+    const allowContinuation = (signal) => {
+      if ((signal && signal.aborted) || budget.expired()) {
+        return { ok: false, message: "time budget exhausted", aborted: true };
       }
-      const passages = citationsFromContent(content);
+      const spent = usageLog.estimatedUsd();
+      if (spendCapBlocks(spent, maxUsd)) {
+        return { ok: false, message: spendCapReason(spent, maxUsd), spendCap: true };
+      }
+      return { ok: true };
+    };
+    const runValuations = async (attempt, signal) => {
+      const model = modelForJob("valuations");
+      const passages = await callWithPauseCap({
+        initialMessages: [{ role: "user", content: VALUATION_SEARCH }],
+        allowContinuation: () => allowContinuation(signal),
+        request: ({ messages, continuation }) => postAnthropicMessage({
+          fetchImpl: fetch,
+          apiKey: env("ANTHROPIC_API_KEY"),
+          model,
+          messages,
+          maxTokens: JOB_MAX_TOKENS.valuations,
+          tool: webSearchTool("valuations", model),
+          jobId: "valuations",
+          attempt,
+          continuation,
+          signal,
+          usageLog,
+        }),
+        accept: (content, stopReason) => {
+          const found = citationsFromContent(content);
+          if (found.length) return found;
+          if (stopReason === "pause_turn") return null;
+          throw new Error("no cited passages in reply");
+        },
+      });
       const at = new Date().toISOString();
       let client;
       try {
@@ -439,7 +559,7 @@ export default async function handler(req, res) {
           ran: true, at, passageCount: passages.length,
           error: String(e.message || e), results: [],
         });
-        throw markBilled(e);
+        throw billError(e);
       }
       const judgmentMs = Math.max(0, Math.min(30_000, budget.remainingMs() - 1000));
       let timer;
@@ -459,7 +579,7 @@ export default async function handler(req, res) {
               resolve({
                 ok: false,
                 error: Object.assign(
-                  markBilled(new Error("time budget exhausted during valuation judgment")),
+                  billError(new Error("time budget exhausted during valuation judgment")),
                   { aborted: true },
                 ),
               });
@@ -472,7 +592,7 @@ export default async function handler(req, res) {
             ran: true, at, passageCount: passages.length,
             error: String(failure && failure.message || failure), results: failure && failure.results || [],
           });
-          throw markBilled(failure);
+          throw billError(failure);
         }
         jevMarkdown = renderJevActions({
           ran: true, at, passageCount: passages.length, results: outcome.value.results,
@@ -486,22 +606,66 @@ export default async function handler(req, res) {
       if (signal.aborted || budget.expired()) {
         throw Object.assign(new Error("time budget exhausted"), { aborted: true });
       }
-      /* A share week that is not due never calls Sonnet. The sentinel is
+      /* A share week that is not due never calls the model. The sentinel is
          not a result and not an error — the panel's prior values and
          timestamps stay where the last successful check left them. */
       if (id === "share" && !shareRefreshDue(prevMeta, runAt)) return SHARE_SKIPPED;
       if (id === "storeRanks") return fetchStoreRanks(fetchWithSignal(signal));
       if (id === "markets") return fetchMarketQuotes(fetchWithSignal(signal));
+      if (MODEL_JOBS.has(id)) {
+        const spent = usageLog.estimatedUsd();
+        if (spendCapBlocks(spent, maxUsd)) {
+          throw Object.assign(new Error(spendCapReason(spent, maxUsd)), { spendCap: true });
+        }
+      }
       if (id === "valuations") return runValuations(attempt, signal);
-      return askClaude({ prompt: JOBS[id].prompt, jobId: id, attempt, signal, usageLog });
+      return askClaude({
+        prompt: JOBS[id].prompt,
+        jobId: id,
+        attempt,
+        signal,
+        usageLog,
+        allowContinuation: () => allowContinuation(signal),
+      });
     }, {
       remainingMs: () => budget.remainingMs(),
       decide: (info) => shouldRetry({ ...info, kind: MODEL_JOBS.has(id) ? "model" : "fast" }),
     });
-    const settled = await settleWithinBudget(
-      ids.map((id) => ({ id, run: (signal) => runJob(id, signal) })),
+    const fastIds = ids.filter((id) => !MODEL_JOBS.has(id));
+    const modelIds = orderedModelJobs(ids, selected.explicit);
+    const fastSettledPromise = settleWithinBudget(
+      fastIds.map((id) => ({ id, run: (signal) => runJob(id, signal) })),
       { remainingMs: () => budget.remainingMs() },
     );
+    const modelSettled = {};
+    for (const id of modelIds) {
+      if (id === "share" && !shareRefreshDue(prevMeta, runAt)) {
+        modelSettled[id] = { status: "fulfilled", value: SHARE_SKIPPED, error: null, timedOut: false };
+        continue;
+      }
+      const spent = usageLog.estimatedUsd();
+      if (spendCapBlocks(spent, maxUsd)) {
+        const reason = spendCapReason(spent, maxUsd);
+        noteSpendSkip(id, spent, reason);
+        modelSettled[id] = {
+          status: "rejected",
+          value: undefined,
+          error: Object.assign(new Error(reason), { spendCap: true }),
+          timedOut: false,
+        };
+        continue;
+      }
+      const slot = await settleWithinBudget(
+        [{ id, run: (signal) => runJob(id, signal) }],
+        { remainingMs: () => budget.remainingMs() },
+      );
+      modelSettled[id] = slot[id];
+      if (slot[id] && slot[id].error && slot[id].error.spendCap) {
+        noteSpendSkip(id, usageLog.estimatedUsd(), slot[id].error.message);
+      }
+    }
+    const fastSettled = await fastSettledPromise;
+    const settled = { ...fastSettled, ...modelSettled };
     const timedOut = ids.filter((id) => settled[id] && settled[id].timedOut);
     const summary = publishUsage({ timedOut });
 
@@ -580,14 +744,13 @@ export default async function handler(req, res) {
         await ghWrite(
           VALUES_PATH,
           valuesText(summary),
-          vFile.sha,
           `data: refresh ${runAt.slice(0, 10)} (all panels failed, values unchanged)`,
         );
       } catch (e) { /* the run already failed; a failed write changes nothing */ }
       await saveTrace();
       const notified = await notifyFailure({ severity: "all", runAt, failures, errors, usage: summary, timedOut });
       return res.status(502).json({
-        ok: false, error: "all panels failed", failures, errors, timedOut, usage: summary, notified,
+        ok: false, error: "all panels failed", jobs: selected.ids, failures, errors, timedOut, usage: summary, notified,
         ...(skipped.length ? { skipped } : {}),
       });
     }
@@ -600,15 +763,15 @@ export default async function handler(req, res) {
     const errors = Object.fromEntries(failures.map((id) => [id, meta[id].error]));
 
     await writeUsage(summary);
-    await ghWrite(VALUES_PATH, valuesText(summary), vFile.sha, `data: refresh ${stamp}${note}`);
-    await ghWrite(TREND_PATH, nextHistory, tFile.sha, `data: trend log ${stamp}`);
+    await ghWrite(VALUES_PATH, valuesText(summary), `data: refresh ${stamp}${note}`);
+    await ghWrite(TREND_PATH, nextHistory, `data: trend log ${stamp}`);
     if (storeRankDay) {
       let prevRanks = { days: [] };
       if (rankFile.text) {
         try { prevRanks = JSON.parse(rankFile.text); } catch (e) { prevRanks = { days: [] }; }
       }
       const nextRanks = JSON.stringify(appendStoreRankDay(prevRanks, storeRankDay), null, 2) + "\n";
-      await ghWrite(STORE_RANKS_PATH, nextRanks, rankFile.sha, `data: store ranks ${stamp}`);
+      await ghWrite(STORE_RANKS_PATH, nextRanks, `data: store ranks ${stamp}`);
     }
     await saveTrace();
 
@@ -620,6 +783,7 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       ok: true,
+      jobs: selected.ids,
       refreshed: ids.filter((id) => !failures.includes(id) && !skipped.includes(id)),
       failures,
       errors,
@@ -638,7 +802,6 @@ export default async function handler(req, res) {
         await ghWrite(
           VALUES_PATH,
           valuesText(summary),
-          vFile.sha,
           `data: refresh ${runAt.slice(0, 10)} (fatal)`,
         );
       } catch (writeError) { /* the alert still fires */ }
@@ -646,6 +809,23 @@ export default async function handler(req, res) {
     const notified = await notifyFailure({
       severity: "fatal", runAt, error, usage: summary, timedOut: summary.timedOut || [],
     });
-    return res.status(500).json({ ok: false, error, usage: summary, notified });
+    return res.status(500).json({ ok: false, error, jobs: selected.ids, usage: summary, notified });
+  } finally {
+    if (lockHeld) {
+      try {
+        await releaseRefreshLock({
+          read: () => ghRead(LOCK_PATH),
+          remove: (sha) => ghDelete(LOCK_PATH, sha, `lock: refresh release ${runAt}`),
+          runAt,
+        });
+      } catch (releaseError) {
+        console.log(JSON.stringify({
+          source: "state-of-ai-briefing",
+          event: "refresh_lock_release_failed",
+          runAt,
+          error: String(releaseError && releaseError.message || releaseError),
+        }));
+      }
+    }
   }
 }

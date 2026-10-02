@@ -1,15 +1,17 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { buildAlert, successWebhookBody } from "../api/refresh.js";
+import handler, { VALUATION_SEARCH, buildAlert, jobsQueryFromRequest, successWebhookBody } from "../api/refresh.js";
+import { lockText } from "./refresh-lock.js";
 import {
   MAX_DURATION_MS, MIN_FAST_RETRY_MS, MIN_MODEL_RETRY_MS, TAIL_RESERVE_MS,
   attemptWithRetry, createBudget, settleWithinBudget, shouldRetry,
 } from "./refresh-budget.js";
 import { SEARCH_MAX_USES } from "./refresh-policy.js";
 import {
-  JOB_MAX_TOKENS, MODEL_PRICES, WEB_SEARCH_USD_PER_REQUEST,
-  createUsageLog, estimateCallCost, modelForJob, nightlyCapCeiling, postAnthropicMessage, summarizeUsage,
+  DEFAULT_REFRESH_MAX_USD, HAIKU_MODEL, JOB_MAX_TOKENS, MODEL_PRICES, WEB_SEARCH_USD_PER_REQUEST,
+  callWithPauseCap, createUsageLog, estimateCallCost, modelForJob, nightlyCapCeiling,
+  postAnthropicMessage, refreshMaxUsd, spendCapBlocks, spendCapReason, summarizeUsage,
 } from "./refresh-usage.js";
 
 const vercel = JSON.parse(readFileSync(new URL("../vercel.json", import.meta.url), "utf8"));
@@ -111,27 +113,58 @@ test("a missing 5m/1h split is priced as a 5-minute write and an unknown tool is
 
 test("one nightly ceiling is the search cap plus max_tokens on every iteration, input excluded", () => {
   const quiet = nightlyCapCeiling({ includeShare: false });
-  assert.equal(quiet.searches, 12 + 5 * 4);
-  assert.equal(SEARCH_MAX_USES.valuations, 12);
+  assert.equal(quiet.searches, 8 + 2 + 3 + 3 + 2);
+  assert.equal(SEARCH_MAX_USES.valuations, 8);
   assert.equal(JOB_MAX_TOKENS.valuations, 8000);
-  assert.equal(quiet.outputTokensAtCap, 12 * 8000 + 4 * 5 * 4000);
-  assert.equal(quiet.searchUsd, 0.32);
-  assert.equal(quiet.outputUsd, 2.64);
-  assert.equal(quiet.usdExcludingInput, 2.96);
+  assert.equal(quiet.outputTokensAtCap, 8 * 8000 + (2 + 3 + 3 + 2) * 4000);
+  assert.equal(quiet.byJob.valuations.model, "claude-sonnet-4-6");
+  assert.equal(quiet.byJob.models.model, HAIKU_MODEL);
+  assert.equal(quiet.byJob.energy.model, HAIKU_MODEL);
+  /* Valuations stay on Sonnet output rates. Simple panels are Haiku. */
+  assert.equal(quiet.searchUsd, 0.18);
+  assert.equal(quiet.outputUsd, 1.16);
+  assert.equal(quiet.usdExcludingInput, 1.34);
   assert.equal(quiet.inputTokens, "uncapped");
 
   const withShare = nightlyCapCeiling({ includeShare: true });
-  assert.equal(withShare.searches, 37);
-  assert.equal(withShare.searchUsd, 0.37);
-  assert.equal(withShare.outputUsd, 2.94);
-  assert.equal(withShare.usdExcludingInput, 3.31);
+  assert.equal(withShare.searches, 20);
+  assert.equal(withShare.searchUsd, 0.2);
+  assert.equal(withShare.outputUsd, 1.2);
+  assert.equal(withShare.usdExcludingInput, 1.4);
+  assert.equal(withShare.byJob.share.model, HAIKU_MODEL);
 });
 
-test("a per-job model env overrides only that job", () => {
+test("a per-job model env overrides only that job, and simple panels default to Haiku", () => {
   const env = { ANTHROPIC_MODEL: "claude-sonnet-4-6", ANTHROPIC_MODEL_MODELS: " claude-haiku-4-5 " };
   assert.equal(modelForJob("models", env), "claude-haiku-4-5");
   assert.equal(modelForJob("valuations", env), "claude-sonnet-4-6");
-  assert.equal(modelForJob("energy", {}), "claude-sonnet-4-6");
+  assert.equal(modelForJob("energy", {}), HAIKU_MODEL);
+  assert.equal(modelForJob("users", { ANTHROPIC_MODEL: "claude-sonnet-4-6" }), HAIKU_MODEL);
+  assert.equal(modelForJob("capital", { ANTHROPIC_MODEL_CAPITAL: "claude-sonnet-4-6" }), "claude-sonnet-4-6");
+  assert.equal(modelForJob("valuations", {}), "claude-sonnet-4-6");
+  assert.equal(HAIKU_MODEL, "claude-haiku-4-5-20251001");
+});
+
+test("Haiku 4.5 list price covers the snapshot id and the alias", () => {
+  for (const id of ["claude-haiku-4-5", "claude-haiku-4-5-20251001"]) {
+    assert.equal(MODEL_PRICES[id].inputPerMTok, 1);
+    assert.equal(MODEL_PRICES[id].outputPerMTok, 5);
+    assert.equal(MODEL_PRICES[id].cacheWrite5mPerMTok, 1.25);
+    assert.equal(MODEL_PRICES[id].cacheWrite1hPerMTok, 2);
+    assert.equal(MODEL_PRICES[id].cacheReadPerMTok, 0.1);
+  }
+});
+
+test("the spend cap defaults to one dollar and blocks the next call at the line", () => {
+  assert.equal(DEFAULT_REFRESH_MAX_USD, 1);
+  assert.equal(refreshMaxUsd({}), 1);
+  assert.equal(refreshMaxUsd({ REFRESH_MAX_USD: " 1.50 " }), 1.5);
+  assert.equal(refreshMaxUsd({ REFRESH_MAX_USD: "0" }), 0);
+  assert.throws(() => refreshMaxUsd({ REFRESH_MAX_USD: "nope" }), /REFRESH_MAX_USD/);
+  assert.equal(spendCapBlocks(0.999999, 1), false);
+  assert.equal(spendCapBlocks(1, 1), true);
+  assert.match(spendCapReason(1.02, 1), /prior values kept/);
+  assert.match(spendCapReason(1.02, 1), /REFRESH_MAX_USD 1/);
 });
 
 test("each Anthropic call logs one usage line and keeps server-tool counts", async () => {
@@ -291,6 +324,7 @@ test("retries skip a billed or permanent failure, and skip when the budget is sh
   assert.equal(shouldRetry({ httpStatus: 400, remainingMs: 300_000 }).reason, "permanent");
   assert.equal(shouldRetry({ httpStatus: 401, remainingMs: 300_000 }).reason, "permanent");
   assert.equal(shouldRetry({ aborted: true, remainingMs: 300_000 }).reason, "aborted");
+  assert.equal(shouldRetry({ spendCap: true, remainingMs: 300_000 }).reason, "spend-cap");
   assert.equal(shouldRetry({ httpStatus: 529, remainingMs: MIN_MODEL_RETRY_MS, attemptDurationMs: 1000 }).retry, true);
   assert.equal(shouldRetry({ httpStatus: 529, remainingMs: MIN_MODEL_RETRY_MS - 1, attemptDurationMs: 1000 }).reason, "time");
   assert.equal(shouldRetry({ remainingMs: 100_000, attemptDurationMs: 180_000, kind: "model" }).reason, "time");
@@ -439,4 +473,235 @@ test("webhook bodies keep their old fields and add usage", () => {
   assert.equal(success.panels, 8);
   assert.equal(success.usage, usage);
   assert.equal(success.failures, undefined);
+});
+
+test("pause_turn continues at most once, and a usable partial answer is not continued", async () => {
+  assert.match(VALUATION_SEARCH, /Do not search again/);
+  const paused = { type: "text", text: "still looking" };
+  const done = { type: "text", text: '{"models":[{"model":"A","lab":"B","score":1,"cn":false}]}' };
+  let calls = 0;
+  const value = await callWithPauseCap({
+    initialMessages: [{ role: "user", content: "search" }],
+    request: async ({ messages, continuation }) => {
+      calls += 1;
+      if (continuation === 0) {
+        assert.equal(messages.length, 1);
+        return { content: [paused], stopReason: "pause_turn" };
+      }
+      assert.equal(continuation, 1);
+      assert.equal(messages[1].role, "assistant");
+      assert.equal(messages[1].content[0], paused);
+      return { content: [done], stopReason: "end_turn" };
+    },
+    accept: (content, stopReason) => {
+      const text = content.filter((block) => block.type === "text").map((block) => block.text).join("\n");
+      try { return JSON.parse(text); }
+      catch (e) {
+        if (stopReason === "pause_turn") return null;
+        throw e;
+      }
+    },
+  });
+  assert.equal(calls, 2);
+  assert.equal(value.models[0].model, "A");
+
+  let early = 0;
+  const partial = await callWithPauseCap({
+    initialMessages: [{ role: "user", content: "search" }],
+    request: async () => {
+      early += 1;
+      return { content: [done], stopReason: "pause_turn" };
+    },
+    accept: (content) => JSON.parse(content[0].text),
+  });
+  assert.equal(early, 1);
+  assert.equal(partial.models[0].model, "A");
+
+  let capped = 0;
+  await assert.rejects(() => callWithPauseCap({
+    initialMessages: [{ role: "user", content: "search" }],
+    request: async () => {
+      capped += 1;
+      return { content: [paused], stopReason: "pause_turn" };
+    },
+    accept: () => null,
+  }), (error) => {
+    assert.equal(error.billed, true);
+    assert.match(error.message, /continuation cap/);
+    return true;
+  });
+  assert.equal(capped, 2);
+
+  let blocked = 0;
+  await assert.rejects(() => callWithPauseCap({
+    initialMessages: [{ role: "user", content: "search" }],
+    request: async () => {
+      blocked += 1;
+      return { content: [paused], stopReason: "pause_turn" };
+    },
+    accept: () => null,
+    allowContinuation: () => ({ ok: false, message: "spend cap", spendCap: true }),
+  }), (error) => error.spendCap === true && error.billed === true);
+  assert.equal(blocked, 1);
+});
+
+test("a pause_turn continuation re-sends the assistant message and is its own usage row", async () => {
+  const lines = [];
+  const usageLog = createUsageLog({ log: (line) => lines.push(line) });
+  let n = 0;
+  const fetchImpl = async (_url, opts) => {
+    n += 1;
+    const body = JSON.parse(opts.body);
+    if (n === 1) {
+      assert.equal(body.messages.length, 1);
+      return message({
+        input_tokens: 1000,
+        output_tokens: 10,
+        server_tool_use: { web_search_requests: 1 },
+        service_tier: "standard",
+      }, {
+        stop_reason: "pause_turn",
+        content: [{ type: "text", text: "not json yet" }, { type: "server_tool_use", id: "srvtoolu_1", name: "web_search", input: { query: "q" } }],
+      });
+    }
+    assert.equal(body.messages.length, 2);
+    assert.equal(body.messages[1].role, "assistant");
+    assert.equal(body.messages[1].content[1].id, "srvtoolu_1");
+    return message({
+      input_tokens: 50,
+      output_tokens: 20,
+      server_tool_use: { web_search_requests: 0 },
+      service_tier: "standard",
+    }, { stop_reason: "end_turn", content: [{ type: "text", text: "{\"ok\":true}" }] });
+  };
+
+  const result = await callWithPauseCap({
+    initialMessages: [{ role: "user", content: "search" }],
+    request: ({ messages, continuation }) => postAnthropicMessage({
+      fetchImpl,
+      apiKey: "test-key",
+      model: "claude-haiku-4-5-20251001",
+      messages,
+      maxTokens: 4000,
+      tool: { type: "web_search_20260318", name: "web_search", max_uses: 2, allowed_callers: ["direct"] },
+      jobId: "models",
+      attempt: 1,
+      continuation,
+      usageLog,
+    }),
+    accept: (content, stopReason) => {
+      const text = (content || []).filter((block) => block.type === "text").map((block) => block.text).join("\n");
+      try { return JSON.parse(text); }
+      catch (e) {
+        if (stopReason === "pause_turn") return null;
+        throw e;
+      }
+    },
+  });
+  assert.equal(result.ok, true);
+  assert.equal(usageLog.calls.length, 2);
+  assert.equal(usageLog.calls[0].continuation, 0);
+  assert.equal(usageLog.calls[1].continuation, 1);
+  assert.equal(usageLog.calls[0].stopReason, "pause_turn");
+  assert.equal(lines.length, 2);
+  assert.equal(usageLog.estimatedUsd() > 0, true);
+  const summary = summarizeUsage(usageLog.calls, {
+    spendCap: { maxUsd: 1, estimatedUsd: usageLog.estimatedUsd(), skipped: [] },
+  });
+  assert.equal(summary.jobs.models.attempts, 2);
+  assert.equal(summary.spendCap.maxUsd, 1);
+});
+
+test("a spend-cap error is not retried", async () => {
+  let runs = 0;
+  await assert.rejects(() => attemptWithRetry(async () => {
+    runs += 1;
+    throw Object.assign(new Error("spend cap: prior values kept"), { spendCap: true });
+  }, {
+    remainingMs: () => 300_000,
+    decide: (info) => shouldRetry({ ...info, kind: "model" }),
+  }), (error) => error.retrySkipped === "spend-cap");
+  assert.equal(runs, 1);
+});
+
+test("jobs can be read from the query object or the request URL", () => {
+  assert.equal(jobsQueryFromRequest({ query: { jobs: "valuations" } }), "valuations");
+  assert.equal(jobsQueryFromRequest({ url: "/api/refresh?jobs=models,users" }), "models,users");
+  assert.equal(jobsQueryFromRequest({ query: {}, url: "/api/refresh?jobs=energy" }), "energy");
+  assert.equal(jobsQueryFromRequest({ url: "/api/refresh" }), null);
+});
+
+const mockRes = () => ({
+  statusCode: 0,
+  body: null,
+  status(code) { this.statusCode = code; return this; },
+  json(body) { this.body = body; return this; },
+});
+
+test("an in-progress refresh is refused before any Claude call, and a bad jobs list never calls GitHub", async () => {
+  const previous = {
+    CRON_SECRET: process.env.CRON_SECRET,
+    GITHUB_TOKEN: process.env.GITHUB_TOKEN,
+    GITHUB_REPO: process.env.GITHUB_REPO,
+  };
+  const originalFetch = globalThis.fetch;
+  process.env.CRON_SECRET = "secret";
+  process.env.GITHUB_TOKEN = "token";
+  process.env.GITHUB_REPO = "owner/repo";
+  const urls = [];
+  globalThis.fetch = async (url, opts = {}) => {
+    const href = String(url);
+    urls.push(href);
+    if (href.includes("api.anthropic.com")) throw new Error("Claude was called");
+    if (opts.method === "PUT" && href.includes("refresh-lock")) {
+      return { ok: false, status: 422, text: async () => JSON.stringify({ message: "sha wasn't supplied" }) };
+    }
+    if (href.includes("refresh-lock")) {
+      const started = new Date().toISOString();
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          sha: "abc",
+          content: Buffer.from(lockText(started), "utf8").toString("base64"),
+        }),
+      };
+    }
+    throw new Error(`unexpected fetch ${href}`);
+  };
+  try {
+    const unauth = mockRes();
+    await handler({ headers: {}, query: { jobs: "valuations" } }, unauth);
+    assert.equal(unauth.statusCode, 401);
+    assert.equal(urls.length, 0);
+
+    const bad = mockRes();
+    await handler({
+      headers: { authorization: "Bearer secret" },
+      query: { jobs: "nope" },
+    }, bad);
+    assert.equal(bad.statusCode, 400);
+    assert.match(bad.body.error, /unknown jobs: nope/);
+    assert.equal(urls.length, 0);
+
+    const locked = mockRes();
+    await handler({
+      headers: { authorization: "Bearer secret" },
+      query: { jobs: "valuations" },
+    }, locked);
+    assert.equal(locked.statusCode, 409);
+    assert.equal(locked.body.ok, false);
+    assert.equal(locked.body.error, "refresh already in progress");
+    assert.ok(locked.body.lockedSince);
+    assert.equal(locked.body.staleAfterMs, 360_000);
+    assert.deepEqual(locked.body.jobs, ["valuations"]);
+    assert.equal(urls.some((url) => url.includes("api.anthropic.com")), false);
+    assert.equal(urls.some((url) => url.includes("refresh-lock")), true);
+  } finally {
+    globalThis.fetch = originalFetch;
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
 });

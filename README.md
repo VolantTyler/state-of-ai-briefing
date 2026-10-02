@@ -85,6 +85,7 @@ all four from `.env.example`:
 - `GITHUB_TOKEN`
 - `GITHUB_REPO` — `your-username/state-of-ai-briefing`
 - `CRON_SECRET` — `openssl rand -hex 32`
+- `REFRESH_MAX_USD` — optional, default `1` (list-price ceiling for one refresh)
 
 **5. Redeploy** so the cron registers.
 
@@ -109,7 +110,8 @@ cannot tell you on its own.
 | `ANTHROPIC_API_KEY` | Anthropic | Anthropic console | Yes | Anything else using the same key |
 | `GITHUB_TOKEN` | GitHub | GitHub → fine-grained PATs | Yes | This repo only, if scoped correctly |
 | `CRON_SECRET` | You — `openssl rand -hex 32` | Vercel | Yes | This app alone; nothing external consumes it |
-| `ANTHROPIC_MODEL` | — | This README | No | Not a secret |
+| `ANTHROPIC_MODEL` | — | This README | No | Not a secret. Selects valuations only; simple panels default to Haiku unless `ANTHROPIC_MODEL_<JOB>` is set |
+| `REFRESH_MAX_USD` | — | This README | No | Not a secret. Default `1` |
 | `GITHUB_REPO`, `GITHUB_BRANCH` | — | This README | No | Not secrets |
 
 Every secret is mirrored in 1Password as **one item per project** —
@@ -220,14 +222,26 @@ for each channel you configured.
   untouched — but the job now writes `meta` and `lastRunAt` anyway, so a
   totally failed night is visible in the repo instead of looking exactly like
   a cron that never fired. Configured failure alerts fire on that path too.
-- **Cost** is one Sonnet call with filtered web search per model-backed
-  panel per day: `web_search_20260318`, `max_uses` 12 on valuations and 5 on
-  models, users, capital, and energy. Web-share uses that same cap, and only
-  when seven days have passed since its last successful check; a skipped
-  night is not a failure. Public closes and store ranks are direct chart
-  fetches, not model calls. A call that already returned (including a reply
+- **Cost.** Valuations stay on Sonnet (`claude-sonnet-4-6` unless
+  `ANTHROPIC_MODEL` or `ANTHROPIC_MODEL_VALUATIONS` says otherwise) with
+  filtered web search, `web_search_20260318`, `max_uses` 8. Models, users,
+  share, capital, and energy default to Haiku 4.5
+  (`claude-haiku-4-5-20251001`), which can use that same tool only as a
+  direct caller — Haiku 4.5 does not support the dynamic filtering Sonnet
+  uses, so those panels set `allowed_callers` to `direct`. Their `max_uses`
+  is 2 for models, share, and energy, and 3 for users and capital. The
+  models panel searches `artificialanalysis.ai` only. Web-share still runs
+  only when seven days have passed since its last successful check; a
+  skipped night is not a failure. Public closes and store ranks are direct
+  chart fetches, not model calls. A `pause_turn` is continued at most once,
+  and not at all when the partial reply is already usable or the running
+  estimate has hit `REFRESH_MAX_USD` (default `$1`). Past that ceiling the
+  remaining Claude panels keep their prior values and `usage.json` records
+  why. A second refresh that starts while one is in progress gets `409`
+  and does not call Claude. A call that already returned (including a reply
   that did not parse) is not retried; only a transient unpaid failure is,
-  and only when the time budget can hold it. Hosting is free on Hobby.
+  and only when the time budget can hold it. `ANTHROPIC_MODEL_<JOB>` still
+  overrides the model for that panel. Hosting is free on Hobby.
   After a run, `public/data/usage.json` (and the `usage` field on
   `values.json`) has each call's tokens, `server_tool_use`, `stop_reason`,
   and an estimated USD cost from the list-price table in
@@ -272,6 +286,36 @@ also advances on a hand edit — which would report a dead cron as healthy.
 
 "Behind" is more than two days without a successful check. The cron is
 daily and Vercel fires it within the hour, so one late run is not a fault.
+
+## Running valuations on their own
+
+Valuations does not finish inside the shared 240-second job budget when it
+runs beside the other panels. `/api/refresh` accepts a `jobs` query, still
+behind `CRON_SECRET`. One call for the fast panels and the Haiku panels, and
+a later call for valuations alone, so valuations gets the whole budget:
+
+```bash
+curl -X POST "https://<your-app>.vercel.app/api/refresh?jobs=models,users,share,capital,energy,markets,storeRanks" \
+  -H "Authorization: Bearer $CRON_SECRET"
+
+curl -X POST "https://<your-app>.vercel.app/api/refresh?jobs=valuations" \
+  -H "Authorization: Bearer $CRON_SECRET"
+```
+
+Omit `jobs` and the endpoint still runs every panel, simple ones first and
+valuations last. A refresh that arrives while another holds the lock returns
+`409` with `error: "refresh already in progress"` and does not call Claude.
+The lock is a file on the repo (`dev/refresh-lock.json`) and is treated as
+abandoned after about 6 minutes.
+
+Hobby cron runs once a day, so two schedules need a second project or a Pro
+plan. This repo's `vercel.json` cron is not changed here. Example entries,
+not applied:
+
+```json
+{ "path": "/api/refresh?jobs=models,users,share,capital,energy,markets,storeRanks", "schedule": "0 8 * * *" }
+{ "path": "/api/refresh?jobs=valuations", "schedule": "30 8 * * *" }
+```
 
 ## Changing the schedule
 

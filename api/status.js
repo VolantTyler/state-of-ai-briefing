@@ -19,9 +19,13 @@ const REQUIRED = ["ANTHROPIC_API_KEY", "GITHUB_TOKEN", "GITHUB_REPO", "CRON_SECR
    unset, because "empty" is the *correct* state for these and reporting it
    the same way as a missing API key reads like four problems when there are
    two. An unset optional variable is not a defect; it is a default. */
+/* ANTHROPIC_MODEL selects valuations when ANTHROPIC_MODEL_VALUATIONS is unset.
+   Simple panels default to Haiku inside modelForJob and do not read it.
+   REFRESH_MAX_USD is the per-run list-price ceiling; empty means $1. */
 const OPTIONAL = {
   ANTHROPIC_MODEL: "claude-sonnet-4-6",
   GITHUB_BRANCH: "main",
+  REFRESH_MAX_USD: "1",
 };
 
 /* Alert channels. Present-but-incomplete sets are called out so a lone

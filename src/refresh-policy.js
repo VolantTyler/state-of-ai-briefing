@@ -1,30 +1,88 @@
-/* Search budget and the web-share cadence.
+/* Search budget, which panels are model calls, and the web-share cadence.
 
-   The prompts stay as they are. These two knobs only change how a search is
-   billed, and how often the share question is asked. Markets is not here:
-   its closes are fetched directly, the same way store ranks fetch charts. */
+   Markets is not here: its closes are fetched directly, the same way store
+   ranks fetch charts. */
 
-/* `web_search_20260318` is the current tool that filters result pages in
-   code before they reach the model. `web_search_20260209` is the first
-   version that does that; this one adds response-inclusion control and
-   leaves the default at "full", so citations still come back. */
+/* `web_search_20260318` filters result pages in code before they reach the
+   model, on models that support programmatic tool calling (Claude 4.6 and
+   later). It also accepts `response_inclusion`. There is no parameter that
+   truncates a result page. `max_uses` is the cap on how many result sets
+   get fed back, and `allowed_domains` drops every other site. */
 export const WEB_SEARCH_TOOL = "web_search_20260318";
 
-/* Valuations names nine companies, so a cap under that can drop one.
-   The other prompts are a single topic; 5 is the top of the 3–5 range. */
+/* Haiku 4.5 can send this tool version only as a direct caller. Dynamic
+   filtering is the default `allowed_callers` on `web_search_20260209` and
+   later, and Haiku 4.5 does not support programmatic tool calling. Leaving
+   the default on makes the API return a 400 that says to set `direct`.
+   The dated id is the snapshot; the alias is what an override often sends. */
+export const DIRECT_WEB_SEARCH_MODELS = new Set([
+  "claude-haiku-4-5",
+  "claude-haiku-4-5-20251001",
+]);
+
+/* Simple panels are one topic. 2 is a single page; 3 covers a list that
+   may not fit on one. Valuations names nine companies and is asked to batch
+   them, so 8 is under the old per-company cap of 12 without dropping to one
+   search per name. */
 export const SEARCH_MAX_USES = {
-  valuations: 12,
-  models: 5,
-  users: 5,
-  share: 5,
-  capital: 5,
-  energy: 5,
+  valuations: 8,
+  models: 2,
+  users: 3,
+  share: 2,
+  capital: 3,
+  energy: 2,
 };
 
-export const webSearchTool = (jobId) => {
+/* The v4.2 leaderboard is one site. Other pages are where the v4.1.1 scale
+   gets mixed in, and they are extra input tokens. Subdomains are included.
+   Share, users, capital, and energy are reported across outlets; a domain
+   list there would miss the figure. `user_location` only re-ranks results,
+   it does not shrink them, so it is not set. */
+export const SEARCH_ALLOWED_DOMAINS = {
+  models: ["artificialanalysis.ai"],
+};
+
+/* Simple panels run before valuations so a spend cap stops the long job
+   first. An explicit `?jobs=` list keeps the caller's order instead. */
+export const SIMPLE_MODEL_JOBS = ["models", "users", "share", "capital", "energy"];
+export const MODEL_JOB_ORDER = [...SIMPLE_MODEL_JOBS, "valuations"];
+
+export const webSearchTool = (jobId, model) => {
   const maxUses = SEARCH_MAX_USES[jobId];
   if (!maxUses) throw new Error(`no search cap for ${jobId}`);
-  return { type: WEB_SEARCH_TOOL, name: "web_search", max_uses: maxUses };
+  const tool = { type: WEB_SEARCH_TOOL, name: "web_search", max_uses: maxUses };
+  /* Drops nested search-result blocks from the response after a completed
+     dynamic-filtering search. Direct calls ignore it and still return
+     results, which a pause_turn continuation has to send back unchanged.
+     Valuations reads `cited_text` off the text blocks. The docs say that
+     flag drops result blocks, not citations, but this panel is the one
+     that cannot finish without those passages, so it keeps the default
+     "full". */
+  if (jobId !== "valuations") tool.response_inclusion = "excluded";
+  const domains = SEARCH_ALLOWED_DOMAINS[jobId];
+  if (domains) tool.allowed_domains = [...domains];
+  if (model && DIRECT_WEB_SEARCH_MODELS.has(model)) tool.allowed_callers = ["direct"];
+  return tool;
+};
+
+export const parseJobsQuery = (raw, allIds) => {
+  if (raw == null || (Array.isArray(raw) && raw.length === 0) || String(raw).trim() === "") {
+    return { ids: [...allIds], explicit: false };
+  }
+  const text = Array.isArray(raw) ? raw.flat().join(",") : String(raw);
+  const parts = text.split(",").map((part) => part.trim()).filter(Boolean);
+  if (!parts.length) return { error: "jobs is empty" };
+  const unknown = [...new Set(parts.filter((id) => !allIds.includes(id)))];
+  if (unknown.length) return { error: `unknown jobs: ${unknown.join(", ")}` };
+  const ids = [];
+  for (const id of parts) if (!ids.includes(id)) ids.push(id);
+  return { ids, explicit: true };
+};
+
+export const orderedModelJobs = (ids, explicit) => {
+  const models = ids.filter((id) => MODEL_JOB_ORDER.includes(id));
+  if (explicit) return models;
+  return MODEL_JOB_ORDER.filter((id) => models.includes(id));
 };
 
 /* Weekly, measured in UTC dates. The cron fires at 08:00 and a check often
