@@ -8,6 +8,12 @@ import { appendStoreRankDay, fetchStoreRanks } from "../src/store-ranks.js";
 import { fetchMarketQuotes } from "../src/market-quotes.js";
 import { SHARE_SKIPPED, shareRefreshDue, webSearchTool } from "../src/refresh-policy.js";
 import {
+  attemptWithRetry, createBudget, settleWithinBudget, shouldRetry,
+} from "../src/refresh-budget.js";
+import {
+  JOB_MAX_TOKENS, createUsageLog, modelForJob, postAnthropicMessage,
+} from "../src/refresh-usage.js";
+import {
   citationsFromContent, judgeValuations, renderJevActions,
 } from "./valuation-judgment.js";
 
@@ -16,9 +22,9 @@ import {
 
    Runs on Vercel Cron. Nothing in the browser ever touches the Anthropic
    API — the key lives only in this function's environment. The output is
-   two small files committed back to the repo, which Vercel then serves
-   as static assets from the CDN. Git history *is* the trend log: every
-   refresh is a dated commit you can diff, replay or revert.
+   the panel files plus public/data/usage.json, committed back to the repo,
+   which Vercel then serves as static assets from the CDN. Git history *is*
+   the trend log: every refresh is a dated commit you can diff, replay or revert.
    ———————————————————————————————————————————————— */
 
 const GH = "https://api.github.com";
@@ -26,6 +32,11 @@ const VALUES_PATH = "public/data/values.json";
 const TREND_PATH = "public/data/trend.csv";
 const STORE_RANKS_PATH = "public/data/store-ranks.json";
 const JEV_LOG_PATH = "dev/jev-actions.md";
+const USAGE_PATH = "public/data/usage.json";
+
+/* Model-backed panels. Markets and store ranks are plain HTTP and may
+   retry on a much shorter remainder. */
+const MODEL_JOBS = new Set(["valuations", "models", "users", "share", "capital", "energy"]);
 
 const VALUATION_SEARCH = `Search the web for recent reporting, in US dollars, on what each of these companies is worth: Anthropic, OpenAI, xAI, Databricks, Z.ai (also called Zhipu), DeepSeek, Anduril, Moonshot AI, MiniMax.
 
@@ -120,28 +131,40 @@ const extractJSON = (blocks) => {
   throw new Error("no parseable JSON object in reply");
 };
 
-const anthropicMessage = async (prompt, maxTokens, jobId) => {
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": env("ANTHROPIC_API_KEY"),
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6",
-      max_tokens: maxTokens,
-      messages: [{ role: "user", content: prompt }],
-      tools: [webSearchTool(jobId)],
-    }),
-  });
-  if (!res.ok) throw new Error(`anthropic ${res.status}: ${await res.text()}`);
-  const data = await res.json();
-  if (!data.content) throw new Error("empty response");
-  return data.content;
+const fetchWithSignal = (signal) => (url, options = {}) => fetch(url, { ...options, signal });
+
+const markBilled = (error) => {
+  const billed = error instanceof Error ? error : new Error(String(error));
+  billed.billed = true;
+  billed.httpStatus = 200;
+  return billed;
 };
 
-const askClaude = async (prompt, jobId) => extractJSON(await anthropicMessage(prompt, 4000, jobId));
+/* `pause_turn` means the search loop stopped before a final answer. Continuing
+   it is another paid request, so a run that is already near the time budget
+   does not. The usage object from the paused response is already recorded. */
+const askClaude = async ({ prompt, jobId, attempt, signal, usageLog }) => {
+  const { content, stopReason } = await postAnthropicMessage({
+    fetchImpl: fetch,
+    apiKey: env("ANTHROPIC_API_KEY"),
+    model: modelForJob(jobId),
+    prompt,
+    maxTokens: JOB_MAX_TOKENS[jobId],
+    tool: webSearchTool(jobId),
+    jobId,
+    attempt,
+    signal,
+    usageLog,
+  });
+  if (stopReason === "pause_turn") {
+    throw markBilled(new Error("anthropic pause_turn before a final answer; not continued"));
+  }
+  try {
+    return extractJSON(content);
+  } catch (e) {
+    throw markBilled(e);
+  }
+};
 
 /* The trace is for reading the judgments. It is not part of the site.
    A local write helps a manual run; the GitHub write is what lasts on Vercel. */
@@ -171,7 +194,7 @@ const truncate = (s, n = 400) => {
   return t.length > n ? `${t.slice(0, n - 1)}…` : t;
 };
 
-const buildAlert = ({ severity, runAt, failures = [], errors = {}, error }) => {
+export const buildAlert = ({ severity, runAt, failures = [], errors = {}, error, usage = null, timedOut = [] }) => {
   const stamp = (runAt || new Date().toISOString()).slice(0, 10);
   const subject =
     severity === "fatal" ? `State of AI refresh crashed · ${stamp}`
@@ -183,7 +206,12 @@ const buildAlert = ({ severity, runAt, failures = [], errors = {}, error }) => {
     `runAt: ${runAt || "(unknown)"}`,
   ];
   if (failures.length) lines.push(`failures: ${failures.join(", ")}`);
+  if (timedOut.length) lines.push(`timedOut: ${timedOut.join(", ")}`);
   if (error) lines.push(`error: ${truncate(error)}`);
+  if (usage && usage.totals && usage.totals.estimatedUsd != null) {
+    const complete = usage.totals.estimateComplete ? "complete" : "incomplete";
+    lines.push(`estimatedUsd: ${usage.totals.estimatedUsd} (${complete})`);
+  }
   for (const id of failures) {
     if (errors[id]) lines.push(`  ${id}: ${truncate(errors[id], 240)}`);
   }
@@ -201,6 +229,8 @@ const buildAlert = ({ severity, runAt, failures = [], errors = {}, error }) => {
     error: error ? truncate(error, 500) : null,
     subject,
     message: lines.join("\n"),
+    usage,
+    timedOut,
   };
 };
 
@@ -250,14 +280,17 @@ const notifyGrokBot = async (body) => {
 
 /* Webhook only. Email stays on the failure path. Errors are swallowed so a
    bad webhook cannot turn a finished refresh into a 500. */
-const notifySuccess = async ({ runAt, panels }) => {
+export const successWebhookBody = ({ runAt, panels, usage }) => ({
+  source: "state-of-ai-briefing",
+  event: "refresh_succeeded",
+  runAt,
+  panels,
+  usage: usage || null,
+});
+
+const notifySuccess = async ({ runAt, panels, usage }) => {
   try {
-    await notifyGrokBot({
-      source: "state-of-ai-briefing",
-      event: "refresh_succeeded",
-      runAt,
-      panels,
-    });
+    await notifyGrokBot(successWebhookBody({ runAt, panels, usage }));
   } catch (e) { /* a notify error must never change the refresh result or response */ }
 };
 
@@ -288,12 +321,72 @@ export default async function handler(req, res) {
     try { await persistJevLog(jevMarkdown); } catch (e) { /* the panel data still stands */ }
   };
   const runAt = new Date().toISOString();
+  const usageLog = createUsageLog();
+  const budget = createBudget();
+  let usageSummary = null;
+  const publishUsage = (extra = {}) => {
+    if (usageSummary) return usageSummary;
+    usageLog.abortOpen();
+    usageSummary = usageLog.summary({
+      runAt,
+      wallClockMs: Date.now() - budget.startedAt,
+      budget: {
+        maxDurationMs: budget.maxDurationMs,
+        tailReserveMs: budget.tailReserveMs,
+        jobBudgetMs: budget.maxDurationMs - budget.tailReserveMs,
+      },
+      ...extra,
+    });
+    console.log(JSON.stringify({
+      source: "state-of-ai-briefing",
+      event: "refresh_usage",
+      runAt,
+      timedOut: usageSummary.timedOut,
+      totals: usageSummary.totals,
+    }));
+    return usageSummary;
+  };
+
+  let vFile = null;
+  let tFile = null;
+  let usageFile = null;
+  let rankFile = null;
+  let data = null;
+  let meta = null;
+  let history = null;
+  let usageWritten = false;
+
+  const writeUsage = async (summary, note) => {
+    if (usageWritten) return;
+    let sha = usageFile ? usageFile.sha : null;
+    if (!usageFile) {
+      try {
+        const existing = await ghRead(USAGE_PATH);
+        sha = existing.sha;
+      } catch (e) { sha = null; }
+    }
+    await ghWrite(
+      USAGE_PATH,
+      JSON.stringify(summary, null, 2) + "\n",
+      sha,
+      `data: usage ${runAt.slice(0, 10)}${note || ""}`,
+    );
+    usageWritten = true;
+  };
+
+  const valuesText = (summary) => {
+    const packed = packValues(data, meta, runAt);
+    packed.usage = summary;
+    return JSON.stringify(packed, null, 2) + "\n";
+  };
 
   try {
     /* 1 — current state from the repo, falling back to the baseline */
-    const [vFile, tFile] = await Promise.all([ghRead(VALUES_PATH), ghRead(TREND_PATH)]);
+    [vFile, tFile, usageFile] = await Promise.all([
+      ghRead(VALUES_PATH), ghRead(TREND_PATH), ghRead(USAGE_PATH),
+    ]);
     let prevMeta = {};
-    let data = BASELINE;
+    data = BASELINE;
     if (vFile.text) {
       try {
         const parsed = JSON.parse(vFile.text);
@@ -301,18 +394,41 @@ export default async function handler(req, res) {
         prevMeta = parsed.meta && typeof parsed.meta === "object" ? parsed.meta : {};
       } catch (e) { /* corrupt file — fall through to baseline */ }
     }
-    const history = tFile.text ? csvToHistory(tFile.text) : [];
-    const rankFile = await ghRead(STORE_RANKS_PATH);
+    history = tFile.text ? csvToHistory(tFile.text) : [];
+    rankFile = await ghRead(STORE_RANKS_PATH);
 
     /* 2 — every panel in parallel. Each job is independent, so one failure
        keeps its prior values instead of aborting the run.
 
-       One retry per job: a search-backed answer that comes back malformed
-       is usually malformed by luck, not by rule, and a second ask is far
-       cheaper than a stale panel for 24 hours. */
+       The wall clock is capped under maxDuration. Whatever is still running
+       at that deadline is aborted, written as `time budget exhausted`, and
+       included in the failure alert. A kill at the platform limit never
+       reaches this code, which is how a paid night used to leave no commit
+       and no email.
+
+       Retry once only when the first attempt was not billed (network, 429,
+       5xx) and the deadline still has room for another attempt of at least
+       as long as the first one. A 200 whose JSON or valuation judgment
+       failed has already paid for its search; a second call would bill that
+       job twice. A 400 such as the workspace limit or an empty credit
+       balance will not succeed on a retry either. */
     const ids = Object.keys(JOBS);
-    const runValuations = async () => {
-      const content = await anthropicMessage(VALUATION_SEARCH, 8000, "valuations");
+    const runValuations = async (attempt, signal) => {
+      const { content, stopReason } = await postAnthropicMessage({
+        fetchImpl: fetch,
+        apiKey: env("ANTHROPIC_API_KEY"),
+        model: modelForJob("valuations"),
+        prompt: VALUATION_SEARCH,
+        maxTokens: JOB_MAX_TOKENS.valuations,
+        tool: webSearchTool("valuations"),
+        jobId: "valuations",
+        attempt,
+        signal,
+        usageLog,
+      });
+      if (stopReason === "pause_turn") {
+        throw markBilled(new Error("anthropic pause_turn before a final answer; not continued"));
+      }
       const passages = citationsFromContent(content);
       const at = new Date().toISOString();
       let client;
@@ -323,61 +439,85 @@ export default async function handler(req, res) {
           ran: true, at, passageCount: passages.length,
           error: String(e.message || e), results: [],
         });
-        throw e;
+        throw markBilled(e);
       }
+      const judgmentMs = Math.max(0, Math.min(30_000, budget.remainingMs() - 1000));
+      let timer;
+      const judgment = judgeValuations({
+        companies: data.valuations.map((row) => ({ name: row.name, value: row.value })),
+        passages,
+        ask: (request) => client.systemOne(request),
+      }).then(
+        (value) => ({ ok: true, value }),
+        (error) => ({ ok: false, error }),
+      );
       try {
-        const judged = await judgeValuations({
-          companies: data.valuations.map((row) => ({ name: row.name, value: row.value })),
-          passages,
-          ask: (request) => client.systemOne(request),
-        });
+        const outcome = await Promise.race([
+          judgment,
+          new Promise((resolve) => {
+            timer = setTimeout(() => {
+              resolve({
+                ok: false,
+                error: Object.assign(
+                  markBilled(new Error("time budget exhausted during valuation judgment")),
+                  { aborted: true },
+                ),
+              });
+            }, judgmentMs);
+          }),
+        ]);
+        if (!outcome.ok) {
+          const failure = outcome.error;
+          jevMarkdown = renderJevActions({
+            ran: true, at, passageCount: passages.length,
+            error: String(failure && failure.message || failure), results: failure && failure.results || [],
+          });
+          throw markBilled(failure);
+        }
         jevMarkdown = renderJevActions({
-          ran: true, at, passageCount: passages.length, results: judged.results,
+          ran: true, at, passageCount: passages.length, results: outcome.value.results,
         });
-        return { valuations: judged.accepted };
-      } catch (e) {
-        jevMarkdown = renderJevActions({
-          ran: true, at, passageCount: passages.length,
-          error: String(e.message || e), results: e.results || [],
-        });
-        throw e;
+        return { valuations: outcome.value.accepted };
+      } finally {
+        clearTimeout(timer);
       }
     };
-    const runJob = async (id) => {
+    const runJob = (id, signal) => attemptWithRetry(async (attempt) => {
+      if (signal.aborted || budget.expired()) {
+        throw Object.assign(new Error("time budget exhausted"), { aborted: true });
+      }
       /* A share week that is not due never calls Sonnet. The sentinel is
          not a result and not an error — the panel's prior values and
          timestamps stay where the last successful check left them. */
       if (id === "share" && !shareRefreshDue(prevMeta, runAt)) return SHARE_SKIPPED;
-      const once = () => {
-        if (id === "storeRanks") return fetchStoreRanks();
-        if (id === "markets") return fetchMarketQuotes();
-        if (id === "valuations") return runValuations();
-        return askClaude(JOBS[id].prompt, id);
-      };
-      try {
-        return await once();
-      } catch (first) {
-        try {
-          return await once();
-        } catch (second) {
-          throw new Error(`${first.message} (retry: ${second.message})`);
-        }
-      }
-    };
-    const results = await Promise.allSettled(ids.map(runJob));
+      if (id === "storeRanks") return fetchStoreRanks(fetchWithSignal(signal));
+      if (id === "markets") return fetchMarketQuotes(fetchWithSignal(signal));
+      if (id === "valuations") return runValuations(attempt, signal);
+      return askClaude({ prompt: JOBS[id].prompt, jobId: id, attempt, signal, usageLog });
+    }, {
+      remainingMs: () => budget.remainingMs(),
+      decide: (info) => shouldRetry({ ...info, kind: MODEL_JOBS.has(id) ? "model" : "fast" }),
+    });
+    const settled = await settleWithinBudget(
+      ids.map((id) => ({ id, run: (signal) => runJob(id, signal) })),
+      { remainingMs: () => budget.remainingMs() },
+    );
+    const timedOut = ids.filter((id) => settled[id] && settled[id].timedOut);
+    const summary = publishUsage({ timedOut });
 
-    const meta = { ...prevMeta };
+    meta = { ...prevMeta };
     const failures = [];
     const skipped = [];
     let storeRankDay = null;
-    results.forEach((r, i) => {
-      const id = ids[i];
-      if (r.status === "fulfilled" && r.value === SHARE_SKIPPED) {
+    ids.forEach((id) => {
+      const slot = settled[id];
+      if (slot.status === "fulfilled" && slot.value === SHARE_SKIPPED) {
         skipped.push(id);
         return;
       }
-      let why = r.status === "rejected" ? String(r.reason && r.reason.message || r.reason) : null;
-      if (r.status === "fulfilled") {
+      let why = slot.status === "rejected" ? String(slot.error && slot.error.message || slot.error) : null;
+      if (slot.timedOut && !(why && /time budget/.test(why))) why = "time budget exhausted";
+      if (slot.status === "fulfilled") {
         try {
           /* A successful fetch always advances `checkedAt`; `changedAt` only
              moves if the panel's slice of the wire format actually differs.
@@ -386,8 +526,8 @@ export default async function handler(req, res) {
              split. `at` is still written as the old alias so anything reading
              the previous shape keeps working. */
           const before = panelDigest(data, id);
-          data = JOBS[id].apply(data, r.value);
-          if (id === "storeRanks" && r.value && r.value.day) storeRankDay = r.value.day;
+          data = JOBS[id].apply(data, slot.value);
+          if (id === "storeRanks" && slot.value && slot.value.day) storeRankDay = slot.value.day;
           const changed = panelDigest(data, id) !== before;
           const prior = meta[id] || {};
           const now = new Date().toISOString();
@@ -406,7 +546,8 @@ export default async function handler(req, res) {
           };
           return;
         } catch (e) {
-          /* Reply parsed but didn't fit the panel's shape. */
+          /* Reply parsed but didn't fit the panel's shape. The model call,
+             when there was one, is already in the usage log. */
           why = `bad shape: ${String(e.message || e)}`;
         }
       }
@@ -434,30 +575,32 @@ export default async function handler(req, res) {
          the ambiguity the page is now trying to resolve. One commit a night
          is a cheap price for being able to tell those apart. */
       const errors = Object.fromEntries(failures.map((id) => [id, meta[id].error]));
+      try { await writeUsage(summary, " (all panels failed)"); } catch (e) { /* the alert still fires */ }
       try {
         await ghWrite(
           VALUES_PATH,
-          JSON.stringify(packValues(data, meta, runAt), null, 2) + "\n",
+          valuesText(summary),
           vFile.sha,
           `data: refresh ${runAt.slice(0, 10)} (all panels failed, values unchanged)`,
         );
       } catch (e) { /* the run already failed; a failed write changes nothing */ }
       await saveTrace();
-      const notified = await notifyFailure({ severity: "all", runAt, failures, errors });
+      const notified = await notifyFailure({ severity: "all", runAt, failures, errors, usage: summary, timedOut });
       return res.status(502).json({
-        ok: false, error: "all panels failed", failures, errors, notified,
+        ok: false, error: "all panels failed", failures, errors, timedOut, usage: summary, notified,
         ...(skipped.length ? { skipped } : {}),
       });
     }
 
-    /* 3 — write both files back */
-    const nextValues = JSON.stringify(packValues(data, meta, runAt), null, 2) + "\n";
+    /* 3 — write the files back. Usage goes first so a later write failure
+       still leaves the meter reading in git. */
     const nextHistory = historyToCSV(logHistory(data, history)) + "\n";
     const stamp = runAt.slice(0, 10);
     const note = failures.length ? ` (${failures.join(", ")} kept prior values)` : "";
     const errors = Object.fromEntries(failures.map((id) => [id, meta[id].error]));
 
-    await ghWrite(VALUES_PATH, nextValues, vFile.sha, `data: refresh ${stamp}${note}`);
+    await writeUsage(summary);
+    await ghWrite(VALUES_PATH, valuesText(summary), vFile.sha, `data: refresh ${stamp}${note}`);
     await ghWrite(TREND_PATH, nextHistory, tFile.sha, `data: trend log ${stamp}`);
     if (storeRankDay) {
       let prevRanks = { days: [] };
@@ -470,23 +613,39 @@ export default async function handler(req, res) {
     await saveTrace();
 
     const notified = failures.length
-      ? await notifyFailure({ severity: "partial", runAt, failures, errors })
+      ? await notifyFailure({ severity: "partial", runAt, failures, errors, usage: summary, timedOut })
       : undefined;
 
-    if (!failures.length) await notifySuccess({ runAt, panels: ids.length });
+    if (!failures.length) await notifySuccess({ runAt, panels: ids.length, usage: summary });
 
     return res.status(200).json({
       ok: true,
       refreshed: ids.filter((id) => !failures.includes(id) && !skipped.includes(id)),
       failures,
       errors,
+      timedOut,
+      usage: summary,
       ...(skipped.length ? { skipped } : {}),
       ...(notified ? { notified } : {}),
     });
   } catch (e) {
     await saveTrace();
     const error = String(e.message || e);
-    const notified = await notifyFailure({ severity: "fatal", runAt, error });
-    return res.status(500).json({ ok: false, error, notified });
+    const summary = publishUsage({ fatal: true });
+    try { await writeUsage(summary, " (fatal)"); } catch (writeError) { /* the alert still fires */ }
+    if (vFile && data && meta) {
+      try {
+        await ghWrite(
+          VALUES_PATH,
+          valuesText(summary),
+          vFile.sha,
+          `data: refresh ${runAt.slice(0, 10)} (fatal)`,
+        );
+      } catch (writeError) { /* the alert still fires */ }
+    }
+    const notified = await notifyFailure({
+      severity: "fatal", runAt, error, usage: summary, timedOut: summary.timedOut || [],
+    });
+    return res.status(500).json({ ok: false, error, usage: summary, notified });
   }
 }
