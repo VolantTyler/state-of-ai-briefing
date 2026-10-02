@@ -275,5 +275,14 @@ daily and Vercel fires it within the hour, so one late run is not a fault.
 
 ## Changing the schedule
 
-Edit `vercel.json`. `"0 8 * * *"` is daily at 08:00 UTC. Twice-daily or hourly
-needs a Vercel Pro plan.
+The nightly cron is paused pending cost fixes. `crons` in `vercel.json` is
+empty, so Vercel does not call `/api/refresh` on a schedule. The endpoint is
+still deployed and can be triggered by hand (see Deploy, step 6).
+
+To restore the nightly run, add this entry back to `crons`:
+
+```json
+{ "path": "/api/refresh", "schedule": "0 8 * * *" }
+```
+
+That is daily at 08:00 UTC. Twice-daily or hourly needs a Vercel Pro plan.
