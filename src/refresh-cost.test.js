@@ -1,13 +1,16 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import handler, { VALUATION_SEARCH, buildAlert, jobsQueryFromRequest, successWebhookBody } from "../api/refresh.js";
+import handler, {
+  JSON_REFORMAT_MAX_TOKENS, VALUATION_SEARCH, buildAlert, extractJSON, jobsQueryFromRequest,
+  jsonReformatPrompt, partitionRefreshJobs, recoverJsonReply, successWebhookBody,
+} from "../api/refresh.js";
 import { lockText } from "./refresh-lock.js";
 import {
   MAX_DURATION_MS, MIN_FAST_RETRY_MS, MIN_MODEL_RETRY_MS, TAIL_RESERVE_MS,
   attemptWithRetry, createBudget, settleWithinBudget, shouldRetry,
 } from "./refresh-budget.js";
-import { SEARCH_MAX_USES } from "./refresh-policy.js";
+import { SEARCH_MAX_USES, VALUATIONS_FULL_RUN_SKIP, shareSkipReason } from "./refresh-policy.js";
 import {
   DEFAULT_REFRESH_MAX_USD, HAIKU_MODEL, JOB_MAX_TOKENS, MODEL_PRICES, WEB_SEARCH_USD_PER_REQUEST,
   callWithPauseCap, createUsageLog, estimateCallCost, modelForJob, nightlyCapCeiling,
@@ -113,24 +116,25 @@ test("a missing 5m/1h split is priced as a 5-minute write and an unknown tool is
 
 test("one nightly ceiling is the search cap plus max_tokens on every iteration, input excluded", () => {
   const quiet = nightlyCapCeiling({ includeShare: false });
-  assert.equal(quiet.searches, 8 + 2 + 3 + 3 + 2);
-  assert.equal(SEARCH_MAX_USES.valuations, 8);
-  assert.equal(JOB_MAX_TOKENS.valuations, 8000);
-  assert.equal(quiet.outputTokensAtCap, 8 * 8000 + (2 + 3 + 3 + 2) * 4000);
+  assert.equal(quiet.searches, 4 + 2 + 3 + 3 + 2);
+  assert.equal(SEARCH_MAX_USES.valuations, 4);
+  assert.equal(JOB_MAX_TOKENS.valuations, 4000);
+  assert.equal(quiet.outputTokensAtCap, 4 * 4000 + (2 + 3 + 3 + 2) * 4000);
   assert.equal(quiet.byJob.valuations.model, "claude-sonnet-4-6");
   assert.equal(quiet.byJob.models.model, HAIKU_MODEL);
   assert.equal(quiet.byJob.energy.model, HAIKU_MODEL);
-  /* Valuations stay on Sonnet output rates. Simple panels are Haiku. */
-  assert.equal(quiet.searchUsd, 0.18);
-  assert.equal(quiet.outputUsd, 1.16);
-  assert.equal(quiet.usdExcludingInput, 1.34);
+  /* Valuations stay on Sonnet output rates. Simple panels are Haiku.
+     16_000 Sonnet tokens × $15 plus 40_000 Haiku tokens × $5, per million. */
+  assert.equal(quiet.searchUsd, 0.14);
+  assert.equal(quiet.outputUsd, 0.44);
+  assert.equal(quiet.usdExcludingInput, 0.58);
   assert.equal(quiet.inputTokens, "uncapped");
 
   const withShare = nightlyCapCeiling({ includeShare: true });
-  assert.equal(withShare.searches, 20);
-  assert.equal(withShare.searchUsd, 0.2);
-  assert.equal(withShare.outputUsd, 1.2);
-  assert.equal(withShare.usdExcludingInput, 1.4);
+  assert.equal(withShare.searches, 16);
+  assert.equal(withShare.searchUsd, 0.16);
+  assert.equal(withShare.outputUsd, 0.48);
+  assert.equal(withShare.usdExcludingInput, 0.64);
   assert.equal(withShare.byJob.share.model, HAIKU_MODEL);
 });
 
@@ -310,10 +314,17 @@ test("an aborted call is recorded once, with the bill unknown", async () => {
   assert.equal(usageLog.calls.length, 1);
   assert.equal(lines.length, 1);
   assert.equal(usageLog.calls[0].billed, null);
+  assert.equal(usageLog.calls[0].likelyBilled, true);
   assert.equal(usageLog.calls[0].aborted, true);
+  assert.equal(usageLog.calls[0].estimatedUsd, null);
   assert.equal(usageLog.calls[0].durationMs, 30);
+  assert.match(usageLog.calls[0].error, /likely billed/);
+  assert.match(usageLog.calls[0].error, /30ms/);
   const summary = summarizeUsage(usageLog.calls, { timedOut: ["valuations"] });
   assert.equal(summary.totals.estimateComplete, false);
+  assert.equal(summary.totals.estimatedUsd, 0);
+  assert.equal(summary.totals.likelyBilledAttempts, 1);
+  assert.ok(summary.totals.unpriced.includes("aborted-likely-billed"));
   assert.ok(summary.totals.unpriced.includes("timed-out") || summary.totals.unpriced.includes("usage-not-reported"));
 });
 
@@ -473,6 +484,27 @@ test("webhook bodies keep their old fields and add usage", () => {
   assert.equal(success.panels, 8);
   assert.equal(success.usage, usage);
   assert.equal(success.failures, undefined);
+  assert.equal(success.skipped, undefined);
+
+  const withSkip = buildAlert({
+    severity: "partial",
+    runAt: "2026-10-02T21:00:03.208Z",
+    failures: ["capital"],
+    errors: { capital: "no JSON in reply" },
+    skipped: { share: "weekly; last run 2026-09-27, next due 2026-10-04" },
+  });
+  assert.equal(withSkip.event, "refresh_failed");
+  assert.match(withSkip.message, /weekly; last run 2026-09-27/);
+  assert.match(withSkip.skipped.share, /next due 2026-10-04/);
+
+  const successSkip = successWebhookBody({
+    runAt: "2026-10-02T21:00:03.208Z",
+    panels: 8,
+    usage,
+    skipped: { valuations: VALUATIONS_FULL_RUN_SKIP },
+  });
+  assert.equal(successSkip.event, "refresh_succeeded");
+  assert.match(successSkip.skipped.valuations, /\?jobs=valuations/);
 });
 
 test("pause_turn continues at most once, and a usable partial answer is not continued", async () => {
@@ -631,6 +663,132 @@ test("jobs can be read from the query object or the request URL", () => {
   assert.equal(jobsQueryFromRequest({ url: "/api/refresh" }), null);
 });
 
+test("JSON extraction takes a fence or the last object in any text block", () => {
+  assert.equal(
+    extractJSON([{ type: "text", text: "note first {\"nope\":1} then {\"capex\":{\"Alphabet\":185}}" }]).capex.Alphabet,
+    185,
+  );
+  assert.equal(
+    extractJSON([{ type: "text", text: "```json\n{\"energy\":{\"totalTWh\":565}}\n```" }]).energy.totalTWh,
+    565,
+  );
+  /* An unclosed quote in an earlier block must not swallow the object in the next one. */
+  const split = extractJSON([
+    { type: "text", text: "still quoting \"" },
+    { type: "text", text: "{\"users\":{\"ChatGPT\":1000}}" },
+  ]);
+  assert.equal(split.users.ChatGPT, 1000);
+  assert.throws(() => extractJSON([{ type: "text", text: "Alphabet planned about 185 billion, no object" }]), /no JSON in reply/);
+});
+
+test("a JSON miss is reformatted once from the reply text, with no second search", async () => {
+  let raw = null;
+  const outcome = await recoverJsonReply({
+    blocks: [{ type: "text", text: "Alphabet capex is 185. Anthropic revenue is 3." }],
+    stopReason: "end_turn",
+    reformat: async (text) => {
+      raw = text;
+      return [{ type: "text", text: "{\"capex\":{\"Alphabet\":185},\"revenue\":{\"Anthropic\":3}}" }];
+    },
+  });
+  assert.equal(outcome.reformatted, true);
+  assert.match(raw, /Alphabet capex is 185/);
+  assert.equal(outcome.value.revenue.Anthropic, 3);
+  assert.match(jsonReformatPrompt("x"), /Do not search/);
+  assert.equal(JSON_REFORMAT_MAX_TOKENS, 1500);
+
+  let reformats = 0;
+  const paused = await recoverJsonReply({
+    blocks: [{ type: "text", text: "still looking" }],
+    stopReason: "pause_turn",
+    reformat: async () => { reformats += 1; return []; },
+  });
+  assert.equal(paused.value, null);
+  assert.equal(reformats, 0);
+
+  const bodies = [];
+  const usageLog = createUsageLog({ log: () => {} });
+  const fetchImpl = async (_url, opts) => {
+    bodies.push(JSON.parse(opts.body));
+    return message({
+      input_tokens: 40,
+      output_tokens: 20,
+      server_tool_use: { web_search_requests: 0 },
+      service_tier: "standard",
+    }, { content: [{ type: "text", text: "{\"ok\":true}" }] });
+  };
+  await postAnthropicMessage({
+    fetchImpl,
+    apiKey: "test-key",
+    model: "claude-haiku-4-5-20251001",
+    messages: [{ role: "user", content: jsonReformatPrompt("prose") }],
+    maxTokens: JSON_REFORMAT_MAX_TOKENS,
+    tool: null,
+    jobId: "capital",
+    attempt: 1,
+    continuation: "reformat",
+    usageLog,
+  });
+  assert.equal(bodies[0].tools, undefined);
+  assert.equal(bodies[0].max_tokens, 1500);
+  assert.equal(usageLog.calls[0].continuation, "reformat");
+  assert.equal(usageLog.calls[0].serverToolUse.web_search_requests, 0);
+  assert.equal(usageLog.calls[0].estimatedUsd > 0, true);
+});
+
+test("every selected job is refreshed, failed, or skipped with a reason", () => {
+  const ids = ["valuations", "models", "users", "share", "capital", "energy", "markets", "storeRanks"];
+  const shareReason = shareSkipReason(
+    { share: { checkedAt: "2026-09-27T08:26:23.077Z" } },
+    "2026-10-02T21:00:03.208Z",
+  );
+  const partial = partitionRefreshJobs({
+    ids,
+    refreshed: ["models", "users", "energy", "markets", "storeRanks"],
+    failures: ["capital"],
+    skipped: { share: shareReason, valuations: VALUATIONS_FULL_RUN_SKIP },
+  });
+  assert.equal(partial.ok, false);
+  assert.equal(partial.partial, true);
+  for (const id of ids) {
+    const places = [
+      partial.refreshed.includes(id),
+      partial.failures.includes(id),
+      Object.prototype.hasOwnProperty.call(partial.skipped, id),
+    ].filter(Boolean);
+    assert.equal(places.length, 1, id);
+  }
+  assert.equal(partial.skipped.share, "weekly; last run 2026-09-27, next due 2026-10-04");
+
+  const clean = partitionRefreshJobs({
+    ids,
+    refreshed: ids.filter((id) => id !== "share" && id !== "valuations"),
+    failures: [],
+    skipped: { share: shareReason, valuations: VALUATIONS_FULL_RUN_SKIP },
+  });
+  assert.equal(clean.ok, true);
+  assert.equal(clean.partial, false);
+
+  assert.throws(
+    () => partitionRefreshJobs({
+      ids,
+      refreshed: ["models"],
+      failures: ["capital"],
+      skipped: { share: shareReason },
+    }),
+    /missing=/,
+  );
+  assert.throws(
+    () => partitionRefreshJobs({
+      ids: ["share"],
+      refreshed: ["share"],
+      failures: [],
+      skipped: { share: shareReason },
+    }),
+    /duplicates=share/,
+  );
+});
+
 const mockRes = () => ({
   statusCode: 0,
   body: null,
@@ -704,4 +862,195 @@ test("an in-progress refresh is refused before any Claude call, and a bad jobs l
       else process.env[key] = value;
     }
   }
+});
+
+/* Drive the handler against a fake GitHub contents API. `res.json` records
+   when the response is sent so a test can prove the lock DELETE happened
+   earlier. */
+const runRefresh = async ({ jobs, lock, deleteMode = "ok", failRead = null }) => {
+  const previous = {
+    CRON_SECRET: process.env.CRON_SECRET,
+    GITHUB_TOKEN: process.env.GITHUB_TOKEN,
+    GITHUB_REPO: process.env.GITHUB_REPO,
+    GITHUB_BRANCH: process.env.GITHUB_BRANCH,
+  };
+  const originalFetch = globalThis.fetch;
+  const originalLog = console.log;
+  process.env.CRON_SECRET = "secret";
+  process.env.GITHUB_TOKEN = "token";
+  process.env.GITHUB_REPO = "owner/repo";
+  process.env.GITHUB_BRANCH = "main";
+  const order = [];
+  const logs = [];
+  const deletes = [];
+  const puts = [];
+  let shaN = 0;
+  let held = lock ? { ...lock } : null;
+  let conflicted = false;
+  console.log = (line) => { logs.push(String(line)); };
+  const contentsPath = (href) => {
+    const marker = "/contents/";
+    const at = href.indexOf(marker);
+    return at < 0 ? "" : decodeURIComponent(href.slice(at + marker.length).split("?")[0]);
+  };
+  const githubFile = (sha, text) => ({
+    ok: true,
+    status: 200,
+    json: async () => ({ sha, content: Buffer.from(text, "utf8").toString("base64") }),
+    text: async () => "",
+  });
+  const githubFail = (status, body) => ({
+    ok: false,
+    status,
+    text: async () => body,
+    json: async () => JSON.parse(body),
+  });
+  const res = mockRes();
+  const send = res.json.bind(res);
+  res.json = (body) => {
+    order.push("response");
+    return send(body);
+  };
+  globalThis.fetch = async (url, opts = {}) => {
+    const href = String(url);
+    const method = opts.method || "GET";
+    if (href.includes("api.anthropic.com")) throw new Error("Claude was called");
+    if (href.includes("query1.finance.yahoo.com")) {
+      const symbol = decodeURIComponent(href.split("/chart/")[1].split("?")[0]);
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          chart: {
+            result: [{
+              meta: {
+                symbol,
+                currency: "USD",
+                currentTradingPeriod: { regular: { start: 0, end: 1 } },
+              },
+              timestamp: [1_700_000_000],
+              indicators: { quote: [{ close: [123.45] }] },
+            }],
+          },
+        }),
+      };
+    }
+    if (!href.includes("api.github.com")) throw new Error(`unexpected fetch ${href}`);
+    const path = contentsPath(href);
+    if (method === "GET") {
+      if (failRead && path === failRead) return githubFail(500, "read failed");
+      if (path === "dev/refresh-lock.json") {
+        return held ? githubFile(held.sha, held.text) : githubFail(404, "missing");
+      }
+      return githubFail(404, "missing");
+    }
+    const body = JSON.parse(opts.body || "{}");
+    if (method === "PUT" && path === "dev/refresh-lock.json") {
+      puts.push({ message: body.message, sha: body.sha || null });
+      if (!body.sha && held) return githubFail(422, JSON.stringify({ message: "sha wasn't supplied" }));
+      if (body.sha && held && body.sha !== held.sha) return githubFail(409, "sha mismatch");
+      shaN += 1;
+      held = {
+        sha: `lock-${shaN}`,
+        text: Buffer.from(body.content, "base64").toString("utf8"),
+      };
+      order.push(body.message.includes("steal") ? "steal" : "lock");
+      return { ok: true, status: 201, text: async () => "{}" };
+    }
+    if (method === "DELETE" && path === "dev/refresh-lock.json") {
+      deletes.push(body.sha);
+      order.push("delete");
+      if (deleteMode === "fail") return githubFail(500, JSON.stringify({ message: "delete refused" }));
+      if (deleteMode === "conflict" && !conflicted) {
+        conflicted = true;
+        if (held) held = { ...held, sha: "lock-fresh" };
+        return githubFail(409, JSON.stringify({ message: "sha mismatch" }));
+      }
+      if (!held || body.sha !== held.sha) return githubFail(409, "sha mismatch");
+      held = null;
+      return { ok: true, status: 200, text: async () => "{}" };
+    }
+    if (method === "PUT") {
+      const text = Buffer.from(body.content, "base64").toString("utf8");
+      puts.push({ path, text, message: body.message });
+      order.push(`put ${path}`);
+      return { ok: true, status: 200, text: async () => "{}" };
+    }
+    throw new Error(`unexpected ${method} ${href}`);
+  };
+  try {
+    await handler({
+      headers: { authorization: "Bearer secret" },
+      query: { jobs },
+    }, res);
+    return { res, order, logs, deletes, puts, held };
+  } finally {
+    globalThis.fetch = originalFetch;
+    console.log = originalLog;
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+};
+
+test("a finished refresh deletes the lock before the response, including a stolen one", async () => {
+  const run = await runRefresh({
+    jobs: "markets",
+    lock: { sha: "stale-sha", text: lockText("2020-01-01T00:00:00.000Z") },
+  });
+  assert.equal(run.res.statusCode, 200);
+  assert.equal(run.res.body.ok, true);
+  assert.equal(run.res.body.lockReleased, true);
+  assert.equal(run.res.body.usage.lockReleased, true);
+  assert.equal(run.order.includes("steal"), true);
+  assert.ok(run.order.indexOf("delete") < run.order.indexOf("response"));
+  assert.equal(run.held, null);
+  assert.equal(run.deletes.includes("stale-sha"), false);
+  const usage = run.puts.filter((put) => put.path === "public/data/usage.json").at(-1);
+  assert.match(usage.text, /"lockReleased": true/);
+  assert.ok(run.order.indexOf("delete") < run.order.lastIndexOf("put public/data/usage.json"));
+});
+
+test("a thrown error still releases the lock before the response", async () => {
+  const run = await runRefresh({
+    jobs: "markets",
+    failRead: "public/data/values.json",
+  });
+  assert.equal(run.res.statusCode, 500);
+  assert.equal(run.res.body.ok, false);
+  assert.equal(run.res.body.lockReleased, true);
+  assert.equal(run.res.body.usage.lockReleased, true);
+  assert.ok(run.order.indexOf("delete") < run.order.indexOf("response"));
+  assert.equal(run.held, null);
+  assert.equal(run.order.some((step) => step.includes("api.anthropic.com")), false);
+});
+
+test("a sha conflict on delete is retried once with the sha just read", async () => {
+  const run = await runRefresh({
+    jobs: "markets",
+    deleteMode: "conflict",
+  });
+  assert.equal(run.res.body.lockReleased, true);
+  assert.deepEqual(run.deletes, ["lock-1", "lock-fresh"]);
+  assert.ok(run.order.indexOf("delete") < run.order.lastIndexOf("delete"));
+  assert.ok(run.order.lastIndexOf("delete") < run.order.indexOf("response"));
+  assert.equal(run.held, null);
+});
+
+test("a failed delete is logged with the GitHub status and body and is not reported as released", async () => {
+  const run = await runRefresh({
+    jobs: "markets",
+    deleteMode: "fail",
+  });
+  assert.equal(run.res.statusCode, 200);
+  assert.equal(run.res.body.ok, true);
+  assert.equal(run.res.body.lockReleased, false);
+  assert.equal(run.res.body.usage.lockReleased, false);
+  assert.ok(run.held);
+  const logged = run.logs.map((line) => JSON.parse(line)).find((row) => row.event === "lock_release_failed");
+  assert.equal(logged.status, 500);
+  assert.match(logged.body, /delete refused/);
+  const usage = run.puts.filter((put) => put.path === "public/data/usage.json").at(-1);
+  assert.match(usage.text, /"lockReleased": false/);
 });

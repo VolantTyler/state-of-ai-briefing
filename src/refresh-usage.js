@@ -60,7 +60,9 @@ export const SERVER_TOOLS_INCLUDED_IN_TOKENS = {
    sample once per iteration, so output_tokens in `usage` can be up to
    max_uses × max_tokens, not max_tokens once. */
 export const JOB_MAX_TOKENS = {
-  valuations: 8000,
+  /* Cited passages are short. 8000 was more output than the judgment reads,
+     and each search iteration can sample up to this cap. */
+  valuations: 4000,
   models: 4000,
   users: 4000,
   share: 4000,
@@ -315,6 +317,7 @@ const blankJob = () => ({
   timedOut: false,
   billedAttempts: 0,
   unbilledAttempts: 0,
+  likelyBilledAttempts: 0,
 });
 
 const addCallToJob = (job, call) => {
@@ -333,6 +336,7 @@ const addCallToJob = (job, call) => {
   for (const [key, value] of Object.entries(call.serverToolUse || {})) addCount(job.serverToolUse, key, value);
   if (call.billed === true) job.billedAttempts += 1;
   else if (call.billed === false) job.unbilledAttempts += 1;
+  if (call.likelyBilled) job.likelyBilledAttempts += 1;
   if (call.aborted) job.timedOut = true;
 };
 
@@ -406,6 +410,7 @@ export const summarizeUsage = (calls, {
       tokensIncomplete,
       billedAttempts: totals.billedAttempts,
       unbilledAttempts: totals.unbilledAttempts,
+      likelyBilledAttempts: totals.likelyBilledAttempts,
     },
   };
 };
@@ -449,6 +454,34 @@ export const nightlyCapCeiling = ({ includeShare = false, env = {} } = {}) => {
   };
 };
 
+/* The non-streaming Messages API returns `usage` only on the completed
+   response body. Aborting the HTTP request does not yield a partial meter.
+   Streaming would expose `message_start` usage before the end, and this
+   client does not stream. Record the elapsed time and that the request
+   was already sent, and do not store a measured $0. */
+export const ABORT_UNMETERED_NOTE =
+  "Non-streaming Messages returns usage only on the completed response. This request was aborted before that body was read, so its token cost was not measured. The request had already been sent and was likely billed.";
+
+export const abortedUnmetered = (durationMs, cost = {}) => {
+  const unpriced = [...(cost.unpriced || [])];
+  for (const item of ["usage-not-reported", "aborted-likely-billed"]) {
+    if (!unpriced.includes(item)) unpriced.push(item);
+  }
+  const notes = [...(cost.notes || [])];
+  if (!notes.includes(ABORT_UNMETERED_NOTE)) notes.push(ABORT_UNMETERED_NOTE);
+  return {
+    ...cost,
+    estimatedUsd: null,
+    estimateComplete: false,
+    unpriced,
+    notes,
+    likelyBilled: true,
+    billed: null,
+    aborted: true,
+    error: `aborted after ${durationMs}ms; response was not read; request was likely billed`,
+  };
+};
+
 const usageLogLine = (record) => JSON.stringify({
   source: "state-of-ai-briefing",
   event: "anthropic_usage",
@@ -476,12 +509,13 @@ export const createUsageLog = ({ now = Date.now, log = (line) => console.log(lin
     },
     abortOpen() {
       for (const [key, partial] of open) {
+        const durationMs = Math.max(0, now() - partial.startedAt);
         const record = {
           jobId: partial.jobId,
           attempt: partial.attempt,
           continuation: partial.continuation || 0,
           model: partial.model || null,
-          durationMs: Math.max(0, now() - partial.startedAt),
+          durationMs,
           stopReason: null,
           httpStatus: null,
           inputTokens: null,
@@ -493,12 +527,7 @@ export const createUsageLog = ({ now = Date.now, log = (line) => console.log(lin
           serverToolUse: {},
           serviceTier: null,
           usage: null,
-          estimatedUsd: 0,
-          estimateComplete: false,
-          unpriced: ["usage-not-reported"],
-          billed: null,
-          aborted: true,
-          error: "aborted: time budget exhausted before the response was read",
+          ...abortedUnmetered(durationMs),
         };
         open.delete(key);
         calls.push(record);
@@ -539,21 +568,36 @@ export const postAnthropicMessage = async ({
     : [{ role: "user", content: prompt }];
   usageLog.start({ jobId, attempt, continuation, model });
   const finishError = (fields) => {
+    const durationMs = Math.max(0, now() - started);
     const normalized = normalizeAnthropicUsage(fields.data);
-    const cost = estimateCallCost({ model, ...normalized });
+    const sawUsage = Boolean(fields.data && fields.data.usage);
+    let cost = estimateCallCost({ model, ...normalized });
+    let billed = fields.billed;
+    let aborted = Boolean(fields.aborted);
+    let likelyBilled = false;
+    let errorText = fields.error ? truncate(fields.error) : null;
+    if (aborted && !sawUsage) {
+      const marked = abortedUnmetered(durationMs, cost);
+      cost = marked;
+      billed = marked.billed;
+      aborted = true;
+      likelyBilled = true;
+      errorText = marked.error;
+    }
     const record = {
       jobId,
       attempt,
       continuation,
       model,
-      durationMs: Math.max(0, now() - started),
+      durationMs,
       stopReason: fields.data && fields.data.stop_reason || null,
       httpStatus: fields.httpStatus ?? null,
       ...normalized,
       ...cost,
-      billed: fields.billed,
-      aborted: Boolean(fields.aborted),
-      error: fields.error ? truncate(fields.error) : null,
+      billed,
+      likelyBilled,
+      aborted,
+      error: errorText,
     };
     usageLog.finish(record);
     const error = new Error(fields.message);
@@ -578,7 +622,7 @@ export const postAnthropicMessage = async ({
         model,
         max_tokens: maxTokens,
         messages: wireMessages,
-        tools: [tool],
+        ...(tool ? { tools: [tool] } : {}),
       }),
     });
   } catch (e) {
@@ -588,7 +632,7 @@ export const postAnthropicMessage = async ({
       httpStatus: null,
       billed: null,
       aborted,
-      error: aborted ? "aborted: time budget exhausted before the response was read" : e.message,
+      error: e.message,
       message: aborted ? "time budget exhausted" : `anthropic network: ${e.message}`,
     });
   }
