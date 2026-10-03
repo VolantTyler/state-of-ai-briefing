@@ -577,14 +577,72 @@ export default async function handler(req, res) {
   let usageWritten = false;
   let lockHeld = false;
 
-  const writeUsage = async (summary, note) => {
-    if (usageWritten) return;
+  const writeUsage = async (summary, note, { force = false } = {}) => {
+    if (usageWritten && !force) return;
     await ghWrite(
       USAGE_PATH,
       JSON.stringify(summary, null, 2) + "\n",
       `data: usage ${runAt.slice(0, 10)}${note || ""}`,
     );
     usageWritten = true;
+  };
+
+  /* The DELETE has to finish before `res.json()`. Vercel treats the sent
+     response as the end of the invocation, so a release awaited only in
+     `finally` never produces a commit. The 21:00Z and 01:16Z runs both
+     wrote their data files and left `dev/refresh-lock.json` in place. */
+  const releaseHeldLock = async () => {
+    if (!lockHeld) return null;
+    lockHeld = false;
+    try {
+      const result = await releaseRefreshLock({
+        read: () => ghRead(LOCK_PATH),
+        remove: (sha) => ghDelete(LOCK_PATH, sha, `lock: refresh release ${runAt}`),
+        runAt,
+      });
+      if (result && result.released) return true;
+      console.log(JSON.stringify({
+        source: "state-of-ai-briefing",
+        event: "lock_release_failed",
+        runAt,
+        status: null,
+        body: result && result.reason ? result.reason : "lock was not released",
+      }));
+      return false;
+    } catch (error) {
+      console.log(JSON.stringify({
+        source: "state-of-ai-briefing",
+        event: "lock_release_failed",
+        runAt,
+        status: error && error.status != null ? error.status : null,
+        body: error && error.body != null ? String(error.body) : String(error && error.message || error),
+      }));
+      return false;
+    }
+  };
+
+  const finish = async (status, body, summary) => {
+    const lockReleased = await releaseHeldLock();
+    if (summary && typeof summary === "object") {
+      summary.lockReleased = lockReleased;
+      try {
+        await writeUsage(
+          summary,
+          lockReleased ? " (lock released)" : " (lock release failed)",
+          { force: true },
+        );
+      } catch (error) {
+        console.log(JSON.stringify({
+          source: "state-of-ai-briefing",
+          event: "lock_release_failed",
+          runAt,
+          status: error && error.status != null ? error.status : null,
+          body: `usage.json was not updated after release: ${error && (error.body || error.message) || error}`,
+        }));
+      }
+    }
+    if (lockReleased != null) body.lockReleased = lockReleased;
+    return res.status(status).json(body);
   };
 
   const valuesText = (summary) => {
@@ -922,14 +980,14 @@ export default async function handler(req, res) {
       const notified = await notifyFailure({
         severity: "all", runAt, failures, errors, usage: summary, timedOut, skipped: outcome.skipped,
       });
-      return res.status(502).json({
+      return finish(502, {
         ...outcome,
         error: "all panels failed",
         errors,
         timedOut,
         usage: summary,
         notified,
-      });
+      }, summary);
     }
 
     /* 3 — write the files back. Usage goes first so a later write failure
@@ -962,13 +1020,13 @@ export default async function handler(req, res) {
       await notifySuccess({ runAt, panels: ids.length, usage: summary, skipped: outcome.skipped });
     }
 
-    return res.status(200).json({
+    return finish(200, {
       ...outcome,
       errors,
       timedOut,
       usage: summary,
       ...(notified ? { notified } : {}),
-    });
+    }, summary);
   } catch (e) {
     await saveTrace();
     const error = String(e.message || e);
@@ -986,23 +1044,12 @@ export default async function handler(req, res) {
     const notified = await notifyFailure({
       severity: "fatal", runAt, error, usage: summary, timedOut: summary.timedOut || [],
     });
-    return res.status(500).json({ ok: false, error, jobs: selected.ids, usage: summary, notified });
+    return finish(500, {
+      ok: false, error, jobs: selected.ids, usage: summary, notified,
+    }, summary);
   } finally {
-    if (lockHeld) {
-      try {
-        await releaseRefreshLock({
-          read: () => ghRead(LOCK_PATH),
-          remove: (sha) => ghDelete(LOCK_PATH, sha, `lock: refresh release ${runAt}`),
-          runAt,
-        });
-      } catch (releaseError) {
-        console.log(JSON.stringify({
-          source: "state-of-ai-briefing",
-          event: "refresh_lock_release_failed",
-          runAt,
-          error: String(releaseError && releaseError.message || releaseError),
-        }));
-      }
-    }
+    /* A path that already answered has cleared lockHeld. This only covers
+       a throw that escaped `finish` itself. */
+    if (lockHeld) await releaseHeldLock();
   }
 }

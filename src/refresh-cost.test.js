@@ -863,3 +863,194 @@ test("an in-progress refresh is refused before any Claude call, and a bad jobs l
     }
   }
 });
+
+/* Drive the handler against a fake GitHub contents API. `res.json` records
+   when the response is sent so a test can prove the lock DELETE happened
+   earlier. */
+const runRefresh = async ({ jobs, lock, deleteMode = "ok", failRead = null }) => {
+  const previous = {
+    CRON_SECRET: process.env.CRON_SECRET,
+    GITHUB_TOKEN: process.env.GITHUB_TOKEN,
+    GITHUB_REPO: process.env.GITHUB_REPO,
+    GITHUB_BRANCH: process.env.GITHUB_BRANCH,
+  };
+  const originalFetch = globalThis.fetch;
+  const originalLog = console.log;
+  process.env.CRON_SECRET = "secret";
+  process.env.GITHUB_TOKEN = "token";
+  process.env.GITHUB_REPO = "owner/repo";
+  process.env.GITHUB_BRANCH = "main";
+  const order = [];
+  const logs = [];
+  const deletes = [];
+  const puts = [];
+  let shaN = 0;
+  let held = lock ? { ...lock } : null;
+  let conflicted = false;
+  console.log = (line) => { logs.push(String(line)); };
+  const contentsPath = (href) => {
+    const marker = "/contents/";
+    const at = href.indexOf(marker);
+    return at < 0 ? "" : decodeURIComponent(href.slice(at + marker.length).split("?")[0]);
+  };
+  const githubFile = (sha, text) => ({
+    ok: true,
+    status: 200,
+    json: async () => ({ sha, content: Buffer.from(text, "utf8").toString("base64") }),
+    text: async () => "",
+  });
+  const githubFail = (status, body) => ({
+    ok: false,
+    status,
+    text: async () => body,
+    json: async () => JSON.parse(body),
+  });
+  const res = mockRes();
+  const send = res.json.bind(res);
+  res.json = (body) => {
+    order.push("response");
+    return send(body);
+  };
+  globalThis.fetch = async (url, opts = {}) => {
+    const href = String(url);
+    const method = opts.method || "GET";
+    if (href.includes("api.anthropic.com")) throw new Error("Claude was called");
+    if (href.includes("query1.finance.yahoo.com")) {
+      const symbol = decodeURIComponent(href.split("/chart/")[1].split("?")[0]);
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          chart: {
+            result: [{
+              meta: {
+                symbol,
+                currency: "USD",
+                currentTradingPeriod: { regular: { start: 0, end: 1 } },
+              },
+              timestamp: [1_700_000_000],
+              indicators: { quote: [{ close: [123.45] }] },
+            }],
+          },
+        }),
+      };
+    }
+    if (!href.includes("api.github.com")) throw new Error(`unexpected fetch ${href}`);
+    const path = contentsPath(href);
+    if (method === "GET") {
+      if (failRead && path === failRead) return githubFail(500, "read failed");
+      if (path === "dev/refresh-lock.json") {
+        return held ? githubFile(held.sha, held.text) : githubFail(404, "missing");
+      }
+      return githubFail(404, "missing");
+    }
+    const body = JSON.parse(opts.body || "{}");
+    if (method === "PUT" && path === "dev/refresh-lock.json") {
+      puts.push({ message: body.message, sha: body.sha || null });
+      if (!body.sha && held) return githubFail(422, JSON.stringify({ message: "sha wasn't supplied" }));
+      if (body.sha && held && body.sha !== held.sha) return githubFail(409, "sha mismatch");
+      shaN += 1;
+      held = {
+        sha: `lock-${shaN}`,
+        text: Buffer.from(body.content, "base64").toString("utf8"),
+      };
+      order.push(body.message.includes("steal") ? "steal" : "lock");
+      return { ok: true, status: 201, text: async () => "{}" };
+    }
+    if (method === "DELETE" && path === "dev/refresh-lock.json") {
+      deletes.push(body.sha);
+      order.push("delete");
+      if (deleteMode === "fail") return githubFail(500, JSON.stringify({ message: "delete refused" }));
+      if (deleteMode === "conflict" && !conflicted) {
+        conflicted = true;
+        if (held) held = { ...held, sha: "lock-fresh" };
+        return githubFail(409, JSON.stringify({ message: "sha mismatch" }));
+      }
+      if (!held || body.sha !== held.sha) return githubFail(409, "sha mismatch");
+      held = null;
+      return { ok: true, status: 200, text: async () => "{}" };
+    }
+    if (method === "PUT") {
+      const text = Buffer.from(body.content, "base64").toString("utf8");
+      puts.push({ path, text, message: body.message });
+      order.push(`put ${path}`);
+      return { ok: true, status: 200, text: async () => "{}" };
+    }
+    throw new Error(`unexpected ${method} ${href}`);
+  };
+  try {
+    await handler({
+      headers: { authorization: "Bearer secret" },
+      query: { jobs },
+    }, res);
+    return { res, order, logs, deletes, puts, held };
+  } finally {
+    globalThis.fetch = originalFetch;
+    console.log = originalLog;
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+};
+
+test("a finished refresh deletes the lock before the response, including a stolen one", async () => {
+  const run = await runRefresh({
+    jobs: "markets",
+    lock: { sha: "stale-sha", text: lockText("2020-01-01T00:00:00.000Z") },
+  });
+  assert.equal(run.res.statusCode, 200);
+  assert.equal(run.res.body.ok, true);
+  assert.equal(run.res.body.lockReleased, true);
+  assert.equal(run.res.body.usage.lockReleased, true);
+  assert.equal(run.order.includes("steal"), true);
+  assert.ok(run.order.indexOf("delete") < run.order.indexOf("response"));
+  assert.equal(run.held, null);
+  assert.equal(run.deletes.includes("stale-sha"), false);
+  const usage = run.puts.filter((put) => put.path === "public/data/usage.json").at(-1);
+  assert.match(usage.text, /"lockReleased": true/);
+  assert.ok(run.order.indexOf("delete") < run.order.lastIndexOf("put public/data/usage.json"));
+});
+
+test("a thrown error still releases the lock before the response", async () => {
+  const run = await runRefresh({
+    jobs: "markets",
+    failRead: "public/data/values.json",
+  });
+  assert.equal(run.res.statusCode, 500);
+  assert.equal(run.res.body.ok, false);
+  assert.equal(run.res.body.lockReleased, true);
+  assert.equal(run.res.body.usage.lockReleased, true);
+  assert.ok(run.order.indexOf("delete") < run.order.indexOf("response"));
+  assert.equal(run.held, null);
+  assert.equal(run.order.some((step) => step.includes("api.anthropic.com")), false);
+});
+
+test("a sha conflict on delete is retried once with the sha just read", async () => {
+  const run = await runRefresh({
+    jobs: "markets",
+    deleteMode: "conflict",
+  });
+  assert.equal(run.res.body.lockReleased, true);
+  assert.deepEqual(run.deletes, ["lock-1", "lock-fresh"]);
+  assert.ok(run.order.indexOf("delete") < run.order.lastIndexOf("delete"));
+  assert.ok(run.order.lastIndexOf("delete") < run.order.indexOf("response"));
+  assert.equal(run.held, null);
+});
+
+test("a failed delete is logged with the GitHub status and body and is not reported as released", async () => {
+  const run = await runRefresh({
+    jobs: "markets",
+    deleteMode: "fail",
+  });
+  assert.equal(run.res.statusCode, 200);
+  assert.equal(run.res.body.ok, true);
+  assert.equal(run.res.body.lockReleased, false);
+  assert.equal(run.res.body.usage.lockReleased, false);
+  assert.ok(run.held);
+  const logged = run.logs.map((line) => JSON.parse(line)).find((row) => row.event === "lock_release_failed");
+  assert.equal(logged.status, 500);
+  assert.match(logged.body, /delete refused/);
+  const usage = run.puts.filter((put) => put.path === "public/data/usage.json").at(-1);
+  assert.match(usage.text, /"lockReleased": false/);
+});
