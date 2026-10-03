@@ -143,3 +143,61 @@ export const shareSkipReason = (meta, now = new Date()) => {
   const next = new Date(utcDay(then) + SHARE_REFRESH_DAYS * DAY_MS).toISOString().slice(0, 10);
   return `weekly; last run ${last}, next due ${next}`;
 };
+
+/* GitHub Actions cron is UTC and does not follow US daylight time.
+   08:00 UTC is 4:00 AM EDT and 3:00 AM EST.
+   10:00 UTC on Sunday is 6:00 AM EDT and 5:00 AM EST. */
+export const DAILY_REFRESH_CRON = "0 8 * * *";
+export const VALUATIONS_REFRESH_CRON = "0 10 * * 0";
+
+/* Every panel except valuations. The daily Actions run uses this list.
+   Valuations has its own weekly run and must not be started here. */
+export const dailyJobIds = (allIds) => allIds.filter((id) => id !== "valuations");
+
+/* Blank means the daily set, and it is explicit so a later change cannot
+   treat "no argument" as "run every panel, including valuations".
+   Any other string is the caller's list, in the caller's order. */
+export const resolveJobSelection = (raw, allIds) => {
+  if (raw == null || (Array.isArray(raw) && raw.length === 0) || String(raw).trim() === "") {
+    return { ids: dailyJobIds(allIds), explicit: true, preset: "daily" };
+  }
+  const parsed = parseJobsQuery(raw, allIds);
+  if (parsed.error) return parsed;
+  const preset = parsed.ids.length === 1 && parsed.ids[0] === "valuations" ? "valuations" : "custom";
+  return { ...parsed, preset };
+};
+
+/* Schedule events ignore REFRESH_JOBS. The Sunday valuations cron is the
+   only schedule that selects that panel. workflow_dispatch uses the input
+   as typed, and a blank input is the daily set. */
+export const jobsForInvocation = ({
+  eventName = "",
+  schedule = "",
+  jobsInput = "",
+  valuationsCron = VALUATIONS_REFRESH_CRON,
+} = {}) => {
+  if (eventName === "workflow_dispatch") {
+    return jobsInput == null ? "" : String(jobsInput);
+  }
+  if (String(schedule || "") === valuationsCron) return "valuations";
+  return "";
+};
+
+/* Actions sets REFRESH_EVENT. A local run can pass ids as argv, then
+   REFRESH_JOBS, and otherwise gets the daily set. */
+export const selectJobsFromEnv = (env = process.env, argv = []) => {
+  const eventName = env && env.REFRESH_EVENT ? String(env.REFRESH_EVENT) : "";
+  if (eventName === "workflow_dispatch" || eventName === "schedule") {
+    return jobsForInvocation({
+      eventName,
+      schedule: env.REFRESH_SCHEDULE || "",
+      jobsInput: env.REFRESH_JOBS ?? "",
+    });
+  }
+  const arg = argv.length ? String(argv[0]) : "";
+  if (arg.trim()) return arg.trim();
+  if (env && env.REFRESH_JOBS != null && String(env.REFRESH_JOBS).trim()) {
+    return String(env.REFRESH_JOBS).trim();
+  }
+  return "";
+};

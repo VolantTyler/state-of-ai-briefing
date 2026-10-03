@@ -1,15 +1,15 @@
 # The State of AI — a living briefing
 
-A periodically refreshed industry dashboard, deployed as a public static site
-with a nightly server-side refresh.
+A periodically refreshed industry dashboard, deployed as a public static site.
+GitHub Actions runs the refresh. Vercel only serves the committed files.
 
 ## How it works
 
 ```
-Vercel Cron (daily, 08:00 UTC)
+GitHub Actions  (daily 08:00 UTC, valuations Sunday 10:00 UTC)
         │
         ▼
-  /api/refresh ──── Anthropic API (filtered web search) ──── nightly panels, web-share weekly
+  scripts/refresh.js ── Anthropic API (filtered web search) ── daily panels; web-share weekly; valuations weekly
         │                 └── US App Store + Google Play charts (store ranks)
         │                 └── Yahoo Finance daily charts (regular-session closes)
         ▼
@@ -21,6 +21,8 @@ Vercel Cron (daily, 08:00 UTC)
         ▼
   Browser reads /data/*.json — no API key, no database, no per-visitor state
 ```
+
+How to run it, and which Actions secrets to add, is `docs/refresh.md`.
 
 The inversion is the point. In the artifact edition the browser did the
 refreshing, which on a public URL would mean either shipping an API key or
@@ -38,7 +40,7 @@ auditability.
 | `src/App.jsx` | The dashboard. See `PATCH.md`. |
 | `src/briefing-data.js` | Baseline dataset, sources, refresh jobs, wire format. Shared by the app and the cron so they can't drift. |
 | `src/useBriefingData.js` | Reads the published files. Replaces `window.storage` + Drive sync. |
-| `api/refresh.js` | The nightly job. The only place the API key exists. |
+| `scripts/refresh.js` | The Actions entry point. The only place the API key is used. |
 | `public/data/` | Published state. `values.json` and `trend.csv` are the panel record; `store-ranks.json` is the daily US top-free chart for first-party AI apps. `usage.json` is the latest nightly Anthropic usage and list-price estimate. |
 | `public/icon.svg` | The mark — three lines converging on one exponential curve. Source of every raster icon. |
 | `public/site.webmanifest` | Homescreen name, colors and icon set. |
@@ -74,45 +76,32 @@ gh repo create state-of-ai-briefing --public --source=. --push
 
 **2. Import into Vercel** — framework preset Vite, everything else default.
 
-**3. Create a GitHub token.** Settings → Developer settings → Personal access
-tokens → Fine-grained. Scope it to *this repository only*, with
-**Contents: Read and write**. Nothing else.
+**3. Create a GitHub token** for the data commits. Settings → Developer
+settings → Personal access tokens → Fine-grained. Scope it to *this
+repository only*, with **Contents: Read and write**. Nothing else. Store it
+as the Actions secret `GH_CONTENTS_TOKEN`. The built-in `GITHUB_TOKEN` cannot
+do this job: Vercel will not deploy commits authored by `github-actions[bot]`.
 
-**4. Set environment variables** in Vercel (Settings → Environment Variables),
-all four from `.env.example`:
+**4. Add the Actions secrets** listed in `docs/refresh.md`. The refresh does
+not read Vercel environment variables, and `crons` stays empty.
 
-- `ANTHROPIC_API_KEY`
-- `GITHUB_TOKEN`
-- `GITHUB_REPO` — `your-username/state-of-ai-briefing`
-- `CRON_SECRET` — `openssl rand -hex 32`
-- `REFRESH_MAX_USD` — optional, default `1` (list-price ceiling for one refresh)
-
-**5. Redeploy** so the cron registers.
-
-**6. Test the job by hand** before waiting for 3am:
-
-```bash
-curl -X POST https://<your-app>.vercel.app/api/refresh \
-  -H "Authorization: Bearer $CRON_SECRET"
-```
-
-Expect `{"ok":true,"refreshed":[...],"failures":[]}` and two new commits.
+**5. Run the job from GitHub** → Actions → Refresh briefing data → Run
+workflow. Leave the jobs field blank. Expect a green run and new commits on
+`main`, which Vercel deploys.
 
 ## Secrets
 
-`.env.example` lists six environment variables; three of them are secret. That
-file says what the shape is. This section says where each one *lives* and how
-to replace it — the part that matters at 3am, and the part a password manager
-cannot tell you on its own.
+`.env.example` lists the process-environment names. The job reads them from
+GitHub Actions. `docs/refresh.md` is the list of secret names to create.
+This section says where each one *lives* and how to replace it.
 
-| Variable | Issued by | Source of truth | Sensitive in Vercel | Blast radius of a rotation |
-|---|---|---|---|---|
-| `ANTHROPIC_API_KEY` | Anthropic | Anthropic console | Yes | Anything else using the same key |
-| `GITHUB_TOKEN` | GitHub | GitHub → fine-grained PATs | Yes | This repo only, if scoped correctly |
-| `CRON_SECRET` | You — `openssl rand -hex 32` | Vercel | Yes | This app alone; nothing external consumes it |
-| `ANTHROPIC_MODEL` | — | This README | No | Not a secret. Selects valuations only; simple panels default to Haiku unless `ANTHROPIC_MODEL_<JOB>` is set |
-| `REFRESH_MAX_USD` | — | This README | No | Not a secret. Default `1` |
-| `GITHUB_REPO`, `GITHUB_BRANCH` | — | This README | No | Not secrets |
+| Variable | Issued by | Where the job reads it | Blast radius of a rotation |
+|---|---|---|---|
+| `ANTHROPIC_API_KEY` | Anthropic | Actions secret of the same name | Anything else using the same key |
+| `GH_CONTENTS_TOKEN` | GitHub fine-grained PAT | Actions secret; the workflow assigns it to `GITHUB_TOKEN` | This repo only, if scoped correctly |
+| `ANTHROPIC_MODEL` | — | Actions variable, optional | Not a secret. Selects valuations only; simple panels default to Haiku unless `ANTHROPIC_MODEL_<JOB>` is set |
+| `REFRESH_MAX_USD` | — | Actions variable, optional | Not a secret. Default `1` |
+| `GITHUB_REPO`, `GITHUB_BRANCH` | — | Set by the workflow | Not secrets |
 
 Every secret is mirrored in 1Password as **one item per project** —
 `state-of-ai-briefing — Vercel`, one field per variable — not one item per
@@ -136,35 +125,24 @@ Test the backup before destroying the original.
 
 ### Rotating
 
-`CRON_SECRET` is the cheap one. You invented it and only this app consumes it,
-so there is nobody to coordinate with:
-
-1. `openssl rand -hex 32`
-2. Update the 1Password field.
-3. Vercel → Settings → Environment Variables, with **Production** ticked.
-4. **Redeploy** — functions read the values baked in at deploy time, so an
-   edit alone changes nothing.
-5. Verify with the manual run below, then mark it Sensitive.
-
-`ANTHROPIC_API_KEY` and `GITHUB_TOKEN` rotate at the issuer first, then follow
-steps 2–5. Fine-grained GitHub PATs expire — 30 days by default — so record
-the expiry date in 1Password next to the value. A cron that goes quiet is
-often just an expired token.
+`ANTHROPIC_API_KEY` and `GH_CONTENTS_TOKEN` rotate at the issuer first, then
+update the Actions secret of the same name. A workflow run reads the secret
+at start, so the next run picks up the new value with no redeploy. Fine-grained
+GitHub PATs expire — 30 days by default — so record the expiry date in
+1Password next to the value. A refresh that goes quiet is often just an
+expired token.
 
 ### Reading a secret without putting it on disk
 
-`vercel env pull` writes *every* production secret into a local file, which is
-a poor trade for needing one string. Read the single value straight out of
-1Password instead, so it never reaches shell history or the filesystem:
-
-```bash
-curl -i -X POST https://<your-app>.vercel.app/api/refresh \
-  -H "Authorization: Bearer $(op read 'op://Private/state-of-ai-briefing/CRON_SECRET')"
-```
+The refresh runs from GitHub Actions, as `docs/refresh.md` describes. Read a
+value out of 1Password when you need to paste it into an Actions secret, so
+it never reaches shell history or the filesystem. `vercel env pull` writes
+every production variable into a local file, and the refresh does not read
+those variables anyway.
 
 ### Checking what the deployment actually sees
 
-`GET /api/status` (same `CRON_SECRET` auth as the refresh endpoint) reports
+`GET /api/status` reports
 every expected variable at once, plus which deployment answered:
 
 ```bash
@@ -173,13 +151,11 @@ curl -s https://<your-app>.vercel.app/api/status \
 ```
 
 It never returns a value — only a state (`ok` / `empty` / `whitespace` /
-`missing`) and a character count. That is enough to catch the two failures
-`vercel env ls` cannot show you: a variable saved blank, and a value one
-character too long because `echo` appended a newline. `env()` in `refresh.js`
-treats an empty string exactly like an absent one, so without this the two are
-indistinguishable — and because it throws on the first falsy variable it
-reaches, a misconfigured deployment otherwise reveals its problems one
-redeploy at a time.
+`missing`) and a character count. That is enough to catch a variable saved
+blank, and a value one character too long because `echo` appended a newline.
+The refresh job does not read these Vercel variables. Its configuration is
+the Actions secrets in `docs/refresh.md`. `refresh.runner` in the JSON is
+`github-actions`.
 
 The `deployment` block echoes `VERCEL_ENV`, the branch and the commit SHA,
 which separates a genuinely missing variable from a production alias still
@@ -192,13 +168,14 @@ Preview is invisible to it while looking present in the dashboard.
 
 ## Failure alerts
 
-When any panel fails (or the job crashes), `api/refresh.js` can notify you
+When any panel fails (or the job crashes), the refresh can notify you
 so a dead credit balance does not sit unnoticed for days. Both channels are
 optional and best-effort — a notify error never changes the refresh result.
 
-**Where to set them:** Vercel → Project → Settings → Environment Variables
-(Production + Preview). There is no checked-in `.env` for this app; nightly
-cron only sees what Vercel injects. `.env.example` is the checklist.
+**Where to set them:** GitHub → Settings → Secrets and variables → Actions.
+The names are in `docs/refresh.md`. There is no checked-in `.env`; the
+workflow only sees the secrets and variables it maps. `.env.example` is the
+checklist of process-environment names.
 
 | Channel | Env vars | Notes |
 |---|---|---|
@@ -214,8 +191,9 @@ for each channel you configured.
 
 ## Notes
 
-- **Vercel Hobby runs cron once per day**, which is exactly the chosen cadence.
-  The trigger time is approximate — Vercel fires within the hour.
+- **GitHub Actions runs the daily job and a separate Sunday valuations job.**
+  The times are in `docs/refresh.md`. GitHub may start a scheduled workflow
+  a few minutes late.
 - **A failed panel keeps its prior values** and is marked `failed` in
   `values.json`, so the dashboard shows "Refresh failed 5 hours ago" on that
   card rather than a gap. If *every* panel fails, the values are still left
@@ -245,8 +223,8 @@ for each channel you configured.
   most once, and not at all when the partial reply is already usable or
   the running estimate has hit `REFRESH_MAX_USD` (default `$1`). Past that
   ceiling the remaining Claude panels keep their prior values and
-  `usage.json` records why. A second refresh that starts while one is in
-  progress gets `409` and does not call Claude. A call that already
+  `usage.json` records why. A second Actions run waits for the first instead
+  of calling Claude beside it. A call that already
   returned (including a reply that did not parse, and including the
   reformat) is not searched again; only a transient unpaid failure is,
   and only when the time budget can hold it. An aborted call records its
@@ -262,8 +240,8 @@ for each channel you configured.
   `refresh_succeeded` webhook bodies.
 - **The commit loop is safe** — the cron only ever writes `public/data/`, and
   Vercel's build doesn't write to the repo, so there's no feedback loop.
-- **`CRON_SECRET` is not optional.** Without it `/api/refresh` is a public
-  button wired to your API key.
+- **There is no public refresh URL.** The job runs only from GitHub Actions.
+  `CRON_SECRET` is not part of that job.
 
 ## Reading the freshness stamps
 
@@ -296,48 +274,26 @@ The masthead summarizes the same thing across every panel, and reads
 from `lastRunAt`/`checkedAt` rather than `updatedAt`, because `updatedAt`
 also advances on a hand edit — which would report a dead cron as healthy.
 
-"Behind" is more than two days without a successful check. The cron is
-daily and Vercel fires it within the hour, so one late run is not a fault.
+"Behind" is more than two days without a successful check. The daily job
+runs once a morning, and GitHub may start it a few minutes late, so one late
+run is not a fault.
 
 ## Running valuations on their own
 
-Valuations does not finish inside the shared 240-second job budget when it
-runs beside the other panels. On 2026-10-02 it was still searching at 198
-seconds when that budget aborted the request, and the usage body was never
-read. A full refresh therefore skips it and records the reason in `skipped`.
-`/api/refresh?jobs=valuations` (still behind `CRON_SECRET`) runs it alone, with
-`max_uses` 4, so it gets the whole budget. It is not started at all when
-fewer than 120 seconds remain.
+Valuations does not run in the daily job. On 2026-10-02 a solo valuations
+call was still searching at about 239 seconds when the 240 second Vercel
+budget aborted it, and the usage body was never read. The Actions job gives
+that call the remaining job budget (23 minutes unless the clocks in
+`docs/refresh.md` are changed) and does not start it when fewer than 10
+minutes remain.
 
-```bash
-curl -X POST "https://state-of-ai-briefing.vercel.app/api/refresh?jobs=valuations" -H "Authorization: Bearer $CRON_SECRET"
-```
-
-Omit `jobs` and the endpoint runs every panel except valuations. A refresh
-that arrives while another holds the lock returns `409` with
-`error: "refresh already in progress"` and does not call Claude. The lock is
-a file on the repo (`dev/refresh-lock.json`) and is treated as abandoned
-after about 6 minutes.
-
-Hobby cron runs once a day, so two schedules need a second project or a Pro
-plan. This repo's `vercel.json` cron is not changed here. Example entries,
-not applied:
-
-```json
-{ "path": "/api/refresh?jobs=models,users,share,capital,energy,markets,storeRanks", "schedule": "0 8 * * *" }
-{ "path": "/api/refresh?jobs=valuations", "schedule": "30 8 * * *" }
-```
+Run it from Actions → Refresh briefing data → Run workflow, with jobs set to
+`valuations`. That is also the Sunday 10:00 UTC schedule. Overlapping runs
+wait on the `state-of-ai-refresh` concurrency group. The repo lock file is
+not used.
 
 ## Changing the schedule
 
-The nightly cron is paused pending cost fixes. `crons` in `vercel.json` is
-empty, so Vercel does not call `/api/refresh` on a schedule. The endpoint is
-still deployed and can be triggered by hand (see Deploy, step 6).
-
-To restore the nightly run, add this entry back to `crons`:
-
-```json
-{ "path": "/api/refresh", "schedule": "0 8 * * *" }
-```
-
-That is daily at 08:00 UTC. Twice-daily or hourly needs a Vercel Pro plan.
+Edit the cron lines in `.github/workflows/refresh.yml`. `crons` in
+`vercel.json` stays empty. Do not put the refresh back on Vercel: the
+function was removed so a manual request cannot hit the 300 second cutoff.
