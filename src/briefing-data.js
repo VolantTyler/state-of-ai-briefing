@@ -178,7 +178,7 @@ export const SRC = {
 
 /* ——— Refresh jobs, one per panel ———
    Unchanged from the artifact edition. These now run server-side in
-   api/refresh.js on a schedule; nothing in the browser ever calls the API.
+   src/refresh-run.js on a schedule; nothing in the browser ever calls the API.
 
    `keys` names the wire-format fields the job writes, which is what lets the
    cron tell a check that found nothing new from a check that never happened.
@@ -186,7 +186,7 @@ export const SRC = {
 export const JOBS = {
   valuations: {
     keys: ["val"],
-    /* Cited passages are collected in api/refresh.js. Which amount is the
+    /* Cited passages are collected in src/refresh-run.js. Which amount is the
        company's completed price is decided in api/valuation-judgment.js.
        This panel does not ask a model to emit the number. */
     apply: (d, j) => {
@@ -203,7 +203,7 @@ export const JOBS = {
   },
   markets: {
     keys: ["stocks"],
-    /* No model prompt. api/refresh.js fetches the seven regular-session
+    /* No model prompt. src/refresh-run.js fetches the seven regular-session
        closes directly (src/market-quotes.js) and passes `{ stocks }` keyed
        by ticker. A missing or non-positive price keeps that ticker's prior
        close — a price is never filled in. */
@@ -265,7 +265,7 @@ export const JOBS = {
   },
   storeRanks: {
     keys: ["ranks"],
-    /* No model prompt. api/refresh.js fetches the two charts directly and
+    /* No model prompt. src/refresh-run.js fetches the two charts directly and
        passes `{ ranks, day }`. Ranks are already filtered to first-party apps. */
     apply: (d, j) => {
       if (!j.ranks || typeof j.ranks !== "object") return d;
@@ -307,7 +307,7 @@ const TEXT_COLS = new Set(["date", "scale"]);
 
 export const packValues = (d, meta, lastRunAt) => ({
   updatedAt: new Date().toISOString(),
-  /* Written only by api/refresh.js, so it is evidence the cron actually
+  /* Written only by src/refresh-run.js, so it is evidence the refresh actually
      fired — including on a night when every panel failed and no value
      moved. `updatedAt` can't do that job: it also advances when the file is
      edited by hand, so a stale cron behind a recent hand edit reads as

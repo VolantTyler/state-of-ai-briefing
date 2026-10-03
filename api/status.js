@@ -1,11 +1,9 @@
 /* ————————————————————————————————————————————————
    Configuration self-check.
 
-   `env()` in refresh.js throws on the *first* falsy variable it reaches, so a
-   misconfigured deployment reveals its problems one redeploy at a time. Worse,
-   it can't tell "absent" from "present but empty" — both are falsy, and
+   The refresh job no longer runs here, so this no longer gates it. It still
+   can't tell "absent" from "present but empty" by value, and
    `vercel env ls` renders an empty variable identically to a populated one.
-   That combination cost a day of guessing.
 
    This reports every expected variable at once, and never returns a value —
    only whether one is set and how many characters long it is. Length alone
@@ -13,7 +11,10 @@
    than it should be is usually a trailing newline from `echo`.
    ———————————————————————————————————————————————— */
 
-const REQUIRED = ["ANTHROPIC_API_KEY", "GITHUB_TOKEN", "GITHUB_REPO", "CRON_SECRET"];
+/* The refresh runs in GitHub Actions now. Nothing here is required for the
+   static site to serve. Names that are still set on this deployment are
+   reported below; they are not read by the job. */
+const REQUIRED = [];
 
 /* Optional variables carry the fallback `refresh.js` applies when they are
    unset, because "empty" is the *correct* state for these and reporting it
@@ -87,6 +88,10 @@ export default async function handler(req, res) {
 
   return res.status(200).json({
     ok: blocking.length === 0,
+    refresh: {
+      runner: "github-actions",
+      workflow: ".github/workflows/refresh.yml",
+    },
     /* Which deployment answered. A production alias still pointing at a build
        that predates a variable looks exactly like a missing variable. */
     deployment: {

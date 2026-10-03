@@ -1,11 +1,12 @@
-/* Overlap guard and the contents-API sha race.
+/* Contents-API sha race, and the overlap guard the Vercel function used.
 
-   Vercel runs each refresh in a fresh isolate, so an in-memory flag cannot
-   see the other one. The GitHub contents API is the durable primitive this
-   project already has. Creating a file without a blob sha fails when the
-   file exists (422 "sha wasn't supplied"), which is an atomic acquire.
-   A lock older than the function's maxDuration is stolen; a live one is
-   refused before any Claude call.
+   The Actions runner does not acquire this lock. Workflow concurrency is
+   the overlap guard there, so a run no longer writes dev/refresh-lock.json.
+   `writeWithFreshSha` is still how data files are committed.
+
+   Creating a file without a blob sha fails when the file exists (422
+   "sha wasn't supplied"), which is an atomic acquire. A lock older than
+   the old function maxDuration is stale; a live one is refused.
 
    Data writes are the other race: the sha has to be read immediately
    before the PUT, and a 409 or a sha 422 is retried once. The lock acquire

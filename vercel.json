@@ -2,9 +2,6 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "crons": [],
-  "functions": {
-    "api/refresh.js": { "maxDuration": 300 }
-  },
   "headers": [
     {
       "source": "/data/(.*)",
