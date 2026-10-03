@@ -134,5 +134,6 @@
     "billedAttempts": 0,
     "unbilledAttempts": 0,
     "likelyBilledAttempts": 1
-  }
+  },
+  "lockReleased": true
 }
