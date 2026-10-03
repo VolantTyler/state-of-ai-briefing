@@ -1,31 +1,33 @@
 {
-  "updatedAt": "2026-10-02T21:04:04.237Z",
-  "lastRunAt": "2026-10-02T21:00:03.208Z",
+  "updatedAt": "2026-10-03T01:17:25.592Z",
+  "lastRunAt": "2026-10-03T01:16:02.631Z",
   "meta": {
     "valuations": {
       "at": "2026-09-26T08:26:24.718Z",
       "checkedAt": "2026-09-26T08:26:24.718Z",
       "changedAt": "2026-09-26T08:26:24.718Z",
       "failed": true,
-      "error": "time budget exhausted",
-      "erroredAt": "2026-10-02T21:04:03.212Z"
+      "error": "anthropic 400: {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.\"},\"request_id\":\"req_011CfeRL6eAWbGjXVToGGCam\"}",
+      "erroredAt": "2026-10-03T01:17:24.572Z"
     },
     "markets": {
-      "at": "2026-10-02T21:04:03.212Z",
-      "checkedAt": "2026-10-02T21:04:03.212Z",
-      "changedAt": "2026-10-02T21:04:03.212Z",
+      "at": "2026-10-03T01:17:24.572Z",
+      "checkedAt": "2026-10-03T01:17:24.572Z",
+      "changedAt": "2026-10-03T01:17:24.572Z",
       "failed": false
     },
     "models": {
       "at": "2026-10-02T21:04:03.213Z",
       "checkedAt": "2026-10-02T21:04:03.213Z",
       "changedAt": "2026-09-26T08:26:24.718Z",
-      "failed": false
+      "failed": true,
+      "error": "no JSON in reply",
+      "erroredAt": "2026-10-03T01:17:24.572Z"
     },
     "users": {
-      "at": "2026-10-02T21:04:03.213Z",
-      "checkedAt": "2026-10-02T21:04:03.213Z",
-      "changedAt": "2026-10-02T21:04:03.213Z",
+      "at": "2026-10-03T01:17:24.573Z",
+      "checkedAt": "2026-10-03T01:17:24.573Z",
+      "changedAt": "2026-10-03T01:17:24.573Z",
       "failed": false
     },
     "share": {
@@ -42,18 +44,18 @@
       "changedAt": "2026-10-02T18:20:31.225Z",
       "failed": true,
       "error": "no JSON in reply",
-      "erroredAt": "2026-10-02T21:04:03.213Z"
+      "erroredAt": "2026-10-03T01:17:24.573Z"
     },
     "energy": {
-      "at": "2026-10-02T21:04:03.213Z",
-      "checkedAt": "2026-10-02T21:04:03.213Z",
+      "at": "2026-10-03T01:17:24.573Z",
+      "checkedAt": "2026-10-03T01:17:24.573Z",
       "changedAt": "2026-10-02T21:04:03.213Z",
       "failed": false
     },
     "storeRanks": {
-      "at": "2026-10-02T21:04:03.213Z",
-      "checkedAt": "2026-10-02T21:04:03.213Z",
-      "changedAt": "2026-10-02T21:04:03.213Z",
+      "at": "2026-10-03T01:17:24.573Z",
+      "checkedAt": "2026-10-03T01:17:24.573Z",
+      "changedAt": "2026-10-03T01:17:24.573Z",
       "failed": false
     }
   },
@@ -69,20 +71,20 @@
     "MiniMax": 4
   },
   "stocks": {
-    "NVDA": 233.95,
-    "MSFT": 517.53,
-    "GOOG": 340.35,
-    "META": 728.08,
-    "AMZN": 251.52,
-    "AVGO": 355.14,
-    "TSM": 472.78
+    "NVDA": 230.86,
+    "MSFT": 512.8,
+    "GOOG": 334.93,
+    "META": 725.93,
+    "AMZN": 248.23,
+    "AVGO": 343.64,
+    "TSM": 459.2
   },
   "users": {
     "Meta AI": 1200,
     "ChatGPT": 1000,
-    "Gemini": 950,
+    "Gemini": 1000,
+    "Copilot": 218,
     "Grok": 50,
-    "Copilot": 30,
     "Claude": 20
   },
   "share": {
@@ -166,28 +168,28 @@
       "muse": 1,
       "chatgpt": 2,
       "gemini": 7,
-      "claude": 8,
-      "copilot": 21,
-      "grok": 31
+      "claude": 9,
+      "copilot": 25,
+      "grok": 37
     },
     "android": {
       "muse": 1,
       "chatgpt": 2,
-      "claude": 16
+      "gemini": 42,
+      "grok": 53,
+      "claude": 59
     }
   },
   "usage": {
-    "runAt": "2026-10-02T21:00:03.208Z",
+    "runAt": "2026-10-03T01:16:02.631Z",
     "fatal": false,
-    "wallClockMs": 240003,
+    "wallClockMs": 81937,
     "budget": {
       "maxDurationMs": 300000,
       "tailReserveMs": 60000,
       "jobBudgetMs": 240000
     },
-    "timedOut": [
-      "valuations"
-    ],
+    "timedOut": [],
     "priceTable": {
       "source": "https://platform.claude.com/docs/en/about-claude/pricing",
       "webSearchSource": "https://platform.claude.com/docs/en/agents-and-tools/tool-use/web-search-tool",
@@ -224,7 +226,7 @@
     },
     "spendCap": {
       "maxUsd": 1,
-      "estimatedUsd": 0.233631,
+      "estimatedUsd": 0.22221,
       "skipped": []
     },
     "calls": [
@@ -233,11 +235,11 @@
         "attempt": 1,
         "continuation": 0,
         "model": "claude-haiku-4-5-20251001",
-        "durationMs": 11215,
+        "durationMs": 5414,
         "stopReason": "end_turn",
         "httpStatus": 200,
-        "inputTokens": 28057,
-        "outputTokens": 648,
+        "inputTokens": 24076,
+        "outputTokens": 313,
         "cacheCreationInputTokens": 0,
         "cacheReadInputTokens": 0,
         "cacheCreation": {
@@ -255,14 +257,14 @@
         },
         "serviceTier": "standard",
         "usage": {
-          "input_tokens": 28057,
+          "input_tokens": 24076,
           "cache_creation_input_tokens": 0,
           "cache_read_input_tokens": 0,
           "cache_creation": {
             "ephemeral_5m_input_tokens": 0,
             "ephemeral_1h_input_tokens": 0
           },
-          "output_tokens": 648,
+          "output_tokens": 313,
           "service_tier": "standard",
           "inference_geo": "not_available",
           "server_tool_use": {
@@ -270,13 +272,13 @@
             "web_fetch_requests": 0
           }
         },
-        "estimatedUsd": 0.051297,
+        "estimatedUsd": 0.045641,
         "estimateComplete": true,
         "unpriced": [],
         "notes": [],
         "webSearchUsd": 0.02,
-        "inputUsd": 0.028057,
-        "outputUsd": 0.00324,
+        "inputUsd": 0.024076,
+        "outputUsd": 0.001565,
         "cacheReadUsd": 0,
         "cacheWrite5mUsd": 0,
         "cacheWrite1hUsd": 0,
@@ -289,11 +291,11 @@
         "attempt": 1,
         "continuation": 0,
         "model": "claude-haiku-4-5-20251001",
-        "durationMs": 8447,
+        "durationMs": 5092,
         "stopReason": "end_turn",
         "httpStatus": 200,
-        "inputTokens": 24556,
-        "outputTokens": 506,
+        "inputTokens": 24877,
+        "outputTokens": 485,
         "cacheCreationInputTokens": 0,
         "cacheReadInputTokens": 0,
         "cacheCreation": {
@@ -311,14 +313,14 @@
         },
         "serviceTier": "standard",
         "usage": {
-          "input_tokens": 24556,
+          "input_tokens": 24877,
           "cache_creation_input_tokens": 0,
           "cache_read_input_tokens": 0,
           "cache_creation": {
             "ephemeral_5m_input_tokens": 0,
             "ephemeral_1h_input_tokens": 0
           },
-          "output_tokens": 506,
+          "output_tokens": 485,
           "service_tier": "standard",
           "inference_geo": "not_available",
           "server_tool_use": {
@@ -326,13 +328,13 @@
             "web_fetch_requests": 0
           }
         },
-        "estimatedUsd": 0.057086,
+        "estimatedUsd": 0.057302,
         "estimateComplete": true,
         "unpriced": [],
         "notes": [],
         "webSearchUsd": 0.03,
-        "inputUsd": 0.024556,
-        "outputUsd": 0.00253,
+        "inputUsd": 0.024877,
+        "outputUsd": 0.002425,
         "cacheReadUsd": 0,
         "cacheWrite5mUsd": 0,
         "cacheWrite1hUsd": 0,
@@ -345,11 +347,11 @@
         "attempt": 1,
         "continuation": 0,
         "model": "claude-haiku-4-5-20251001",
-        "durationMs": 12482,
+        "durationMs": 7723,
         "stopReason": "end_turn",
         "httpStatus": 200,
-        "inputTokens": 45726,
-        "outputTokens": 639,
+        "inputTokens": 41642,
+        "outputTokens": 498,
         "cacheCreationInputTokens": 0,
         "cacheReadInputTokens": 0,
         "cacheCreation": {
@@ -367,14 +369,14 @@
         },
         "serviceTier": "standard",
         "usage": {
-          "input_tokens": 45726,
+          "input_tokens": 41642,
           "cache_creation_input_tokens": 0,
           "cache_read_input_tokens": 0,
           "cache_creation": {
             "ephemeral_5m_input_tokens": 0,
             "ephemeral_1h_input_tokens": 0
           },
-          "output_tokens": 639,
+          "output_tokens": 498,
           "service_tier": "standard",
           "inference_geo": "not_available",
           "server_tool_use": {
@@ -382,13 +384,13 @@
             "web_fetch_requests": 0
           }
         },
-        "estimatedUsd": 0.078921,
+        "estimatedUsd": 0.074132,
         "estimateComplete": true,
         "unpriced": [],
         "notes": [],
         "webSearchUsd": 0.03,
-        "inputUsd": 0.045726,
-        "outputUsd": 0.003195,
+        "inputUsd": 0.041642,
+        "outputUsd": 0.00249,
         "cacheReadUsd": 0,
         "cacheWrite5mUsd": 0,
         "cacheWrite1hUsd": 0,
@@ -401,11 +403,11 @@
         "attempt": 1,
         "continuation": 0,
         "model": "claude-haiku-4-5-20251001",
-        "durationMs": 7314,
+        "durationMs": 4676,
         "stopReason": "end_turn",
         "httpStatus": 200,
-        "inputTokens": 24502,
-        "outputTokens": 365,
+        "inputTokens": 24105,
+        "outputTokens": 206,
         "cacheCreationInputTokens": 0,
         "cacheReadInputTokens": 0,
         "cacheCreation": {
@@ -423,14 +425,14 @@
         },
         "serviceTier": "standard",
         "usage": {
-          "input_tokens": 24502,
+          "input_tokens": 24105,
           "cache_creation_input_tokens": 0,
           "cache_read_input_tokens": 0,
           "cache_creation": {
             "ephemeral_5m_input_tokens": 0,
             "ephemeral_1h_input_tokens": 0
           },
-          "output_tokens": 365,
+          "output_tokens": 206,
           "service_tier": "standard",
           "inference_geo": "not_available",
           "server_tool_use": {
@@ -438,13 +440,13 @@
             "web_fetch_requests": 0
           }
         },
-        "estimatedUsd": 0.046327,
+        "estimatedUsd": 0.045135,
         "estimateComplete": true,
         "unpriced": [],
         "notes": [],
         "webSearchUsd": 0.02,
-        "inputUsd": 0.024502,
-        "outputUsd": 0.001825,
+        "inputUsd": 0.024105,
+        "outputUsd": 0.00103,
         "cacheReadUsd": 0,
         "cacheWrite5mUsd": 0,
         "cacheWrite1hUsd": 0,
@@ -457,9 +459,9 @@
         "attempt": 1,
         "continuation": 0,
         "model": "claude-sonnet-4-6",
-        "durationMs": 198148,
+        "durationMs": 57442,
         "stopReason": null,
-        "httpStatus": null,
+        "httpStatus": 400,
         "inputTokens": null,
         "outputTokens": null,
         "cacheCreationInputTokens": null,
@@ -485,27 +487,27 @@
         "cacheReadUsd": 0,
         "cacheWrite5mUsd": 0,
         "cacheWrite1hUsd": 0,
-        "billed": null,
-        "aborted": true,
-        "error": "aborted: time budget exhausted before the response was read"
+        "billed": false,
+        "aborted": false,
+        "error": "{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.\"},\"request_id\":\"req_011CfeRL6eAWbGjXVToGGCam\"}"
       }
     ],
     "jobs": {
       "models": {
         "attempts": 1,
-        "inputTokens": 28057,
-        "outputTokens": 648,
+        "inputTokens": 24076,
+        "outputTokens": 313,
         "cacheCreationInputTokens": 0,
         "cacheReadInputTokens": 0,
         "serverToolUse": {
           "web_search_requests": 2,
           "web_fetch_requests": 0
         },
-        "durationMs": 11215,
+        "durationMs": 5414,
         "stopReasons": [
           "end_turn"
         ],
-        "estimatedUsd": 0.051297,
+        "estimatedUsd": 0.045641,
         "estimateComplete": true,
         "unpriced": [],
         "timedOut": false,
@@ -514,19 +516,19 @@
       },
       "users": {
         "attempts": 1,
-        "inputTokens": 24556,
-        "outputTokens": 506,
+        "inputTokens": 24877,
+        "outputTokens": 485,
         "cacheCreationInputTokens": 0,
         "cacheReadInputTokens": 0,
         "serverToolUse": {
           "web_search_requests": 3,
           "web_fetch_requests": 0
         },
-        "durationMs": 8447,
+        "durationMs": 5092,
         "stopReasons": [
           "end_turn"
         ],
-        "estimatedUsd": 0.057086,
+        "estimatedUsd": 0.057302,
         "estimateComplete": true,
         "unpriced": [],
         "timedOut": false,
@@ -535,19 +537,19 @@
       },
       "capital": {
         "attempts": 1,
-        "inputTokens": 45726,
-        "outputTokens": 639,
+        "inputTokens": 41642,
+        "outputTokens": 498,
         "cacheCreationInputTokens": 0,
         "cacheReadInputTokens": 0,
         "serverToolUse": {
           "web_search_requests": 3,
           "web_fetch_requests": 0
         },
-        "durationMs": 12482,
+        "durationMs": 7723,
         "stopReasons": [
           "end_turn"
         ],
-        "estimatedUsd": 0.078921,
+        "estimatedUsd": 0.074132,
         "estimateComplete": true,
         "unpriced": [],
         "timedOut": false,
@@ -556,19 +558,19 @@
       },
       "energy": {
         "attempts": 1,
-        "inputTokens": 24502,
-        "outputTokens": 365,
+        "inputTokens": 24105,
+        "outputTokens": 206,
         "cacheCreationInputTokens": 0,
         "cacheReadInputTokens": 0,
         "serverToolUse": {
           "web_search_requests": 2,
           "web_fetch_requests": 0
         },
-        "durationMs": 7314,
+        "durationMs": 4676,
         "stopReasons": [
           "end_turn"
         ],
-        "estimatedUsd": 0.046327,
+        "estimatedUsd": 0.045135,
         "estimateComplete": true,
         "unpriced": [],
         "timedOut": false,
@@ -582,39 +584,38 @@
         "cacheCreationInputTokens": 0,
         "cacheReadInputTokens": 0,
         "serverToolUse": {},
-        "durationMs": 198148,
+        "durationMs": 57442,
         "stopReasons": [],
         "estimatedUsd": 0,
         "estimateComplete": false,
         "unpriced": [
           "usage-not-reported"
         ],
-        "timedOut": true,
+        "timedOut": false,
         "billedAttempts": 0,
-        "unbilledAttempts": 0
+        "unbilledAttempts": 1
       }
     },
     "totals": {
       "calls": 5,
-      "inputTokens": 122841,
-      "outputTokens": 2158,
+      "inputTokens": 114700,
+      "outputTokens": 1502,
       "cacheCreationInputTokens": 0,
       "cacheReadInputTokens": 0,
       "serverToolUse": {
         "web_search_requests": 10,
         "web_fetch_requests": 0
       },
-      "summedCallDurationMs": 237606,
-      "wallClockMs": 240003,
-      "estimatedUsd": 0.233631,
+      "summedCallDurationMs": 80347,
+      "wallClockMs": 81937,
+      "estimatedUsd": 0.22221,
       "estimateComplete": false,
       "unpriced": [
-        "usage-not-reported",
-        "timed-out"
+        "usage-not-reported"
       ],
       "tokensIncomplete": true,
       "billedAttempts": 4,
-      "unbilledAttempts": 0
+      "unbilledAttempts": 1
     }
   }
 }
