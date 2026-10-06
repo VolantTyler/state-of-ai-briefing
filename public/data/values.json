@@ -1,14 +1,12 @@
 {
-  "updatedAt": "2026-10-06T14:47:14.847Z",
-  "lastRunAt": "2026-10-06T14:44:18.801Z",
+  "updatedAt": "2026-10-06T15:26:38.753Z",
+  "lastRunAt": "2026-10-06T15:26:16.687Z",
   "meta": {
     "valuations": {
-      "at": "2026-09-26T08:26:24.718Z",
-      "checkedAt": "2026-09-26T08:26:24.718Z",
-      "changedAt": "2026-09-26T08:26:24.718Z",
-      "failed": true,
-      "error": "no cited passages in reply",
-      "erroredAt": "2026-10-06T14:47:13.842Z"
+      "at": "2026-10-06T15:26:37.060Z",
+      "checkedAt": "2026-10-06T15:26:37.060Z",
+      "changedAt": "2026-10-06T15:26:37.060Z",
+      "failed": false
     },
     "markets": {
       "at": "2026-10-06T14:36:19.040Z",
@@ -60,7 +58,7 @@
     "Databricks": 134,
     "DeepSeek": 74,
     "Anduril": 61,
-    "Z.ai (Zhipu)": 40.4,
+    "Z.ai (Zhipu)": 55.9,
     "Moonshot AI": 35,
     "MiniMax": 4
   },
@@ -176,9 +174,9 @@
     }
   },
   "usage": {
-    "runAt": "2026-10-06T14:44:18.801Z",
+    "runAt": "2026-10-06T15:26:16.687Z",
     "fatal": false,
-    "wallClockMs": 175040,
+    "wallClockMs": 20373,
     "budget": {
       "maxDurationMs": 1500000,
       "tailReserveMs": 120000,
@@ -224,7 +222,7 @@
     },
     "spendCap": {
       "maxUsd": 1,
-      "estimatedUsd": 0.593254,
+      "estimatedUsd": 0.118104,
       "skipped": []
     },
     "calls": [
@@ -233,11 +231,11 @@
         "attempt": 1,
         "continuation": 0,
         "model": "claude-sonnet-4-6",
-        "durationMs": 174694,
+        "durationMs": 19082,
         "stopReason": "end_turn",
         "httpStatus": 200,
-        "inputTokens": 166193,
-        "outputTokens": 3645,
+        "inputTokens": 24778,
+        "outputTokens": 918,
         "cacheCreationInputTokens": 0,
         "cacheReadInputTokens": 0,
         "cacheCreation": {
@@ -250,33 +248,33 @@
           "assumed5m": false
         },
         "serverToolUse": {
-          "web_search_requests": 4,
+          "web_search_requests": 3,
           "web_fetch_requests": 0
         },
         "serviceTier": "standard",
         "usage": {
-          "input_tokens": 166193,
+          "input_tokens": 24778,
           "cache_creation_input_tokens": 0,
           "cache_read_input_tokens": 0,
           "cache_creation": {
             "ephemeral_5m_input_tokens": 0,
             "ephemeral_1h_input_tokens": 0
           },
-          "output_tokens": 3645,
+          "output_tokens": 918,
           "service_tier": "standard",
           "inference_geo": "global",
           "server_tool_use": {
-            "web_search_requests": 4,
+            "web_search_requests": 3,
             "web_fetch_requests": 0
           }
         },
-        "estimatedUsd": 0.593254,
+        "estimatedUsd": 0.118104,
         "estimateComplete": true,
         "unpriced": [],
         "notes": [],
-        "webSearchUsd": 0.04,
-        "inputUsd": 0.498579,
-        "outputUsd": 0.054675,
+        "webSearchUsd": 0.03,
+        "inputUsd": 0.074334,
+        "outputUsd": 0.01377,
         "cacheReadUsd": 0,
         "cacheWrite5mUsd": 0,
         "cacheWrite1hUsd": 0,
@@ -288,19 +286,19 @@
     "jobs": {
       "valuations": {
         "attempts": 1,
-        "inputTokens": 166193,
-        "outputTokens": 3645,
+        "inputTokens": 24778,
+        "outputTokens": 918,
         "cacheCreationInputTokens": 0,
         "cacheReadInputTokens": 0,
         "serverToolUse": {
-          "web_search_requests": 4,
+          "web_search_requests": 3,
           "web_fetch_requests": 0
         },
-        "durationMs": 174694,
+        "durationMs": 19082,
         "stopReasons": [
           "end_turn"
         ],
-        "estimatedUsd": 0.593254,
+        "estimatedUsd": 0.118104,
         "estimateComplete": true,
         "unpriced": [],
         "timedOut": false,
@@ -311,17 +309,17 @@
     },
     "totals": {
       "calls": 1,
-      "inputTokens": 166193,
-      "outputTokens": 3645,
+      "inputTokens": 24778,
+      "outputTokens": 918,
       "cacheCreationInputTokens": 0,
       "cacheReadInputTokens": 0,
       "serverToolUse": {
-        "web_search_requests": 4,
+        "web_search_requests": 3,
         "web_fetch_requests": 0
       },
-      "summedCallDurationMs": 174694,
-      "wallClockMs": 175040,
-      "estimatedUsd": 0.593254,
+      "summedCallDurationMs": 19082,
+      "wallClockMs": 20373,
+      "estimatedUsd": 0.118104,
       "estimateComplete": true,
       "unpriced": [],
       "tokensIncomplete": false,
