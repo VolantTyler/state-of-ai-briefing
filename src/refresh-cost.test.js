@@ -142,6 +142,7 @@ test("one nightly ceiling is the search cap plus max_tokens on every iteration, 
 test("a per-job model env overrides only that job, and simple panels default to Haiku", () => {
   const env = { ANTHROPIC_MODEL: "claude-sonnet-4-6", ANTHROPIC_MODEL_MODELS: " claude-haiku-4-5 " };
   assert.equal(modelForJob("models", env), "claude-haiku-4-5");
+  assert.equal(modelForJob("models", { ANTHROPIC_MODEL: "claude-sonnet-4-6" }), HAIKU_MODEL);
   assert.equal(modelForJob("valuations", env), "claude-sonnet-4-6");
   assert.equal(modelForJob("energy", {}), HAIKU_MODEL);
   assert.equal(modelForJob("users", { ANTHROPIC_MODEL: "claude-sonnet-4-6" }), HAIKU_MODEL);

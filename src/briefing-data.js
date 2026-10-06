@@ -1,9 +1,10 @@
 import { STORE_RANK_SOURCES } from "./store-ranks.js";
 
 export const EDITION = {
-  version: "v2.5",
-  date: "2026-09-26",
+  version: "v2.6",
+  date: "2026-10-06",
   changelog: [
+    ["v2.6", "2026-10-06", "Intelligence Index locked to v4.3.2. Gemini 4 Argon is eligible for the models panel when it ranks in the top families. Scores on v4.3.2 are not comparable to v4.2."],
     ["v2.5", "2026-09-26", "App-store rankings: weekly US top-free rank for first-party AI apps on the iOS App Store and Google Play. Each point is the latest daily chart in that week. History starts when the nightly job began storing charts — earlier weeks were not reconstructed."],
     ["v2.4", "2026-09-07", "Model capability rebuilt around the September releases: Claude Fable 5.1 (Sep 1), GPT-6 Astra (Sep 3), Meta's Muse Spark 1.3 (Sep 3) and Gemini 3.8 Flash (Sep 2). The Artificial Analysis Intelligence Index moved to v4.2 — a re-anchored scale with two new evals and 40% private held-out data — so every score in §03 is restated on v4.2 and is NOT comparable to the v4.1.1 numbers in earlier editions. Meta joins the brand palette as it enters the frontier. Grok 4.7 is announced but unreleased and is deliberately absent."],
     ["v2.3", "2026-08-29", "Runtime state now syncs to Google Drive: current panel values and the dated trend log are written to ai-briefing-values.json and ai-briefing-trend.csv on every refresh, and pulled on load — so data accumulated in one place shows up everywhere the dashboard is opened. Local browser storage becomes a cache rather than the record."],
@@ -46,13 +47,21 @@ export const BRAND_OF = {
   Anthropic: "Anthropic", Claude: "Anthropic", "Claude Opus 5": "Anthropic", "Claude Fable 5": "Anthropic",
   "Claude Fable 5.1": "Anthropic", "Claude Mythos 5.1": "Anthropic",
   OpenAI: "OpenAI", ChatGPT: "OpenAI", "GPT-5.6 Sol": "OpenAI", "GPT-5.6 Terra": "OpenAI", "GPT-6 Astra": "OpenAI",
-  Google: "Google", Gemini: "Google", "Gemini 3.7 Flash": "Google", "Gemini 3.8 Flash": "Google", Alphabet: "Google", GOOG: "Google",
+  Google: "Google", Gemini: "Google", "Gemini 3.7 Flash": "Google", "Gemini 3.8 Flash": "Google",
+  "Gemini 4 Argon": "Google", "Gemini-4 Argon": "Google", "Gemini 4.0 Argon": "Google", "gemini-4-argon": "Google",
+  Alphabet: "Google", GOOG: "Google",
   xAI: "xAI", Grok: "xAI", "Grok 4.6": "xAI", SpaceXAI: "xAI",
   Microsoft: "Microsoft", Copilot: "Microsoft", MSFT: "Microsoft",
   Meta: "Meta", "Meta AI": "Meta", Muse: "Meta", "Muse Spark": "Meta", "Muse Spark 1.3": "Meta", META: "Meta",
   Perplexity: "Perplexity",
 };
-export const brandFill = (name, fallback) => (BRAND_OF[name] ? BRAND_COLOR[BRAND_OF[name]] : fallback);
+/* Exact keys miss a qualifier or a hyphenated slug. Any Gemini name is
+   Google, the same as Gemini 3.8 Flash and Gemini 4 Argon. */
+const geminiName = (name) => /^gemini(?:[\s._-]|$|\d)/i.test(String(name ?? "").trim());
+export const brandFill = (name, fallback) => {
+  const brand = BRAND_OF[name] || (geminiName(name) ? "Google" : null);
+  return brand ? BRAND_COLOR[brand] : fallback;
+};
 
 
 /* Fallback when a values file or the baseline has no stored index version.
@@ -60,7 +69,7 @@ export const brandFill = (name, fallback) => (BRAND_OF[name] ? BRAND_COLOR[BRAND
    snapshot() stamps that stored version onto the trend log so the chart can
    break its line where the scale changed. Scores are not comparable across
    versions. */
-export const AA_INDEX_VERSION = "v4.2";
+export const AA_INDEX_VERSION = "v4.3.2";
 
 /* A one-row reply is not a leaderboard. Fewer valid rows than this keeps the
    previous `aa` list and fails the panel. */
@@ -110,15 +119,13 @@ export const BASELINE = {
     { ticker: "AVGO", name: "Broadcom", price: 356.74, cap: "—", note: "custom accelerators; down from summer highs" },
     { ticker: "TSM", name: "TSMC", price: 417.41, cap: "—", note: "frontier fabrication" },
   ],
-  /* Scores are Artificial Analysis Intelligence Index **v4.2** (Sep '26).
-     v4.2 re-anchored the scale, added AA-Briefcase and GDP.pdf, dropped the
-     saturated GPQA Diamond, and took private held-out data to 40% — so these
-     numbers are lower than, and not comparable to, the v4.1.1 scores that
-     earlier editions of this briefing carried. */
+  /* The locked fallback is Intelligence Index v4.3.2. These rows are the
+     restored v4.2 board and stay until the models job writes a live table.
+     A score on v4.3.2 is not comparable to one of these v4.2 numbers. */
   /* Names carry the scored configuration in parentheses where the source
      states it: §03 splits that off, putting the base name on the axis and
      the variant in the fine print. Muse Spark 1.3 is left bare because the
-     v4.2 table doesn't say which of its variants was measured — guessing a
+     source table doesn't say which of its variants was measured — guessing a
      qualifier would read as sourced when it isn't. */
   aaIndex: [
     { model: "Claude Fable 5.1 (Adaptive Reasoning, Max Effort)", lab: "Anthropic", score: 57.0 },
@@ -177,7 +184,7 @@ export const BASELINE = {
 };
 
 export const TRACKERS = [
-  { name: "Artificial Analysis Intelligence Index", leader: "Claude Fable 5.1 — 57.0", detail: "Composite of 10 evals (v4.2): AA-Briefcase and GDP.pdf added, saturated GPQA Diamond retired, 40% of weight now private held-out data. Re-anchored scale — do not compare to v4.1.1 scores.", url: "https://artificialanalysis.ai/evaluations/artificial-analysis-intelligence-index" },
+  { name: "Artificial Analysis Intelligence Index", leader: "Claude Fable 5.1 — 57.0", detail: "Composite of 10 evals (v4.3.2): AA-Briefcase v1.1, GDPval-AA v2.1, AutomationBench-AA, Terminal-Bench 4.0, SciCode, Humanity's Last Exam, GDP.pdf, CritPt, AA-Omniscience, and AA-LCR v1.1. Scores on v4.3.2 are not comparable to v4.2.", url: "https://artificialanalysis.ai/evaluations/artificial-analysis-intelligence-index" },
   { name: "LMArena (Chatbot Arena)", leader: "Claude Fable 5 holds text Elo (1507)", detail: "Crowd-sourced blind A/B voting. Fable 5.1 entered at 1504 ±11 — inside the noise of the top four, and still accumulating votes; GPT-6 Astra has not yet placed.", url: "https://arena.ai/leaderboard/text" },
   { name: "SWE-bench Verified", leader: "Claude Opus 5 — 96.0%", detail: "Real GitHub issue resolution — rose from 60% to the mid-90s in a single year, per Stanford's AI Index. No published re-run yet for the September models.", url: "https://hai.stanford.edu/ai-index/2026-ai-index-report/technical-performance" },
   { name: "Terminal-Bench 2.1 (agentic)", leader: "Claude Fable 5.1 — 91.4%", detail: "Hard terminal-agent tasks; the field's center of gravity as benchmarks shift toward agentic work. First score above 90 — Grok 4.6's 88.4% held the top for most of the summer.", url: "https://artificialanalysis.ai/evaluations/terminalbench-v2-1" },
@@ -186,7 +193,7 @@ export const TRACKERS = [
 export const SRC = {
   valuations: [["CNBC — Anthropic Series H", "https://www.cnbc.com/2026/05/28/anthropic-open-ai-startup-value.html"], ["CNBC — Databricks $190B round", "https://www.cnbc.com/2026/08/13/databricks-funding-round-190-billion-valuation.html"], ["Fortune — China's AI IPO rush", "https://fortune.com/2026/07/23/moonshot-deepseek-great-chinese-ai-ipo-rush/"], ["Bloomberg — DeepSeek resumes $8B round", "https://www.bloomberg.com/news/articles/2026-08-06/deepseek-resumes-8-billion-round-with-monolith-in-the-running"]],
   markets: [["CNBC quotes", "https://www.cnbc.com/quotes/AAPL,AMZN,GOOGL,MSFT,META,NVDA,TSLA"], ["stockanalysis.com — market data", "https://stockanalysis.com/"], ["MLQ.ai — hyperscaler capex tracker", "https://mlq.ai/news/big-techs-2026-capex-range-reaches-720-billion-to-745-billion/"]],
-  models: [["Artificial Analysis — Intelligence Index v4.2", "https://artificialanalysis.ai/evaluations/artificial-analysis-intelligence-index"], ["Artificial Analysis — announcing v4.2", "https://artificialanalysis.ai/articles/artificial-analysis-intelligence-index-v4-2"], ["Artificial Analysis — Claude Fable 5.1 tops the Index", "https://artificialanalysis.ai/articles/claude-fable-5-1"], ["Artificial Analysis — benchmarking GPT-6 Astra", "https://artificialanalysis.ai/articles/benchmarking-gpt-6-astra"], ["Artificial Analysis — Muse Spark 1.3: Meta reaches the frontier", "https://artificialanalysis.ai/articles/muse-spark-1-3"], ["OpenAI — GPT-6 Astra", "https://openai.com/index/gpt-6-astra/"], ["Stanford HAI — AI Index 2026", "https://hai.stanford.edu/ai-index/2026-ai-index-report"], ["tbench.ai — Terminal-Bench 2.1", "https://www.tbench.ai/leaderboard/terminal-bench/2.1"]],
+  models: [["Artificial Analysis — Intelligence Index v4.3.2", "https://artificialanalysis.ai/evaluations/artificial-analysis-intelligence-index"], ["Artificial Analysis — Claude Fable 5.1 tops the Index", "https://artificialanalysis.ai/articles/claude-fable-5-1"], ["Artificial Analysis — benchmarking GPT-6 Astra", "https://artificialanalysis.ai/articles/benchmarking-gpt-6-astra"], ["Artificial Analysis — Muse Spark 1.3: Meta reaches the frontier", "https://artificialanalysis.ai/articles/muse-spark-1-3"], ["OpenAI — GPT-6 Astra", "https://openai.com/index/gpt-6-astra/"], ["Stanford HAI — AI Index 2026", "https://hai.stanford.edu/ai-index/2026-ai-index-report"], ["tbench.ai — Terminal-Bench 2.1", "https://www.tbench.ai/leaderboard/terminal-bench/2.1"]],
   users: [["TechCrunch — Gemini passes 1B MAU", "https://techcrunch.com/2026/08/11/googles-gemini-app-surges-to-one-billion-users/"], ["Tech Insider — chatbot web-share, July ’26", "https://tech-insider.org/ie/claude-vs-chatgpt-vs-gemini-2026/"], ["Instant Press — AI statistics", "https://www.instantpress.co/ai-statistics"]],
   capital: [["TechCrunch — Anthropic ARR to $65B", "https://techcrunch.com/2026/08/17/anthropics-annualized-revenue-surges-to-65b/"], ["Bloomberg — OpenAI ARR tops $40B", "https://www.bloomberg.com/news/articles/2026-08-13/openai-s-revenue-run-rate-tops-40-billion-ahead-of-ipo"], ["MLQ.ai — capex roundup", "https://mlq.ai/news/big-techs-2026-capex-range-reaches-720-billion-to-745-billion/"]],
   energy: [["Gartner — data center power", "https://www.gartner.com/en/newsroom/press-releases/2026-06-10-gartner-says-data-center-electricity-demand-to-grow-26-percent-in-2026"], ["Forbes — US ~40% of global data-center power", "https://www.forbes.com/sites/rrapier/2026/08/23/the-us-now-uses-nearly-40-of-the-worlds-data-center-electricity/"], ["IEA — Energy and AI", "https://www.iea.org/reports/energy-and-ai/energy-demand-from-ai"], ["Goldman Sachs — US power demand", "https://www.goldmansachs.com/insights/articles/us-data-center-power-demand-projected-to-double-by-2027"]],
