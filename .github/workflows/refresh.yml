@@ -1,0 +1,77 @@
+# Refresh the briefing data. The job commits public/data through the GitHub
+# contents API. Vercel production deploys those commits. See docs/refresh.md.
+#
+# Cron is UTC and does not follow US daylight time.
+#   0 8 * * *   daily panels except valuations.
+#               08:00 UTC = 4:00 AM EDT / 3:00 AM EST.
+#   0 10 * * 0  valuations only, early Sunday Eastern.
+#               10:00 UTC = 6:00 AM EDT / 5:00 AM EST.
+# src/refresh-policy.js compares github.event.schedule to those strings.
+
+name: Refresh briefing data
+
+on:
+  schedule:
+    - cron: "0 8 * * *"
+    - cron: "0 10 * * 0"
+  workflow_dispatch:
+    inputs:
+      jobs:
+        description: "Panel ids, comma-separated. Blank = daily set (no valuations). valuations = valuations only."
+        required: false
+        default: ""
+        type: string
+
+# A second run waits. It does not cancel the first, and it does not overlap.
+concurrency:
+  group: state-of-ai-refresh
+  cancel-in-progress: false
+
+# Checkout only. Commits use the fine-grained PAT in GH_CONTENTS_TOKEN.
+# The built-in GITHUB_TOKEN is not enough: those commits are authored by
+# github-actions[bot], and Vercel does not deploy them.
+permissions:
+  contents: read
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Refresh
+        run: node scripts/refresh.js
+        env:
+          REFRESH_EVENT: ${{ github.event_name }}
+          REFRESH_SCHEDULE: ${{ github.event.schedule }}
+          REFRESH_JOBS: ${{ github.event.inputs.jobs }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GH_CONTENTS_TOKEN }}
+          GITHUB_REPO: ${{ github.repository }}
+          GITHUB_BRANCH: main
+          TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+          AGENTMAIL_API_KEY: ${{ secrets.AGENTMAIL_API_KEY }}
+          AGENTMAIL_INBOX_ID: ${{ secrets.AGENTMAIL_INBOX_ID }}
+          NOTIFY_EMAIL: ${{ secrets.NOTIFY_EMAIL }}
+          GROK_BOT_WEBHOOK_URL: ${{ secrets.GROK_BOT_WEBHOOK_URL }}
+          GROK_BOT_WEBHOOK_KEY: ${{ secrets.GROK_BOT_WEBHOOK_KEY }}
+          REFRESH_MAX_USD: ${{ vars.REFRESH_MAX_USD }}
+          ANTHROPIC_MODEL: ${{ vars.ANTHROPIC_MODEL }}
+          ANTHROPIC_MODEL_VALUATIONS: ${{ vars.ANTHROPIC_MODEL_VALUATIONS }}
+          ANTHROPIC_MODEL_MODELS: ${{ vars.ANTHROPIC_MODEL_MODELS }}
+          ANTHROPIC_MODEL_USERS: ${{ vars.ANTHROPIC_MODEL_USERS }}
+          ANTHROPIC_MODEL_SHARE: ${{ vars.ANTHROPIC_MODEL_SHARE }}
+          ANTHROPIC_MODEL_CAPITAL: ${{ vars.ANTHROPIC_MODEL_CAPITAL }}
+          ANTHROPIC_MODEL_ENERGY: ${{ vars.ANTHROPIC_MODEL_ENERGY }}
+          REFRESH_MAX_DURATION_MS: ${{ vars.REFRESH_MAX_DURATION_MS }}
+          REFRESH_TAIL_RESERVE_MS: ${{ vars.REFRESH_TAIL_RESERVE_MS }}
+          REFRESH_CALL_TIMEOUT_MS: ${{ vars.REFRESH_CALL_TIMEOUT_MS }}
+          REFRESH_VALUATIONS_CALL_TIMEOUT_MS: ${{ vars.REFRESH_VALUATIONS_CALL_TIMEOUT_MS }}
+          REFRESH_VALUATIONS_MIN_START_MS: ${{ vars.REFRESH_VALUATIONS_MIN_START_MS }}

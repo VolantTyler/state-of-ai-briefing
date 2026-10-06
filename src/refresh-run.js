@@ -3,36 +3,39 @@ import { TypeSafeClient } from "@typesafe-ai/sdk";
 import {
   BASELINE, JOBS, packValues, unpackValues, panelDigest,
   historyToCSV, csvToHistory, logHistory,
-} from "../src/briefing-data.js";
-import { appendStoreRankDay, fetchStoreRanks } from "../src/store-ranks.js";
-import { fetchMarketQuotes } from "../src/market-quotes.js";
+} from "./briefing-data.js";
+import { appendStoreRankDay, fetchStoreRanks } from "./store-ranks.js";
+import { fetchMarketQuotes } from "./market-quotes.js";
 import {
-  MODEL_JOB_ORDER, SHARE_SKIPPED, VALUATIONS_FULL_RUN_SKIP, VALUATIONS_MIN_START_MS,
-  orderedModelJobs, parseJobsQuery, shareRefreshDue, shareSkipReason, valuationsTimeSkipReason,
-  webSearchTool,
-} from "../src/refresh-policy.js";
+  MODEL_JOB_ORDER, SHARE_SKIPPED, VALUATIONS_FULL_RUN_SKIP,
+  orderedModelJobs, resolveJobSelection, shareRefreshDue, shareSkipReason,
+  valuationsTimeSkipReason, webSearchTool,
+} from "./refresh-policy.js";
 import {
-  attemptWithRetry, createBudget, settleWithinBudget, shouldRetry,
-} from "../src/refresh-budget.js";
+  attemptWithRetry, budgetConfigFromEnv, callWindowMs, createBudget, settleWithinBudget, shouldRetry,
+} from "./refresh-budget.js";
 import {
   JOB_MAX_TOKENS, callWithPauseCap, createUsageLog, modelForJob, postAnthropicMessage,
   refreshMaxUsd, spendCapBlocks, spendCapReason,
-} from "../src/refresh-usage.js";
-import {
-  LOCK_PATH, LOCK_STALE_MS, acquireRefreshLock, releaseRefreshLock, writeWithFreshSha,
-} from "../src/refresh-lock.js";
+} from "./refresh-usage.js";
+import { writeWithFreshSha } from "./refresh-lock.js";
 import {
   citationsFromContent, judgeValuations, renderJevActions,
-} from "./valuation-judgment.js";
+} from "../api/valuation-judgment.js";
 
 /* ————————————————————————————————————————————————
-   Nightly refresh.
+   Data refresh.
 
-   Runs on Vercel Cron. Nothing in the browser ever touches the Anthropic
-   API — the key lives only in this function's environment. The output is
-   the panel files plus public/data/usage.json, committed back to the repo,
-   which Vercel then serves as static assets from the CDN. Git history *is*
-   the trend log: every refresh is a dated commit you can diff, replay or revert.
+   `runRefresh` is the job. `scripts/refresh.js` calls it from GitHub
+   Actions. Nothing in the browser ever touches the Anthropic API. The
+   output is the panel files plus public/data/usage.json, committed back
+   through the GitHub contents API. A push by the contents token is what
+   makes Vercel rebuild and serve the files from the CDN. Git history *is*
+   the trend log: every refresh is a dated commit you can diff, replay or
+   revert.
+
+   Actions concurrency is the overlap guard. This path does not write
+   dev/refresh-lock.json.
    ———————————————————————————————————————————————— */
 
 const GH = "https://api.github.com";
@@ -50,11 +53,17 @@ export const VALUATION_SEARCH = `Search the web for one recent US-dollar figure 
 
 For each company report only the company name, the dollar figure, and whether it is a valuation, a round size, a market cap, or a price still being negotiated. Cite the source passage for that figure, in the source's words. Batch several companies into each query. Stop when every company has one cited figure. Do not search again to cross-check or add background.`;
 
+/* `runRefresh` points this at the env it was given. Helpers below read it
+   at call time, so a test can pass a bag without leaking into the next one. */
+let activeEnv = process.env;
+
 const env = (k) => {
-  const v = process.env[k];
+  const v = activeEnv[k];
   if (!v) throw new Error(`missing env var ${k}`);
   return v;
 };
+
+const branchName = () => activeEnv.GITHUB_BRANCH || "main";
 
 /* ——— GitHub contents API ———
    Reads carry the blob sha, and writes must echo it back. That sha is the
@@ -68,7 +77,7 @@ const ghHeaders = () => ({
 });
 
 const ghRead = async (path) => {
-  const branch = process.env.GITHUB_BRANCH || "main";
+  const branch = branchName();
   const res = await fetch(`${GH}/repos/${env("GITHUB_REPO")}/contents/${path}?ref=${branch}`, {
     headers: ghHeaders(),
   });
@@ -97,20 +106,12 @@ const ghRequest = async (path, method, body) => {
 const ghPut = (path, text, sha, message) => ghRequest(path, "PUT", {
   message,
   content: Buffer.from(text, "utf8").toString("base64"),
-  branch: process.env.GITHUB_BRANCH || "main",
+  branch: branchName(),
   ...(sha ? { sha } : {}),
 });
 
-const ghDelete = (path, sha, message) => ghRequest(path, "DELETE", {
-  message,
-  sha,
-  branch: process.env.GITHUB_BRANCH || "main",
-});
-
 /* Data files re-read the blob sha immediately before the PUT and retry once
-   on a 409 or a sha 422. The lock file does not use this: its create omits
-   the sha on purpose, and a retry that overwrote a just-created lock would
-   steal a live run. */
+   on a 409 or a sha 422. */
 const ghWrite = (path, text, message) => writeWithFreshSha({
   read: () => ghRead(path),
   write: (sha) => ghPut(path, text, sha, message),
@@ -287,7 +288,7 @@ const billError = (error) => {
    A finished reply that still has no JSON gets one Haiku reformat with no
    tools. That second call is logged on its own. It is not another search. */
 const askClaude = async ({ prompt, jobId, attempt, signal, usageLog, allowContinuation }) => {
-  const model = modelForJob(jobId);
+  const model = modelForJob(jobId, activeEnv);
   const logUnparsed = (error) => {
     console.log(JSON.stringify({
       source: "state-of-ai-briefing",
@@ -365,8 +366,8 @@ const persistJevLog = async (markdown) => {
    `refresh_succeeded` ping (same auth, silent skip when unset, and a notify
    error still must not change the refresh result or response) so a deduped
    failure can clear. That ping does not send email.
-   Set these in the Vercel project env (Settings → Environment Variables) —
-   there is no repo `.env`; cron only sees what Vercel injects at runtime. */
+   Set these as GitHub Actions secrets. There is no repo `.env`. A notify
+   error never changes the refresh result. */
 
 const truncate = (s, n = 400) => {
   const t = String(s || "");
@@ -416,9 +417,9 @@ export const buildAlert = ({ severity, runAt, failures = [], errors = {}, error,
 };
 
 const sendEmailAlert = async (alert) => {
-  const key = process.env.AGENTMAIL_API_KEY;
-  const inbox = process.env.AGENTMAIL_INBOX_ID;
-  const to = process.env.NOTIFY_EMAIL;
+  const key = activeEnv.AGENTMAIL_API_KEY;
+  const inbox = activeEnv.AGENTMAIL_INBOX_ID;
+  const to = activeEnv.NOTIFY_EMAIL;
   if (!key || !inbox || !to) return { skipped: "email unset" };
 
   const res = await fetch(
@@ -442,8 +443,8 @@ const sendEmailAlert = async (alert) => {
 };
 
 const notifyGrokBot = async (body) => {
-  const url = process.env.GROK_BOT_WEBHOOK_URL;
-  const key = process.env.GROK_BOT_WEBHOOK_KEY;
+  const url = activeEnv.GROK_BOT_WEBHOOK_URL;
+  const key = activeEnv.GROK_BOT_WEBHOOK_KEY;
   if (!url || !key) return { skipped: "grok bot unset" };
 
   const res = await fetch(url, {
@@ -501,27 +502,58 @@ export const jobsQueryFromRequest = (req) => {
   }
 };
 
-export default async function handler(req, res) {
-  /* Vercel Cron signs its requests with CRON_SECRET. Without this check the
-     endpoint is a public button that spends money. */
-  const secret = process.env.CRON_SECRET;
-  const auth = req.headers.authorization || "";
-  if (secret && auth !== `Bearer ${secret}`) {
-    return res.status(401).json({ error: "unauthorized" });
+export async function runRefresh({
+  jobs = null,
+  env: envBag = null,
+  budget: budgetOverride = null,
+  now = Date.now,
+  startedAt = null,
+} = {}) {
+  const previousEnv = activeEnv;
+  activeEnv = envBag || process.env;
+  try {
+    return await runRefreshWithEnv({ jobs, budget: budgetOverride, now, startedAt });
+  } finally {
+    activeEnv = previousEnv;
   }
+}
 
+async function runRefreshWithEnv({ jobs, budget: budgetOverride, now, startedAt }) {
+  const fromEnv = budgetConfigFromEnv(activeEnv);
+  const merged = { ...fromEnv, ...(budgetOverride || {}) };
+  const jobBudgetMs = merged.maxDurationMs - merged.tailReserveMs;
+  if (!(jobBudgetMs > 0)) {
+    throw new Error("REFRESH_TAIL_RESERVE_MS must be shorter than REFRESH_MAX_DURATION_MS");
+  }
+  const budgetSettings = { ...merged, jobBudgetMs };
   const allIds = Object.keys(JOBS);
-  const selected = parseJobsQuery(jobsQueryFromRequest(req), allIds);
-  if (selected.error) return res.status(400).json({ ok: false, error: selected.error });
+  const selected = resolveJobSelection(jobs, allIds);
+  if (selected.error) return { status: 400, body: { ok: false, error: selected.error } };
+  if (selected.preset === "daily") selected.ids = selected.ids.filter((id) => id !== "valuations");
+  console.log(JSON.stringify({
+    source: "state-of-ai-briefing",
+    event: "refresh_start",
+    preset: selected.preset,
+    jobs: selected.ids,
+    budget: budgetSettings,
+  }));
 
   let jevMarkdown = null;
   const saveTrace = async () => {
     if (!jevMarkdown) return;
     try { await persistJevLog(jevMarkdown); } catch (e) { /* the panel data still stands */ }
   };
-  const runAt = new Date().toISOString();
-  const usageLog = createUsageLog();
-  const budget = createBudget();
+  const runAt = new Date(now()).toISOString();
+  const usageLog = createUsageLog({ now });
+  const budget = createBudget({
+    startedAt: startedAt == null ? now() : startedAt,
+    maxDurationMs: budgetSettings.maxDurationMs,
+    tailReserveMs: budgetSettings.tailReserveMs,
+    now,
+  });
+  const callCapMs = budgetSettings.callTimeoutMs;
+  const valuationsCallCapMs = budgetSettings.valuationsCallTimeoutMs;
+  const valuationsMinStartMs = budgetSettings.valuationsMinStartMs;
   let usageSummary = null;
   let maxUsd = null;
   const skippedForSpend = [];
@@ -548,11 +580,14 @@ export default async function handler(req, res) {
     usageLog.abortOpen();
     usageSummary = usageLog.summary({
       runAt,
-      wallClockMs: Date.now() - budget.startedAt,
+      wallClockMs: now() - budget.startedAt,
       budget: {
         maxDurationMs: budget.maxDurationMs,
         tailReserveMs: budget.tailReserveMs,
         jobBudgetMs: budget.maxDurationMs - budget.tailReserveMs,
+        callTimeoutMs: callCapMs,
+        valuationsCallTimeoutMs: valuationsCallCapMs,
+        valuationsMinStartMs,
       },
       spendCap: spendCapSummary(),
       ...extra,
@@ -575,10 +610,9 @@ export default async function handler(req, res) {
   let meta = null;
   let history = null;
   let usageWritten = false;
-  let lockHeld = false;
 
-  const writeUsage = async (summary, note, { force = false } = {}) => {
-    if (usageWritten && !force) return;
+  const writeUsage = async (summary, note) => {
+    if (usageWritten) return;
     await ghWrite(
       USAGE_PATH,
       JSON.stringify(summary, null, 2) + "\n",
@@ -587,63 +621,7 @@ export default async function handler(req, res) {
     usageWritten = true;
   };
 
-  /* The DELETE has to finish before `res.json()`. Vercel treats the sent
-     response as the end of the invocation, so a release awaited only in
-     `finally` never produces a commit. The 21:00Z and 01:16Z runs both
-     wrote their data files and left `dev/refresh-lock.json` in place. */
-  const releaseHeldLock = async () => {
-    if (!lockHeld) return null;
-    lockHeld = false;
-    try {
-      const result = await releaseRefreshLock({
-        read: () => ghRead(LOCK_PATH),
-        remove: (sha) => ghDelete(LOCK_PATH, sha, `lock: refresh release ${runAt}`),
-        runAt,
-      });
-      if (result && result.released) return true;
-      console.log(JSON.stringify({
-        source: "state-of-ai-briefing",
-        event: "lock_release_failed",
-        runAt,
-        status: null,
-        body: result && result.reason ? result.reason : "lock was not released",
-      }));
-      return false;
-    } catch (error) {
-      console.log(JSON.stringify({
-        source: "state-of-ai-briefing",
-        event: "lock_release_failed",
-        runAt,
-        status: error && error.status != null ? error.status : null,
-        body: error && error.body != null ? String(error.body) : String(error && error.message || error),
-      }));
-      return false;
-    }
-  };
-
-  const finish = async (status, body, summary) => {
-    const lockReleased = await releaseHeldLock();
-    if (summary && typeof summary === "object") {
-      summary.lockReleased = lockReleased;
-      try {
-        await writeUsage(
-          summary,
-          lockReleased ? " (lock released)" : " (lock release failed)",
-          { force: true },
-        );
-      } catch (error) {
-        console.log(JSON.stringify({
-          source: "state-of-ai-briefing",
-          event: "lock_release_failed",
-          runAt,
-          status: error && error.status != null ? error.status : null,
-          body: `usage.json was not updated after release: ${error && (error.body || error.message) || error}`,
-        }));
-      }
-    }
-    if (lockReleased != null) body.lockReleased = lockReleased;
-    return res.status(status).json(body);
-  };
+  const finish = (status, body) => ({ status, body });
 
   const valuesText = (summary) => {
     const packed = packValues(data, meta, runAt);
@@ -652,38 +630,7 @@ export default async function handler(req, res) {
   };
 
   try {
-    const lock = await acquireRefreshLock({
-      read: () => ghRead(LOCK_PATH),
-      create: (text) => ghPut(LOCK_PATH, text, null, `lock: refresh start ${runAt}`),
-      update: (sha, text) => ghPut(LOCK_PATH, text, sha, `lock: refresh steal ${runAt}`),
-      runAt,
-      nowMs: Date.now(),
-    });
-    if (!lock.acquired) {
-      console.log(JSON.stringify({
-        source: "state-of-ai-briefing",
-        event: "refresh_locked",
-        runAt,
-        lockedSince: lock.lockedSince,
-        staleAfterMs: LOCK_STALE_MS,
-      }));
-      return res.status(409).json({
-        ok: false,
-        error: "refresh already in progress",
-        lockedSince: lock.lockedSince,
-        staleAfterMs: LOCK_STALE_MS,
-        jobs: selected.ids,
-      });
-    }
-    lockHeld = true;
-    if (lock.stolen) {
-      console.log(JSON.stringify({
-        source: "state-of-ai-briefing",
-        event: "refresh_lock_stolen",
-        runAt,
-      }));
-    }
-    maxUsd = refreshMaxUsd();
+    maxUsd = refreshMaxUsd(activeEnv);
 
     /* 1 — current state from the repo, falling back to the baseline */
     [vFile, tFile] = await Promise.all([
@@ -703,16 +650,18 @@ export default async function handler(req, res) {
 
     /* 2 — panels. Fast HTTP jobs run together. Model jobs run one at a time
        so the spend cap can refuse the next Claude call after the estimate
-       crosses REFRESH_MAX_USD. A default run does the simple panels and does
-       not start valuations: that call did not finish inside the shared 240s
-       budget. `?jobs=valuations` runs it alone and gives it the whole budget.
-       An explicit `?jobs=` list keeps the caller's order.
+       crosses REFRESH_MAX_USD. A blank job list is the daily set, which
+       does not include valuations. `jobs=valuations` runs that panel alone.
+       Any other explicit list keeps the caller's order. A non-explicit
+       selection still refuses to start valuations.
 
-       The wall clock is capped under maxDuration. Whatever is still running
-       at that deadline is aborted, written as `time budget exhausted`, and
-       included in the failure alert. A kill at the platform limit never
-       reaches this code, which is how a paid night used to leave no commit
-       and no email.
+       The wall clock is the configured job budget. A single non-valuation
+       call also stops at the per-call cap. Valuations may use the rest of
+       the job budget, and it is not started when less than its minimum
+       remains. Whatever is still running at that deadline is aborted,
+       written as `time budget exhausted`, and included in the failure
+       alert. Stopping here, ahead of the Actions job timeout, is what
+       leaves a commit and an email. A platform kill would not.
 
        Retry once only when the first attempt was not billed (network, 429,
        5xx) and the deadline still has room for another attempt of at least
@@ -733,7 +682,7 @@ export default async function handler(req, res) {
       return { ok: true };
     };
     const runValuations = async (attempt, signal) => {
-      const model = modelForJob("valuations");
+      const model = modelForJob("valuations", activeEnv);
       const passages = await callWithPauseCap({
         initialMessages: [{ role: "user", content: VALUATION_SEARCH }],
         allowContinuation: () => allowContinuation(signal),
@@ -842,7 +791,7 @@ export default async function handler(req, res) {
     const modelIds = orderedModelJobs(ids, selected.explicit);
     const fastSettledPromise = settleWithinBudget(
       fastIds.map((id) => ({ id, run: (signal) => runJob(id, signal) })),
-      { remainingMs: () => budget.remainingMs() },
+      { remainingMs: () => callWindowMs(budget.remainingMs(), callCapMs) },
     );
     const modelSettled = {};
     const skipReasons = {};
@@ -859,7 +808,7 @@ export default async function handler(req, res) {
         rememberSkip(id, VALUATIONS_FULL_RUN_SKIP);
         continue;
       }
-      if (id === "valuations" && budget.remainingMs() < VALUATIONS_MIN_START_MS) {
+      if (id === "valuations" && budget.remainingMs() < valuationsMinStartMs) {
         rememberSkip(id, valuationsTimeSkipReason(budget.remainingMs()));
         continue;
       }
@@ -872,7 +821,12 @@ export default async function handler(req, res) {
       }
       const slot = await settleWithinBudget(
         [{ id, run: (signal) => runJob(id, signal) }],
-        { remainingMs: () => budget.remainingMs() },
+        {
+          remainingMs: () => callWindowMs(
+            budget.remainingMs(),
+            id === "valuations" ? valuationsCallCapMs : callCapMs,
+          ),
+        },
       );
       modelSettled[id] = slot[id];
       if (slot[id] && slot[id].error && slot[id].error.spendCap) {
@@ -987,7 +941,7 @@ export default async function handler(req, res) {
         timedOut,
         usage: summary,
         notified,
-      }, summary);
+      });
     }
 
     /* 3 — write the files back. Usage goes first so a later write failure
@@ -1026,7 +980,7 @@ export default async function handler(req, res) {
       timedOut,
       usage: summary,
       ...(notified ? { notified } : {}),
-    }, summary);
+    });
   } catch (e) {
     await saveTrace();
     const error = String(e.message || e);
@@ -1046,10 +1000,6 @@ export default async function handler(req, res) {
     });
     return finish(500, {
       ok: false, error, jobs: selected.ids, usage: summary, notified,
-    }, summary);
-  } finally {
-    /* A path that already answered has cleared lockHeld. This only covers
-       a throw that escaped `finish` itself. */
-    if (lockHeld) await releaseHeldLock();
+    });
   }
 }
