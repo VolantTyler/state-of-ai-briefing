@@ -162,6 +162,13 @@ test("blank jobs is the daily set and the Sunday cron is valuations only", () =>
 
   const unknown = resolveJobSelection("models,nope", allIds);
   assert.match(unknown.error, /unknown jobs: nope/);
+
+  const typed = resolveJobSelection("Valuations", allIds);
+  assert.deepEqual(typed.ids, ["valuations"]);
+  assert.equal(typed.preset, "valuations");
+  const mixed = resolveJobSelection("models, Energy", allIds);
+  assert.deepEqual(mixed.ids, ["models", "energy"]);
+  assert.equal(mixed.preset, "custom");
 });
 
 test("the Actions budget is configurable and the defaults fit under the job timeout", () => {
@@ -325,6 +332,11 @@ test("a valuations run with room left calls Claude and does not call it twice on
   assert.deepEqual(run.result.body.failures, ["valuations"]);
   assert.equal(run.anthropicBodies.length, 1);
   assert.match(run.anthropicBodies[0], /Batch several companies/);
+  const sent = JSON.parse(run.anthropicBodies[0]);
+  assert.equal(sent.model, "claude-sonnet-4-6");
+  assert.equal(sent.tools[0].type, "web_search_20260318");
+  assert.deepEqual(sent.tools[0].allowed_callers, ["direct"]);
+  assert.equal(sent.tools[0].response_inclusion, undefined);
   assert.equal(run.urls.filter((url) => url.includes("api.anthropic.com")).length, 1);
 });
 

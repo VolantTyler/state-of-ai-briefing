@@ -44,8 +44,9 @@ or on pull requests.
 1. Open the repository on GitHub.
 2. Actions → **Refresh briefing data** → **Run workflow**.
 3. Leave **jobs** blank for the daily set. Type `valuations` to run that panel
-   alone. Any other comma-separated panel id list is accepted
-   (`models,users`). An unknown id fails before any paid call.
+   alone. Any other panel id list is accepted (`models,users` or
+   `models Energy`). Entries are trimmed and lowercased, so `Valuations`
+   works. An unknown id fails before any paid call.
 4. Run workflow. The branch does not matter for the data files: the job always
    commits to `main`.
 

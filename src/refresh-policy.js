@@ -34,8 +34,9 @@ export const SEARCH_MAX_USES = {
   energy: 2,
 };
 
-/* The v4.2 leaderboard is one site. Other pages are where the v4.1.1 scale
-   gets mixed in, and they are extra input tokens. Subdomains are included.
+/* The Intelligence Index leaderboard is one site. Other pages are where an
+   older index scale gets mixed in, and they are extra input tokens.
+   Subdomains are included.
    Share, users, capital, and energy are reported across outlets; a domain
    list there would miss the figure. `user_location` only re-ranks results,
    it does not shrink them, so it is not set. */
@@ -62,7 +63,12 @@ export const webSearchTool = (jobId, model) => {
   if (jobId !== "valuations") tool.response_inclusion = "excluded";
   const domains = SEARCH_ALLOWED_DOMAINS[jobId];
   if (domains) tool.allowed_domains = [...domains];
-  if (model && DIRECT_WEB_SEARCH_MODELS.has(model)) tool.allowed_callers = ["direct"];
+  /* Haiku 4.5 can send this tool only as a direct caller. Valuations is
+     direct even on Sonnet: the default there is dynamic filtering, and that
+     path's final text has no citation blocks. This panel reads cited_text. */
+  if (jobId === "valuations" || (model && DIRECT_WEB_SEARCH_MODELS.has(model))) {
+    tool.allowed_callers = ["direct"];
+  }
   return tool;
 };
 
@@ -71,7 +77,7 @@ export const parseJobsQuery = (raw, allIds) => {
     return { ids: [...allIds], explicit: false };
   }
   const text = Array.isArray(raw) ? raw.flat().join(",") : String(raw);
-  const parts = text.split(",").map((part) => part.trim()).filter(Boolean);
+  const parts = text.split(/[\s,]+/).map((part) => part.trim().toLowerCase()).filter(Boolean);
   if (!parts.length) return { error: "jobs is empty" };
   const unknown = [...new Set(parts.filter((id) => !allIds.includes(id)))];
   if (unknown.length) return { error: `unknown jobs: ${unknown.join(", ")}` };
@@ -168,8 +174,9 @@ export const resolveJobSelection = (raw, allIds) => {
 };
 
 /* Schedule events ignore REFRESH_JOBS. The Sunday valuations cron is the
-   only schedule that selects that panel. workflow_dispatch uses the input
-   as typed, and a blank input is the daily set. */
+   only schedule that selects that panel. workflow_dispatch passes the input
+   through; parseJobsQuery trims it, lowercases it, and splits on commas or
+   spaces. A blank input is the daily set. */
 export const jobsForInvocation = ({
   eventName = "",
   schedule = "",

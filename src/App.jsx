@@ -8,6 +8,7 @@ import {
   EDITION, INK, PAPER, FAINT, RULE_SOFT, C, TEXT_BRICK, TEXT_CLAY,
   BRAND_COLOR, BRAND_OF, brandFill,
   BASELINE, TRACKERS, SRC, snapshot, panelTimes,
+  AA_INDEX_VERSION, aaIndexVersion,
 } from "./briefing-data.js";
 import {
   DEFAULT_STORE_APP_IDS, STORE_APP_BY_ID, STORE_RANK_DEPTH, weeklyRankSeries,
@@ -784,6 +785,7 @@ export default function App() {
   const f = (arr) => (showCN ? arr : arr.filter((x) => !x.cn));
   const valuations = useMemo(() => f(data.valuations), [data.valuations, showCN]);
   const aaIndex = useMemo(() => f(data.aaIndex), [data.aaIndex, showCN]);
+  const indexVersion = aaIndexVersion(data);
   const cnCount = data.valuations.filter((x) => x.cn).length + data.aaIndex.filter((x) => x.cn).length;
 
   const tocItems = useMemo(() => {
@@ -947,10 +949,12 @@ export default function App() {
 
         {/* §03 Models */}
         <SectionHead id="sec-03" n="03" title="Model capability" sub="Where the frontier sits, per the four most-watched scoreboards" />
-        <Panel id="models" label="Artificial Analysis Intelligence Index v4.2" meta={meta.models} sources={SRC.models}>
+        <Panel id="models" label={`Artificial Analysis Intelligence Index ${indexVersion}`} meta={meta.models} sources={SRC.models}>
           <AASwarm items={aaIndex} vertical={isMobile} />
           <div style={{ ...mono, fontSize: 10, color: TEXT_BRICK, marginTop: 6 }}>
-            ▲ scale change — v4.2 re-anchored the index, so these scores are not comparable to the v4.1.1 numbers in editions ≤ v2.3
+            {indexVersion === AA_INDEX_VERSION
+              ? "▲ scale change — v4.2 re-anchored the index, so these scores are not comparable to the v4.1.1 numbers in editions ≤ v2.3"
+              : `▲ ${indexVersion} — these scores are not comparable to scores from another Intelligence Index version`}
           </div>
           <Commentary>
             Three frontier releases landed in three days and the whole board moved. Anthropic shipped Claude Fable 5.1

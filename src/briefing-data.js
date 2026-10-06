@@ -55,11 +55,29 @@ export const BRAND_OF = {
 export const brandFill = (name, fallback) => (BRAND_OF[name] ? BRAND_COLOR[BRAND_OF[name]] : fallback);
 
 
-/* ——— Which Artificial Analysis index version the scores above are on ———
-   Stamped onto every trend-log row so the §08 chart can break its line where
-   the scale changed instead of drawing a cliff that never happened. Bump this
-   whenever Artificial Analysis re-anchors the index. */
+/* Fallback when a values file or the baseline has no stored index version.
+   The models job writes the version the leaderboard returned (`aaVersion`).
+   snapshot() stamps that stored version onto the trend log so the chart can
+   break its line where the scale changed. Scores are not comparable across
+   versions. */
 export const AA_INDEX_VERSION = "v4.2";
+
+/* A one-row reply is not a leaderboard. Fewer valid rows than this keeps the
+   previous `aa` list and fails the panel. */
+export const MIN_AA_ROWS = 5;
+
+/* The version field is a token such as v4.3.2. Anything else is absent, and
+   the display falls back to AA_INDEX_VERSION. */
+export const parseAaVersion = (raw) => {
+  const text = String(raw ?? "").trim();
+  const match = /^v?(\d+(?:\.\d+)+)$/.exec(text);
+  return match ? `v${match[1]}` : "";
+};
+
+export const aaIndexVersion = (d) => {
+  const stored = d && typeof d.aaVersion === "string" ? d.aaVersion.trim() : "";
+  return stored || AA_INDEX_VERSION;
+};
 
 /* ——— Baseline dataset, researched 2026-08-21/22, refreshed 2026-08-26 ——— */
 export const BASELINE = {
@@ -213,20 +231,29 @@ export const JOBS = {
     }) }),
   },
   models: {
-    keys: ["aa"],
+    keys: ["aa", "aaVersion"],
     /* Two constraints that pull in opposite directions, both deliberate.
        Dedupe by family: an earlier run returned Claude Opus 5 three times at
        three effort settings, spending three of eight slots on one model. But
        KEEP the parenthesised configuration — §03 splits it off and shows it
-       as the variant qualifier, so stripping it would blank a real column. */
-    prompt: 'Search the web for the current top 8 models on the Artificial Analysis Intelligence Index, version 4.2 (v4.2), with their scores and labs. Use v4.2 scores only — v4.1.1 scores are on a different, higher scale and must not be mixed in. Search only the Artificial Analysis leaderboard. List each model family at most once, choosing its highest-scoring configuration; do not return the same model at several effort levels. Keep the scored configuration in parentheses after the model name exactly as the leaderboard writes it, e.g. "Claude Fable 5.1 (Adaptive Reasoning, Max Effort)" or "GPT-6 Astra (max)"; if the leaderboard names no configuration, give the model name alone. Include Chinese models if they rank. Stop when eight distinct model families are in hand. Do not search again to confirm a score you already have. Your final text block must be a single JSON object and no other characters: {"models":[{"model":"","lab":"","score":0,"cn":false}]}',
+       as the variant qualifier, so stripping it would blank a real column.
+       The index version is whatever the leaderboard shows now. Do not pin a
+       version number: Artificial Analysis re-anchors the scale, and a pinned
+       version makes the model answer in prose instead of JSON. */
+    prompt: 'Search the web for the current top 8 models on the Artificial Analysis Intelligence Index, with their scores, labs, and the current index version. Report the version the leaderboard shows now; the version string in the JSON example is only a shape. Use scores from that current version only, and do not mix in scores from an older index version. Search only the Artificial Analysis leaderboard. List each model family at most once, choosing its highest-scoring configuration; do not return the same model at several effort levels. Keep the scored configuration in parentheses after the model name exactly as the leaderboard writes it, e.g. "Claude Fable 5.1 (Adaptive Reasoning, Max Effort)" or "GPT-6 Astra (max)"; if the leaderboard names no configuration, give the model name alone. Include Chinese models if they rank. Stop when eight distinct model families are in hand. Do not search again to confirm a score you already have. Your final text block must be a single JSON object and no other characters: {"version":"v4.3.2","models":[{"model":"","lab":"","score":0,"cn":false}]}',
     apply: (d, j) => {
-      if (!Array.isArray(j.models) || !j.models.length) return d;
-      const clean = j.models
-        .filter((m) => m.model && Number(m.score) > 0)
+      const rows = j && Array.isArray(j.models) ? j.models : [];
+      const clean = rows
+        .filter((m) => m && m.model && Number(m.score) > 0)
         .map((m) => ({ model: String(m.model), lab: String(m.lab || "—"), score: Math.round(Number(m.score) * 10) / 10, cn: !!m.cn }))
         .sort((a, b) => b.score - a.score).slice(0, 8);
-      return clean.length ? { ...d, aaIndex: clean } : d;
+      if (clean.length < MIN_AA_ROWS) {
+        const error = new Error(`too few rows: ${clean.length}`);
+        error.panelError = true;
+        throw error;
+      }
+      const version = parseAaVersion(j && j.version);
+      return { ...d, aaIndex: clean, ...(version ? { aaVersion: version } : {}) };
     },
   },
   users: {
@@ -322,6 +349,7 @@ export const packValues = (d, meta, lastRunAt) => ({
   rev: Object.fromEntries(d.revenue.map((x) => [x.name, x.value])),
   energy: d.energyStats,
   aa: d.aaIndex.map((m) => [m.model, m.lab, m.score, m.cn ? 1 : 0]),
+  ...(d.aaVersion ? { aaVersion: d.aaVersion } : {}),
   ranks: {
     ios: (d.storeRanks && d.storeRanks.ios) || {},
     android: (d.storeRanks && d.storeRanks.android) || {},
@@ -386,6 +414,7 @@ export const unpackValues = (d, p) => {
       .map((r) => ({ model: String(r[0]), lab: String(r[1] || "—"), score: Number(r[2]), cn: !!r[3] }))
       .sort((a, b) => b.score - a.score);
   }
+  if (typeof p.aaVersion === "string" && p.aaVersion.trim()) n.aaVersion = p.aaVersion.trim();
   if (p.ranks && typeof p.ranks === "object") {
     const keep = (ranks) => {
       const out = {};
@@ -416,7 +445,7 @@ export const snapshot = (d) => {
     claude: val(d.users, "name", "Claude", "users"),
     gemini: val(d.users, "name", "Gemini", "users"),
     topScore: d.aaIndex.length ? d.aaIndex[0].score : null,
-    scale: d.aaIndex.length ? AA_INDEX_VERSION : null,
+    scale: d.aaIndex.length ? aaIndexVersion(d) : null,
   };
 };
 

@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { JOBS } from "./briefing-data.js";
+import {
+  AA_INDEX_VERSION, BASELINE, JOBS, MIN_AA_ROWS, aaIndexVersion, packValues, parseAaVersion,
+  snapshot, unpackValues,
+} from "./briefing-data.js";
 import {
   SEARCH_MAX_USES, SHARE_REFRESH_DAYS, SHARE_SKIPPED, VALUATIONS_FULL_RUN_SKIP,
   VALUATIONS_MIN_START_MS, WEB_SEARCH_TOOL, orderedModelJobs, parseJobsQuery,
@@ -40,7 +43,8 @@ test("web search uses the filtered tool and caps each call", () => {
   assert.equal(valuations.type, "web_search_20260318");
   assert.equal(valuations.max_uses, 4);
   assert.equal(valuations.response_inclusion, undefined);
-  assert.equal(valuations.allowed_callers, undefined);
+  assert.deepEqual(valuations.allowed_callers, ["direct"]);
+  assert.deepEqual(webSearchTool("valuations").allowed_callers, ["direct"]);
   assert.equal(valuations.allowed_domains, undefined);
   assert.equal(SEARCH_MAX_USES.markets, undefined);
   assert.throws(() => webSearchTool("markets"), /no search cap/);
@@ -119,4 +123,74 @@ test("a skipped share night is not a failure and does not move the clock", () =>
   assert.equal(shareRefreshDue({}, "2026-09-28T08:00:00.000Z"), true);
   assert.equal(shareRefreshDue({ share: { checkedAt: "not-a-date" } }, "2026-09-28T08:00:00.000Z"), true);
   assert.equal(shareRefreshDue(null, "2026-09-28T08:00:00.000Z"), true);
+});
+
+test("job names are trimmed, lowercased, and split on commas or spaces", () => {
+  const all = Object.keys(JOBS);
+  assert.deepEqual(parseJobsQuery("Valuations", all).ids, ["valuations"]);
+  assert.deepEqual(parseJobsQuery(" valuations ", all).ids, ["valuations"]);
+  assert.deepEqual(parseJobsQuery("models, Energy", all).ids, ["models", "energy"]);
+  assert.deepEqual(parseJobsQuery("models Energy", all).ids, ["models", "energy"]);
+  assert.deepEqual(parseJobsQuery("models,, energy", all).ids, ["models", "energy"]);
+  assert.deepEqual(parseJobsQuery([" Models ", "energy"], all).ids, ["models", "energy"]);
+  const unknown = parseJobsQuery("models, Nope", all);
+  assert.match(unknown.error, /unknown jobs: nope/);
+  assert.equal(parseJobsQuery(" , ", all).error, "jobs is empty");
+});
+
+test("models apply keeps a current index version and rejects fewer than five rows", () => {
+  const prompt = JOBS.models.prompt;
+  assert.match(prompt, /current index version/);
+  assert.match(prompt, /"version":"v4\.3\.2"/);
+  assert.match(prompt, /at most once/);
+  assert.match(prompt, /parentheses/);
+  assert.match(prompt, /Chinese models/);
+  assert.match(prompt, /eight distinct model families/);
+  assert.match(prompt, /Do not search again/);
+  assert.match(prompt, /final text block must be a single JSON object/);
+  assert.doesNotMatch(prompt, /v4\.2/);
+  assert.equal(MIN_AA_ROWS, 5);
+
+  const row = (model, score, extra = {}) => ({ model, lab: "Lab", score, cn: false, ...extra });
+  const namesBefore = BASELINE.aaIndex.map((item) => item.model);
+  assert.throws(
+    () => JOBS.models.apply(BASELINE, { version: "v4.3.2", models: [row("Claude Fable 5.1", 66)] }),
+    (error) => error.message === "too few rows: 1" && error.panelError === true,
+  );
+  assert.deepEqual(BASELINE.aaIndex.map((item) => item.model), namesBefore);
+
+  assert.throws(() => JOBS.models.apply(BASELINE, {
+    models: [
+      row("A", 10),
+      { model: "", lab: "Lab", score: 9 },
+      { model: "B", lab: "Lab", score: 0 },
+      row("C", 8),
+      row("D", 7),
+      row("E", 6),
+    ],
+  }), /too few rows: 4/);
+
+  const five = [1, 2, 3, 4, 5].map((n) => row(`Model ${n}`, 40 + n));
+  const next = JOBS.models.apply({ ...BASELINE, aaVersion: "v4.2" }, { version: "4.3.2", models: five });
+  assert.equal(next.aaIndex.length, 5);
+  assert.equal(next.aaIndex[0].model, "Model 5");
+  assert.equal(next.aaIndex[0].score, 45);
+  assert.equal(next.aaVersion, "v4.3.2");
+  assert.equal(parseAaVersion("not a version"), "");
+
+  const kept = JOBS.models.apply({ ...BASELINE, aaVersion: "v4.2" }, { models: five });
+  assert.equal(kept.aaVersion, "v4.2");
+
+  const nine = [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => row(`M${n}`, n));
+  assert.equal(JOBS.models.apply(BASELINE, { version: "v4.3.2", models: nine }).aaIndex.length, 8);
+
+  const packed = packValues(next, null);
+  assert.equal(packed.aaVersion, "v4.3.2");
+  assert.equal(packed.aa.length, 5);
+  const unpacked = unpackValues(BASELINE, { aa: packed.aa, aaVersion: packed.aaVersion });
+  assert.equal(unpacked.aaVersion, "v4.3.2");
+  assert.equal(unpacked.aaIndex[0].score, 45);
+  assert.equal(snapshot(unpacked).scale, "v4.3.2");
+  assert.equal(snapshot(BASELINE).scale, AA_INDEX_VERSION);
+  assert.equal(aaIndexVersion({}), AA_INDEX_VERSION);
 });

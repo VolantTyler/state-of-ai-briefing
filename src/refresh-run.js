@@ -197,11 +197,39 @@ export const replyPreview = (blocks, n = RAW_REPLY_LOG_CHARS) => {
 
 export const JSON_REFORMAT_MAX_TOKENS = 1500;
 
+export const VALUATIONS_REPLY_LOG_CHARS = 1500;
+
+/* Actions can show this when the valuations search returns text and no
+   citation blocks. The preview is the model's text, not a second search. */
+export const valuationsNoCitationsRecord = (blocks) => ({
+  source: "state-of-ai-briefing",
+  event: "valuations_no_citations",
+  blockTypes: (blocks || []).map((block) => String((block && block.type) || "unknown")),
+  rawReply: replyPreview(blocks, VALUATIONS_REPLY_LOG_CHARS),
+});
+
+/* Citations win. A pause_turn with none is continued, not logged. A finished
+   reply with none is a failure: log the text, then throw. Do not mine the
+   prose for passages. */
+export const takeValuationPassages = (content, stopReason) => {
+  const found = citationsFromContent(content);
+  if (found.length) return found;
+  if (stopReason === "pause_turn") return null;
+  console.log(JSON.stringify(valuationsNoCitationsRecord(content)));
+  throw new Error("no cited passages in reply");
+};
+
 export const jsonReformatPrompt = (raw, shape = "") => {
   const hint = shape
     ? `Use this shape, and only values the answer already states:\n${shape}\n\n`
     : "";
-  return `Reformat the answer below as one JSON object and nothing else. No prose and no markdown fence. Use only facts already in the answer. Do not search.\n\n${hint}${raw}`;
+  /* The models reformat only sees the reply text, not the search results.
+     An empty list fails the min-rows check and keeps the previous board,
+     which is safer than a row the text never stated. */
+  const modelsGuard = /"models"\s*:/.test(shape)
+    ? 'If the answer does not already contain a full models list, return {"version":"","models":[]} and do not invent rows.\n\n'
+    : "";
+  return `Reformat the answer below as one JSON object and nothing else. No prose and no markdown fence. Use only facts already in the answer. Do not search.\n\n${hint}${modelsGuard}${raw}`;
 };
 
 const jsonShape = (prompt) => {
@@ -699,12 +727,7 @@ async function runRefreshWithEnv({ jobs, budget: budgetOverride, now, startedAt 
           signal,
           usageLog,
         }),
-        accept: (content, stopReason) => {
-          const found = citationsFromContent(content);
-          if (found.length) return found;
-          if (stopReason === "pause_turn") return null;
-          throw new Error("no cited passages in reply");
-        },
+        accept: (content, stopReason) => takeValuationPassages(content, stopReason),
       });
       const at = new Date().toISOString();
       let client;
@@ -894,8 +917,11 @@ async function runRefreshWithEnv({ jobs, budget: budgetOverride, now, startedAt 
           return;
         } catch (e) {
           /* Reply parsed but didn't fit the panel's shape. The model call,
-             when there was one, is already in the usage log. */
-          why = `bad shape: ${String(e.message || e)}`;
+             when there was one, is already in the usage log. A panelError
+             already says why (for example "too few rows: 1"); other throws
+             stay under the bad-shape prefix. */
+          const message = String((e && e.message) || e);
+          why = e && e.panelError ? message : `bad shape: ${message}`;
         }
       }
       /* Keep the last-good timestamps so the panel can still say how old its

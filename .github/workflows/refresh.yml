@@ -17,7 +17,7 @@ on:
   workflow_dispatch:
     inputs:
       jobs:
-        description: "Panel ids, comma-separated. Blank = daily set (no valuations). valuations = valuations only."
+        description: "Panel ids. Commas or spaces. Case does not matter. Blank = daily set (no valuations)."
         required: false
         default: ""
         type: string
