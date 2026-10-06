@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
-  JSON_REFORMAT_MAX_TOKENS, VALUATION_SEARCH, buildAlert, extractJSON, jobsQueryFromRequest,
-  jsonReformatPrompt, partitionRefreshJobs, recoverJsonReply, successWebhookBody,
+  JSON_REFORMAT_MAX_TOKENS, VALUATION_SEARCH, VALUATIONS_REPLY_LOG_CHARS, buildAlert, extractJSON, jobsQueryFromRequest,
+  jsonReformatPrompt, partitionRefreshJobs, recoverJsonReply, successWebhookBody, takeValuationPassages,
 } from "./refresh-run.js";
 import {
   MAX_DURATION_MS, MIN_FAST_RETRY_MS, MIN_MODEL_RETRY_MS, TAIL_RESERVE_MS,
@@ -697,6 +697,11 @@ test("a JSON miss is reformatted once from the reply text, with no second search
   assert.equal(outcome.value.revenue.Anthropic, 3);
   assert.match(jsonReformatPrompt("x"), /Do not search/);
   assert.equal(JSON_REFORMAT_MAX_TOKENS, 1500);
+  const modelsShape = '{"version":"v4.3.2","models":[{"model":"","lab":"","score":0,"cn":false}]}';
+  const modelsReformat = jsonReformatPrompt("The search results show v4.3.2 is current", modelsShape);
+  assert.match(modelsReformat, /do not invent rows/);
+  assert.match(modelsReformat, /"models":\[\]/);
+  assert.doesNotMatch(jsonReformatPrompt("Alphabet capex is 185", '{"capex":{"Alphabet":0}}'), /invent rows/);
 
   let reformats = 0;
   const paused = await recoverJsonReply({
@@ -735,6 +740,47 @@ test("a JSON miss is reformatted once from the reply text, with no second search
   assert.equal(usageLog.calls[0].continuation, "reformat");
   assert.equal(usageLog.calls[0].serverToolUse.web_search_requests, 0);
   assert.equal(usageLog.calls[0].estimatedUsd > 0, true);
+});
+
+test("a finished valuations reply with no citations is logged and not mined for passages", () => {
+  const cited = [{
+    type: "text",
+    text: "Anthropic is worth $965 billion.",
+    citations: [{ url: "https://example.test", title: "Src", cited_text: "Anthropic closed at $965 billion." }],
+  }];
+  assert.equal(takeValuationPassages(cited, "end_turn").length, 1);
+
+  const lines = [];
+  const original = console.log;
+  console.log = (line) => lines.push(line);
+  try {
+    const prose = "Anthropic \"closed a round\" https://example.test/a " + "x".repeat(1600);
+    assert.throws(
+      () => takeValuationPassages([
+        { type: "server_tool_use", name: "web_search" },
+        { type: "text", text: prose },
+      ], "end_turn"),
+      /no cited passages in reply/,
+    );
+  } finally {
+    console.log = original;
+  }
+  assert.equal(lines.length, 1);
+  const logged = JSON.parse(lines[0]);
+  assert.equal(logged.event, "valuations_no_citations");
+  assert.equal(logged.source, "state-of-ai-briefing");
+  assert.deepEqual(logged.blockTypes, ["server_tool_use", "text"]);
+  assert.equal(logged.rawReply.length, VALUATIONS_REPLY_LOG_CHARS);
+  assert.equal(VALUATIONS_REPLY_LOG_CHARS, 1500);
+
+  const paused = [];
+  console.log = (line) => paused.push(line);
+  try {
+    assert.equal(takeValuationPassages([{ type: "text", text: "still looking" }], "pause_turn"), null);
+  } finally {
+    console.log = original;
+  }
+  assert.equal(paused.length, 0);
 });
 
 test("every selected job is refreshed, failed, or skipped with a reason", () => {
