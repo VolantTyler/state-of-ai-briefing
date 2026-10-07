@@ -92,7 +92,7 @@ export const orderedModelJobs = (ids, explicit) => {
   return MODEL_JOB_ORDER.filter((id) => models.includes(id));
 };
 
-/* Weekly, measured in UTC dates. The cron fires at 08:00 and a check often
+/* Weekly, measured in UTC dates. The cron fires at 08:17 and a check often
    finishes later that hour, so a 7×24h clock would skip the morning that
    is already seven calendar days on. A skipped night is not a failure:
    the caller leaves that panel's values and timestamps alone. */
@@ -151,10 +151,13 @@ export const shareSkipReason = (meta, now = new Date()) => {
 };
 
 /* GitHub Actions cron is UTC and does not follow US daylight time.
-   08:00 UTC is 4:00 AM EDT and 3:00 AM EST.
-   10:00 UTC on Sunday is 6:00 AM EDT and 5:00 AM EST. */
-export const DAILY_REFRESH_CRON = "0 8 * * *";
-export const VALUATIONS_REFRESH_CRON = "0 10 * * 0";
+   08:17 UTC is 4:17 AM EDT and 3:17 AM EST.
+   10:23 UTC on Sunday is 6:23 AM EDT and 5:23 AM EST.
+   The minute is 17 and 23 so the runs miss the top of the hour, when
+   GitHub delays or drops scheduled workflows under load.
+   jobsForInvocation compares github.event.schedule to these strings. */
+export const DAILY_REFRESH_CRON = "17 8 * * *";
+export const VALUATIONS_REFRESH_CRON = "23 10 * * 0";
 
 /* Every panel except valuations. The daily Actions run uses this list.
    Valuations has its own weekly run and must not be started here. */

@@ -23,16 +23,18 @@ Cron is UTC. It does not move with US daylight time.
 
 | Run | UTC cron | Eastern |
 |---|---|---|
-| Daily panels, except valuations | `0 8 * * *` | 4:00 AM EDT / 3:00 AM EST |
-| Valuations only | `0 10 * * 0` (Sunday) | 6:00 AM EDT / 5:00 AM EST |
+| Daily panels, except valuations | `17 8 * * *` | 4:17 AM EDT / 3:17 AM EST |
+| Valuations only | `23 10 * * 0` (Sunday) | 6:23 AM EDT / 5:23 AM EST |
 
 The daily run is every panel except valuations: models, users, share, capital,
 energy, markets, and store ranks. Valuations is not in that list. Share keeps
 its own weekly rule: it runs only when the last successful check is at least
 seven UTC days earlier, and a skip is not a failure.
 
-GitHub may start a scheduled run a few minutes late. The two Sunday runs are
-two hours apart. `concurrency` group `state-of-ai-refresh` has
+The minutes are 17 and 23 so the runs miss the top of the hour. GitHub delays
+or drops scheduled workflows that start then, when Actions is under load. A
+run can still begin a few minutes late. The two Sunday runs are two hours
+apart. `concurrency` group `state-of-ai-refresh` has
 `cancel-in-progress: false`, so if one is still going the next one waits. They
 do not overlap, and a waiting run is not cancelled.
 

@@ -222,12 +222,14 @@ test("the Actions budget is configurable and the defaults fit under the job time
 
 test("the workflow cron, concurrency, timeout, and secret names match the runner", () => {
   const cronLine = (cron) => workflow.includes(`cron: "${cron}"`);
+  assert.equal(DAILY_REFRESH_CRON, "17 8 * * *");
+  assert.equal(VALUATIONS_REFRESH_CRON, "23 10 * * 0");
   assert.equal(cronLine(DAILY_REFRESH_CRON), true);
   assert.equal(cronLine(VALUATIONS_REFRESH_CRON), true);
-  assert.match(workflow, /4:00 AM EDT/);
-  assert.match(workflow, /3:00 AM EST/);
-  assert.match(workflow, /6:00 AM EDT/);
-  assert.match(workflow, /5:00 AM EST/);
+  assert.match(workflow, /4:17 AM EDT/);
+  assert.match(workflow, /3:17 AM EST/);
+  assert.match(workflow, /6:23 AM EDT/);
+  assert.match(workflow, /5:23 AM EST/);
   assert.match(workflow, /cancel-in-progress:\s*false/);
   assert.match(workflow, /group:\s*state-of-ai-refresh/);
   assert.match(workflow, new RegExp(`timeout-minutes:\\s*${ACTIONS_TIMEOUT_MINUTES}`));
