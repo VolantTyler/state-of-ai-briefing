@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  AA_INDEX_VERSION, BASELINE, JOBS, MIN_AA_ROWS, aaIndexVersion, packValues, parseAaVersion,
-  snapshot, unpackValues,
+  AA_INDEX_VERSION, BASELINE, BRAND_COLOR, EDITION, JOBS, MIN_AA_ROWS, SRC, TRACKERS,
+  aaIndexVersion, brandFill, packValues, parseAaVersion, snapshot, unpackValues,
 } from "./briefing-data.js";
 import {
   SEARCH_MAX_USES, SHARE_REFRESH_DAYS, SHARE_SKIPPED, VALUATIONS_FULL_RUN_SKIP,
@@ -191,6 +191,23 @@ test("models apply keeps a current index version and rejects fewer than five row
   assert.equal(unpacked.aaVersion, "v4.3.2");
   assert.equal(unpacked.aaIndex[0].score, 45);
   assert.equal(snapshot(unpacked).scale, "v4.3.2");
+  assert.equal(AA_INDEX_VERSION, "v4.3.2");
   assert.equal(snapshot(BASELINE).scale, AA_INDEX_VERSION);
   assert.equal(aaIndexVersion({}), AA_INDEX_VERSION);
+  assert.equal(EDITION.version, "v2.6");
+  assert.match(TRACKERS[0].detail, /v4\.3\.2/);
+  assert.match(TRACKERS[0].detail, /not comparable to v4\.2/);
+  assert.equal(SRC.models[0][0], "Artificial Analysis — Intelligence Index v4.3.2");
+  assert.equal(SRC.models[0][1], "https://artificialanalysis.ai/evaluations/artificial-analysis-intelligence-index");
+  assert.ok(SRC.models.every(([label, url]) => !/v4\.2/.test(label) && !/v4-3-2/.test(url)));
+  assert.equal(brandFill("Gemini 4 Argon", "#000"), BRAND_COLOR.Google);
+  assert.equal(brandFill("Gemini-4 Argon", "#000"), BRAND_COLOR.Google);
+  assert.equal(brandFill("Gemini 4.0 Argon", "#000"), BRAND_COLOR.Google);
+  assert.equal(brandFill("gemini-4-argon", "#000"), BRAND_COLOR.Google);
+  assert.equal(brandFill("Gemini 4 Argon (max)", "#000"), BRAND_COLOR.Google);
+  assert.equal(brandFill("Gemini-4-Argon", "#000"), BRAND_COLOR.Google);
+  assert.equal(brandFill("Gemini 3.8 Flash", "#000"), BRAND_COLOR.Google);
+  assert.equal(brandFill("Claude Fable 5.1", "#000"), BRAND_COLOR.Anthropic);
+  assert.equal(brandFill("Mystery Model", "#abc"), "#abc");
+  assert.equal(BASELINE.revenue.find((row) => row.name === "xAI").value, 0.5);
 });

@@ -953,7 +953,7 @@ export default function App() {
           <AASwarm items={aaIndex} vertical={isMobile} />
           <div style={{ ...mono, fontSize: 10, color: TEXT_BRICK, marginTop: 6 }}>
             {indexVersion === AA_INDEX_VERSION
-              ? "▲ scale change — v4.2 re-anchored the index, so these scores are not comparable to the v4.1.1 numbers in editions ≤ v2.3"
+              ? `▲ scale change — ${AA_INDEX_VERSION} scores are not comparable to the v4.2 numbers in earlier editions`
               : `▲ ${indexVersion} — these scores are not comparable to scores from another Intelligence Index version`}
           </div>
           <Commentary>
