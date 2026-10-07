@@ -6,7 +6,7 @@ GitHub Actions runs the refresh. Vercel only serves the committed files.
 ## How it works
 
 ```
-GitHub Actions  (daily 08:00 UTC, valuations Sunday 10:00 UTC)
+GitHub Actions  (daily 08:17 UTC, valuations Sunday 10:23 UTC)
         │
         ▼
   scripts/refresh.js ── Anthropic API (filtered web search) ── daily panels; web-share weekly; valuations weekly
@@ -288,7 +288,7 @@ that call the remaining job budget (23 minutes unless the clocks in
 minutes remain.
 
 Run it from Actions → Refresh briefing data → Run workflow, with jobs set to
-`valuations`. That is also the Sunday 10:00 UTC schedule. Overlapping runs
+`valuations`. That is also the Sunday 10:23 UTC schedule. Overlapping runs
 wait on the `state-of-ai-refresh` concurrency group. The repo lock file is
 not used.
 

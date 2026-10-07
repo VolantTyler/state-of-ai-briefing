@@ -2,18 +2,20 @@
 # contents API. Vercel production deploys those commits. See docs/refresh.md.
 #
 # Cron is UTC and does not follow US daylight time.
-#   0 8 * * *   daily panels except valuations.
-#               08:00 UTC = 4:00 AM EDT / 3:00 AM EST.
-#   0 10 * * 0  valuations only, early Sunday Eastern.
-#               10:00 UTC = 6:00 AM EDT / 5:00 AM EST.
+# The minute is 17 and 23 so these miss the top of the hour, when GitHub
+# delays or drops scheduled runs under load.
+#   17 8 * * *  daily panels except valuations.
+#               08:17 UTC = 4:17 AM EDT / 3:17 AM EST.
+#   23 10 * * 0 valuations only, early Sunday Eastern.
+#               10:23 UTC = 6:23 AM EDT / 5:23 AM EST.
 # src/refresh-policy.js compares github.event.schedule to those strings.
 
 name: Refresh briefing data
 
 on:
   schedule:
-    - cron: "0 8 * * *"
-    - cron: "0 10 * * 0"
+    - cron: "17 8 * * *"
+    - cron: "23 10 * * 0"
   workflow_dispatch:
     inputs:
       jobs:
