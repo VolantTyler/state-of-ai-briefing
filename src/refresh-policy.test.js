@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   AA_INDEX_VERSION, BASELINE, BRAND_COLOR, EDITION, JOBS, MIN_AA_ROWS, SRC, TRACKERS,
-  aaIndexVersion, brandFill, packValues, parseAaVersion, snapshot, unpackValues,
+  aaIndexVersion, brandFill, csvToHistory, formatUserMillions, identicalRevenueNote,
+  normalizeUserMillions, packValues, panelTimes, parseAaVersion, rejectIdenticalCompanyValues,
+  snapshot, unpackValues,
 } from "./briefing-data.js";
 import {
   SEARCH_MAX_USES, SHARE_REFRESH_DAYS, SHARE_SKIPPED, VALUATIONS_FULL_RUN_SKIP,
@@ -210,4 +212,80 @@ test("models apply keeps a current index version and rejects fewer than five row
   assert.equal(brandFill("Claude Fable 5.1", "#000"), BRAND_COLOR.Anthropic);
   assert.equal(brandFill("Mystery Model", "#abc"), "#abc");
   assert.equal(BASELINE.revenue.find((row) => row.name === "xAI").value, 0.5);
+  assert.match(JOBS.models.prompt, /at least five distinct families/);
+});
+
+test("user counts are stored in millions and mixed units are normalized", () => {
+  assert.equal(normalizeUserMillions(1_200_000_000), 1200);
+  assert.equal(normalizeUserMillions(950_000_000), 950);
+  assert.equal(normalizeUserMillions(420), 420);
+  assert.equal(normalizeUserMillions(117.4), 117);
+  assert.equal(normalizeUserMillions(1_500_000_000), 1500);
+  assert.equal(normalizeUserMillions(0), null);
+  assert.equal(normalizeUserMillions(-4), null);
+  assert.equal(normalizeUserMillions(0.4), null);
+  assert.equal(normalizeUserMillions(1e12), null);
+  assert.equal(formatUserMillions(1200), "1,200M");
+  assert.equal(formatUserMillions(420), "420M");
+  assert.equal(formatUserMillions(1500), "1,500M");
+
+  const mixed = JOBS.users.apply(BASELINE, {
+    users: {
+      "Meta AI": 1_500_000_000,
+      ChatGPT: 1_000_000_000,
+      Gemini: 1_000_000_000,
+      Copilot: 420,
+      Claude: 245,
+      Grok: 117,
+    },
+  });
+  assert.deepEqual(mixed.users.map((row) => [row.name, row.users]), [
+    ["Meta AI", 1500],
+    ["ChatGPT", 1000],
+    ["Gemini", 1000],
+    ["Copilot", 420],
+    ["Claude", 245],
+    ["Grok", 117],
+  ]);
+  const kept = JOBS.users.apply(BASELINE, { users: { Grok: 0.2, ChatGPT: "nope" } });
+  assert.equal(kept.users.find((row) => row.name === "Grok").users, BASELINE.users.find((row) => row.name === "Grok").users);
+  assert.equal(kept.users.find((row) => row.name === "ChatGPT").users, BASELINE.users.find((row) => row.name === "ChatGPT").users);
+
+  const unpacked = unpackValues(BASELINE, {
+    users: { "Meta AI": 1_200_000_000, ChatGPT: 1000, Gemini: 950, Copilot: 420, Claude: 245, Grok: 117 },
+  });
+  assert.equal(unpacked.users.find((row) => row.name === "Meta AI").users, 1200);
+  assert.equal(unpacked.users.find((row) => row.name === "ChatGPT").users, 1000);
+
+  const history = csvToHistory("date,anthropic,openai,nvda,msft,chatgpt,claude,gemini,topScore,scale\n2026-10-08,965,852,237.47,529.76,1000000000,245,1000000000,58,v4.3.2\n");
+  assert.equal(history[0].chatgpt, 1000);
+  assert.equal(history[0].gemini, 1000);
+  assert.equal(history[0].claude, 245);
+  assert.match(JOBS.users.prompt, /1200, not 1200000000/);
+});
+
+test("an exact revenue tie keeps the previous values and marks the panel suspicious", () => {
+  const { cleaned, ties } = rejectIdenticalCompanyValues({ Anthropic: 70, OpenAI: 70, xAI: 0.5 });
+  assert.deepEqual(cleaned, { xAI: 0.5 });
+  assert.equal(identicalRevenueNote(ties), "identical revenue rejected: Anthropic and OpenAI both 70; previous values kept");
+
+  const next = JOBS.capital.apply(BASELINE, {
+    capex: { Alphabet: 210 },
+    revenue: { Anthropic: 70, OpenAI: 70, xAI: 0.5 },
+  });
+  assert.equal(next.revenue.find((row) => row.name === "Anthropic").value, 65);
+  assert.equal(next.revenue.find((row) => row.name === "OpenAI").value, 40);
+  assert.equal(next.revenue.find((row) => row.name === "xAI").value, 0.5);
+  assert.equal(next.capex.find((row) => row.name === "Alphabet").value, 210);
+  assert.match(next.panelSuspicion, /Anthropic and OpenAI both 70/);
+
+  const distinct = JOBS.capital.apply(BASELINE, { revenue: { Anthropic: 65, OpenAI: 70, xAI: 0.5 } });
+  assert.equal(distinct.revenue.find((row) => row.name === "Anthropic").value, 65);
+  assert.equal(distinct.revenue.find((row) => row.name === "OpenAI").value, 70);
+  assert.equal(distinct.panelSuspicion, undefined);
+
+  const three = rejectIdenticalCompanyValues({ Anthropic: 10, OpenAI: 10, xAI: 10 });
+  assert.match(identicalRevenueNote(three.ties), /Anthropic, OpenAI, and xAI all 10/);
+  assert.equal(panelTimes({ suspicious: true, error: "tie", checkedAt: "2026-10-08T00:00:00.000Z" }).suspicious, true);
+  assert.match(JOBS.capital.prompt, /Do not copy one company's run rate onto another/);
 });

@@ -6,6 +6,7 @@ import {
 } from "./briefing-data.js";
 import { appendStoreRankDay, fetchStoreRanks } from "./store-ranks.js";
 import { fetchMarketQuotes } from "./market-quotes.js";
+import { fetchAaLeaderboard } from "./aa-leaderboard.js";
 import {
   MODEL_JOB_ORDER, SHARE_SKIPPED, VALUATIONS_FULL_RUN_SKIP,
   orderedModelJobs, resolveJobSelection, shareRefreshDue, shareSkipReason,
@@ -791,6 +792,35 @@ async function runRefreshWithEnv({ jobs, budget: budgetOverride, now, startedAt 
       if (id === "share" && !shareRefreshDue(prevMeta, runAt)) return SHARE_SKIPPED;
       if (id === "storeRanks") return fetchStoreRanks(fetchWithSignal(signal));
       if (id === "markets") return fetchMarketQuotes(fetchWithSignal(signal));
+      /* The Intelligence Index is on the public leaderboard page. That fetch
+         is not a model call, so a spend cap does not skip it. Haiku search
+         remains the fallback when the page cannot be read. */
+      if (id === "models") {
+        try {
+          const board = await fetchAaLeaderboard(fetchWithSignal(signal), signal);
+          console.log(JSON.stringify({
+            source: "state-of-ai-briefing",
+            event: "models_leaderboard_fetched",
+            version: board.version,
+            rows: board.models.length,
+            top: board.models[0] ? board.models[0].model : null,
+          }));
+          return board;
+        } catch (error) {
+          const aborted = Boolean(signal && signal.aborted)
+            || Boolean(error && (error.aborted || error.name === "AbortError"));
+          if (aborted) {
+            const failure = error instanceof Error ? error : new Error(String(error));
+            failure.aborted = true;
+            throw failure;
+          }
+          console.log(JSON.stringify({
+            source: "state-of-ai-briefing",
+            event: "models_page_fetch_failed",
+            error: String(error && error.message || error).slice(0, 300),
+          }));
+        }
+      }
       if (MODEL_JOBS.has(id)) {
         const spent = usageLog.estimatedUsd();
         if (spendCapBlocks(spent, maxUsd)) {
@@ -895,7 +925,12 @@ async function runRefreshWithEnv({ jobs, budget: budgetOverride, now, startedAt 
              split. `at` is still written as the old alias so anything reading
              the previous shape keeps working. */
           const before = panelDigest(data, id);
-          data = JOBS[id].apply(data, slot.value);
+          const applied = JOBS[id].apply(data, slot.value);
+          const suspicion = applied && applied.panelSuspicion ? String(applied.panelSuspicion) : "";
+          if (applied && Object.prototype.hasOwnProperty.call(applied, "panelSuspicion")) {
+            delete applied.panelSuspicion;
+          }
+          data = applied;
           if (id === "storeRanks" && slot.value && slot.value.day) storeRankDay = slot.value.day;
           const changed = panelDigest(data, id) !== before;
           const prior = meta[id] || {};
@@ -912,6 +947,7 @@ async function runRefreshWithEnv({ jobs, budget: budgetOverride, now, startedAt 
                came back with the same number. */
             changedAt: changed ? now : (prior.changedAt || now),
             failed: false,
+            ...(suspicion ? { suspicious: true, error: suspicion.slice(0, 300) } : {}),
           };
           refreshed.push(id);
           return;

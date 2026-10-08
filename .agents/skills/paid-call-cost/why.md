@@ -17,4 +17,10 @@ On 2026-10-02 two overlapping refreshes billed Sonnet again because web-search r
 
 The 2026-10-02 21:00Z run logged $0.233631 on Haiku (123k input, 10 searches) and then aborted valuations unread after 198s, so that Sonnet bill was not in the $0.23. A full run no longer starts valuations. The solo call uses `max_uses` 4 and `max_tokens` 4000. A reply with no JSON gets one extra Haiku call with no web search, logged as continuation `reformat`, instead of another search. An aborted non-streaming call stores duration and `likelyBilled` rather than a measured $0, because the Messages API returns `usage` only on the completed body.
 
+On 2026-10-08 the models panel stopped calling Haiku when the public
+Artificial Analysis pages can be read. Those two GETs are not metered.
+Haiku search remains the fallback, with the same `max_uses` 2, and was
+not repriced. The success path was not measured as a dollar figure
+because it makes no Anthropic call.
+
 On 2026-10-06 the valuations job (claude-sonnet-4-6, `web_search_20260318` with the default dynamic-filtering caller) spent about $0.59 (166k input, 3.6k output, 4 searches) and returned text with no citation blocks. Valuations now sets `allowed_callers: ["direct"]` and still leaves `response_inclusion` unset, so result pages are loaded as input. `max_uses` stays 4. The extra input tokens versus dynamic filtering were not measured. A direct `pause_turn` continuation still re-sends those pages; the cap is still one continuation.

@@ -72,9 +72,9 @@
     "TSM": 472.2
   },
   "users": {
-    "Meta AI": 1500000000,
-    "ChatGPT": 1000000000,
-    "Gemini": 1000000000,
+    "Meta AI": 1500,
+    "ChatGPT": 1000,
+    "Gemini": 1000,
     "Copilot": 420,
     "Claude": 245,
     "Grok": 117
@@ -95,7 +95,7 @@
     "Meta": 137.5
   },
   "rev": {
-    "Anthropic": 70,
+    "Anthropic": 65,
     "OpenAI": 70,
     "xAI": 0.5
   },
@@ -109,7 +109,7 @@
     [
       "Claude Opus 5.5 (Max, Default Fallback)",
       "Anthropic",
-      58,
+      57.6,
       0
     ],
     [
@@ -119,39 +119,39 @@
       0
     ],
     [
-      "GPT-6 Astra (Max)",
-      "OpenAI",
-      53,
+      "Claude Fable 5.1 (Max, Default Fallback)",
+      "Anthropic",
+      53.4,
       0
     ],
     [
-      "Claude Opus 5 (Max)",
-      "Anthropic",
-      51,
+      "GPT-6 Astra (Max)",
+      "OpenAI",
+      52.7,
+      0
+    ],
+    [
+      "Gemini 4 Argon (High)",
+      "Google",
+      52.6,
+      0
+    ],
+    [
+      "GPT-6.1 Sol (Max)",
+      "OpenAI",
+      51.8,
       0
     ],
     [
       "Muse Spark 1.3 (Max)",
-      "Alibaba",
-      48,
-      1
-    ],
-    [
-      "Grok 4.7",
-      "SpaceXAI",
-      46,
+      "Meta",
+      48.1,
       0
     ],
     [
-      "GLM-5.3 Flash",
-      "Zhipu",
-      42,
-      1
-    ],
-    [
-      "GPT-5.6 Terra (Max)",
-      "OpenAI",
-      42,
+      "Grok 4.7 (Xhigh)",
+      "SpaceXAI",
+      46.4,
       0
     ]
   ],

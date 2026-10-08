@@ -114,6 +114,17 @@ and any panel that was not started because of it. `budget` records the clocks
 this run actually used (`maxDurationMs`, `tailReserveMs`, `jobBudgetMs`,
 `callTimeoutMs`, `valuationsCallTimeoutMs`, `valuationsMinStartMs`).
 
+The models panel does not start with Haiku. It reads two public Artificial
+Analysis pages: the Intelligence Index page for the version string, and the
+models leaderboard for the rows. Deprecated generations are left out, one
+row is kept per model family, and fewer than five families keeps the
+previous board. Haiku with `web_search` runs only when those pages cannot
+be read. The official API (`/api/v2/language/models`) needs an
+`x-api-key` even on the free tier, so there is no
+`ARTIFICIAL_ANALYSIS_API_KEY` secret. User counts are stored in millions.
+A revenue tie across companies keeps the previous values for those
+companies and marks the capital panel suspicious.
+
 Each entry in `calls` has the model, token counts, `server_tool_use`
 (including `web_search_requests`), `stop_reason`, and that call's
 `estimatedUsd`. Git history of the file is the log. The same summary is on
