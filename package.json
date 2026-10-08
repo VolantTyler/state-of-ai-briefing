@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "refresh": "node scripts/refresh.js",
-    "test": "node --test api/valuation-judgment.test.js src/store-ranks.test.js src/refresh-policy.test.js src/market-quotes.test.js src/refresh-cost.test.js src/refresh-lock.test.js src/refresh-entry.test.js"
+    "test": "node --test api/valuation-judgment.test.js src/store-ranks.test.js src/refresh-policy.test.js src/market-quotes.test.js src/refresh-cost.test.js src/refresh-lock.test.js src/refresh-entry.test.js src/aa-leaderboard.test.js"
   },
   "dependencies": {
     "@typesafe-ai/sdk": "^0.6.0",

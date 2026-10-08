@@ -209,7 +209,8 @@ for each channel you configured.
   direct caller — Haiku 4.5 does not support the dynamic filtering Sonnet
   uses, so those panels set `allowed_callers` to `direct`. Their `max_uses`
   is 2 for models, share, and energy, and 3 for users and capital. The
-  models panel searches `artificialanalysis.ai` only. Each of those prompts
+  models panel reads the public Artificial Analysis leaderboard pages first
+  and searches `artificialanalysis.ai` only if that fetch fails. Each of those prompts
   asks for one JSON object as the final text block. If that reply has no
   parseable object, one Haiku follow-up with no web search reformats it.
   The first ~300 characters of the unparsed reply are logged. Web-share

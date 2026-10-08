@@ -8,7 +8,7 @@ import {
   EDITION, INK, PAPER, FAINT, RULE_SOFT, C, TEXT_BRICK, TEXT_CLAY,
   BRAND_COLOR, BRAND_OF, brandFill,
   BASELINE, TRACKERS, SRC, snapshot, panelTimes,
-  AA_INDEX_VERSION, aaIndexVersion,
+  AA_INDEX_VERSION, aaIndexVersion, formatUserMillions,
 } from "./briefing-data.js";
 import {
   DEFAULT_STORE_APP_IDS, STORE_APP_BY_ID, STORE_RANK_DEPTH, weeklyRankSeries,
@@ -83,6 +83,15 @@ const refreshStamp = (meta, id) => {
       text: `Refresh failed ${ago(t.erroredAt || t.checkedAt)} · showing values from ${ago(t.checkedAt)}`,
       tone: "bad",
       title: t.error ? `Reason: ${t.error}` : undefined,
+    };
+  }
+
+  if (t.suspicious) {
+    const when = t.checkedAt ? `Refreshed ${ago(t.checkedAt)} · ` : "";
+    return {
+      text: `${when}tie rejected, previous value kept`,
+      tone: "warn",
+      title: t.error || "Identical figures across companies were not written.",
     };
   }
 
@@ -679,7 +688,7 @@ const PaperTooltip = ({ active, payload, label, unit = "" }) => {
     <div style={{ background: PAPER, border: `1px solid ${INK}`, padding: "8px 12px", boxShadow: "2px 2px 0 rgba(25,23,20,0.12)" }}>
       <div style={{ ...mono, fontSize: 11, marginBottom: 2 }}>{label}</div>
       {payload.map((p) => (
-        <div key={p.name} style={{ ...mono, fontSize: 12 }}>{p.name !== label ? `${p.name}: ` : ""}{Number(p.value).toLocaleString()}{unit}</div>
+        <div key={p.name} style={{ ...mono, fontSize: 12 }}>{p.name !== label ? `${p.name}: ` : ""}{Number(p.value).toLocaleString("en-US")}{unit}</div>
       ))}
     </div>
   );
@@ -957,19 +966,11 @@ export default function App() {
               : `▲ ${indexVersion} — these scores are not comparable to scores from another Intelligence Index version`}
           </div>
           <Commentary>
-            Three frontier releases landed in three days and the whole board moved. Anthropic shipped Claude Fable 5.1
-            on Sep 1 (and Mythos 5.1, the same weights under trusted-access safeguards, so it takes no separate slot
-            here); Google shipped Gemini 3.8 Flash on Sep 2; OpenAI shipped GPT-6 Astra and Meta shipped Muse Spark
-            1.3 on Sep 3. Artificial Analysis re-cut its index to v4.2 in the middle of it — two new evals, the
-            saturated GPQA Diamond retired, and 40% of the weight now private held-out data specifically to make the
-            leaderboard harder to train against. Every score above is on that new, lower scale; last edition's 63.0
-            for Opus 5 reads as 54.0 here, and nothing regressed. The substance is that Fable 5.1 leads at 57.0,
-            GPT-6 Astra enters second at 55.0 — OpenAI's president called it a "generational leap" and the first
-            model OpenAI has rated critical for cyber under its preparedness framework — and Meta, absent from this
-            chart all year, arrives fourth-equal with Muse Spark 1.3, its fourth Muse Spark release in five months.
-            Grok 4.7 is not here because it does not exist yet: Musk announced it for mid-September, but xAI has
-            published no model card, price, or API id, so 4.6 still stands in for xAI.
-            {showCN ? " Chinese representation in the top eight has narrowed to Kimi K3 alone — GLM-5.3 and Qwen sit in the upper half of v4.2 without published scores yet, so their absence here is a reporting gap, not a fall." : " Hide/show has removed the Chinese entries; on the current board that is one model, Kimi K3."}
+            The chart is one row per model family: the highest-scoring configuration Artificial Analysis still marks
+            current. A deprecated generation can keep a published score and still stay off this cut. Gemini 4 Argon
+            is included when that ranking puts it in the top eight. Scores on v4.3.2 are not comparable to the v4.2
+            numbers this section used to show.
+            {showCN ? " Chinese labs are in the wider field. They appear in this top eight only when a current score puts them there." : " Hide/show removes Chinese entries. On the current top eight that removes none."}
           </Commentary>
         </Panel>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 14, marginBottom: 18 }}>
@@ -989,21 +990,21 @@ export default function App() {
         <Panel id="users" label="Reported users · millions (mixed bases)" meta={meta.users} sources={SRC.users}>
           <div style={{ height: 250 }}>
             <ResponsiveContainer>
-              <BarChart data={data.users} layout="vertical" margin={{ left: 8, right: 64, top: 8 }}>
+              <BarChart data={data.users} layout="vertical" margin={{ left: 8, right: 72, top: 8 }}>
                 <CartesianGrid horizontal={false} stroke={RULE_SOFT} />
-                <XAxis type="number" tick={tickFaint} axisLine={{ stroke: INK }} tickLine={false} />
+                <XAxis type="number" tick={tickFaint} axisLine={{ stroke: INK }} tickLine={false} tickFormatter={(v) => (Number(v) ? formatUserMillions(v) : "0")} />
                 <YAxis type="category" dataKey="name" width={78} tick={tick} axisLine={{ stroke: INK }} tickLine={false} />
                 <Tooltip content={<PaperTooltip unit="M" />} cursor={{ fill: "rgba(25,23,20,0.04)" }} />
                 <Bar dataKey="users" stroke={INK} strokeWidth={1} barSize={20} isAnimationActive={false}>
                   {data.users.map((u) => <Cell key={u.name} fill={brandFill(u.name, C.neutral)} />)}
-                  <LabelList dataKey="users" position="right" style={{ ...mono, fontSize: 11, fill: INK }} formatter={(v) => `${v}M`} />
+                  <LabelList dataKey="users" position="right" style={{ ...mono, fontSize: 11, fill: INK }} formatter={(v) => formatUserMillions(v)} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
           <div style={{ ...mono, fontSize: 10, color: FAINT, marginTop: 6 }}>■ bars use each product's brand color · Meta AI now carries Meta's teal, added to the palette in §03 when Muse Spark reached the frontier</div>
           <Commentary>
-            Read the bases before the bars: Meta AI's 1.2B counts anyone who touched it inside WhatsApp or Instagram,
+            Read the bases before the bars: Meta AI's 1,500M counts anyone who touched it inside WhatsApp or Instagram,
             while ChatGPT's reflects deliberate use. Gemini crossed 1 billion monthly actives in mid-August — Google's
             fastest-growing product ever — closing most of the gap with ChatGPT. Beneath the ranking, ChatGPT's
             app-market share remains below 50%, with Claude posting the fastest relative growth from a small base.
@@ -1148,9 +1149,9 @@ export default function App() {
           </div>
           <Commentary>
             Four companies plan roughly three-quarters of a trillion dollars of capex in 2026, most of it AI data
-            centers. Against that, Anthropic's run-rate jumped again — from $47B to $65B in about three months,
-            widening its lead over OpenAI's reconfirmed $40B — with the same live caveat as last edition: the SEC
-            may force cloud-credit revenue onto a net basis pre-IPO, which would shrink the headline.
+            centers. Against that, Anthropic's reported run rate was about $65B at the end of July 2026, and OpenAI's
+            was reported nearing $70B on 29 Sep 2026. xAI stays at its standalone $0.5B figure. The same live caveat
+            as last edition: the SEC may force cloud-credit revenue onto a net basis pre-IPO, which would shrink the headline.
           </Commentary>
         </Panel>
         <BackToTop />

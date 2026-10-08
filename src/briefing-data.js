@@ -75,6 +75,64 @@ export const AA_INDEX_VERSION = "v4.3.2";
    previous `aa` list and fails the panel. */
 export const MIN_AA_ROWS = 5;
 
+/* User bases are stored in millions. A model often returns the raw count
+   for the largest products (1200000000) and millions for the rest (420).
+   Anything at or above this threshold is a raw count. */
+export const USER_RAW_COUNT_AT = 100_000;
+/* After that conversion, a figure outside this band is not a monthly user
+   base for these assistants: under 1 million, or over 10 billion. */
+export const USER_MILLIONS_MIN = 1;
+export const USER_MILLIONS_MAX = 10_000;
+
+export const normalizeUserMillions = (raw) => {
+  let n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  if (n >= USER_RAW_COUNT_AT) n /= 1_000_000;
+  if (!Number.isFinite(n) || n < USER_MILLIONS_MIN || n > USER_MILLIONS_MAX) return null;
+  return Math.round(n);
+};
+
+export const formatUserMillions = (value) => {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "";
+  return `${Math.round(n).toLocaleString("en-US")}M`;
+};
+
+/* An exact tie across companies is a copied figure, not two sources that
+   happened to match. Those companies keep their previous values. */
+export const rejectIdenticalCompanyValues = (incoming) => {
+  const groups = new Map();
+  for (const [name, raw] of Object.entries(incoming || {})) {
+    const v = Number(raw);
+    if (!Number.isFinite(v) || !(v > 0)) continue;
+    const key = String(Math.round(v * 1000) / 1000);
+    const names = groups.get(key) || [];
+    names.push(name);
+    groups.set(key, names);
+  }
+  const cleaned = { ...(incoming || {}) };
+  const ties = [];
+  for (const [key, names] of groups) {
+    if (names.length < 2) continue;
+    ties.push({ value: Number(key), names: [...names] });
+    for (const name of names) delete cleaned[name];
+  }
+  return { cleaned, ties };
+};
+
+export const identicalRevenueNote = (ties) => {
+  if (!ties || !ties.length) return null;
+  const parts = ties.map((tie) => {
+    const names = tie.names;
+    const listed = names.length === 2
+      ? `${names[0]} and ${names[1]}`
+      : `${names.slice(0, -1).join(", ")}, and ${names[names.length - 1]}`;
+    const verb = names.length === 2 ? "both" : "all";
+    return `${listed} ${verb} ${tie.value}`;
+  });
+  return `identical revenue rejected: ${parts.join("; ")}; previous values kept`;
+};
+
 /* The version field is a token such as v4.3.2. Anything else is absent, and
    the display falls back to AA_INDEX_VERSION. */
 export const parseAaVersion = (raw) => {
@@ -184,7 +242,7 @@ export const BASELINE = {
 };
 
 export const TRACKERS = [
-  { name: "Artificial Analysis Intelligence Index", leader: "Claude Fable 5.1 — 57.0", detail: "Composite of 10 evals (v4.3.2): AA-Briefcase v1.1, GDPval-AA v2.1, AutomationBench-AA, Terminal-Bench 4.0, SciCode, Humanity's Last Exam, GDP.pdf, CritPt, AA-Omniscience, and AA-LCR v1.1. Scores on v4.3.2 are not comparable to v4.2.", url: "https://artificialanalysis.ai/evaluations/artificial-analysis-intelligence-index" },
+  { name: "Artificial Analysis Intelligence Index", leader: "Claude Opus 5.5 — 57.6", detail: "Composite of 10 evals (v4.3.2): AA-Briefcase v1.1, GDPval-AA v2.1, AutomationBench-AA, Terminal-Bench 4.0, SciCode, Humanity's Last Exam, GDP.pdf, CritPt, AA-Omniscience, and AA-LCR v1.1. Scores on v4.3.2 are not comparable to v4.2.", url: "https://artificialanalysis.ai/evaluations/artificial-analysis-intelligence-index" },
   { name: "LMArena (Chatbot Arena)", leader: "Claude Fable 5 holds text Elo (1507)", detail: "Crowd-sourced blind A/B voting. Fable 5.1 entered at 1504 ±11 — inside the noise of the top four, and still accumulating votes; GPT-6 Astra has not yet placed.", url: "https://arena.ai/leaderboard/text" },
   { name: "SWE-bench Verified", leader: "Claude Opus 5 — 96.0%", detail: "Real GitHub issue resolution — rose from 60% to the mid-90s in a single year, per Stanford's AI Index. No published re-run yet for the September models.", url: "https://hai.stanford.edu/ai-index/2026-ai-index-report/technical-performance" },
   { name: "Terminal-Bench 2.1 (agentic)", leader: "Claude Fable 5.1 — 91.4%", detail: "Hard terminal-agent tasks; the field's center of gravity as benchmarks shift toward agentic work. First score above 90 — Grok 4.6's 88.4% held the top for most of the summer.", url: "https://artificialanalysis.ai/evaluations/terminalbench-v2-1" },
@@ -195,7 +253,7 @@ export const SRC = {
   markets: [["CNBC quotes", "https://www.cnbc.com/quotes/AAPL,AMZN,GOOGL,MSFT,META,NVDA,TSLA"], ["stockanalysis.com — market data", "https://stockanalysis.com/"], ["MLQ.ai — hyperscaler capex tracker", "https://mlq.ai/news/big-techs-2026-capex-range-reaches-720-billion-to-745-billion/"]],
   models: [["Artificial Analysis — Intelligence Index v4.3.2", "https://artificialanalysis.ai/evaluations/artificial-analysis-intelligence-index"], ["Artificial Analysis — Claude Fable 5.1 tops the Index", "https://artificialanalysis.ai/articles/claude-fable-5-1"], ["Artificial Analysis — benchmarking GPT-6 Astra", "https://artificialanalysis.ai/articles/benchmarking-gpt-6-astra"], ["Artificial Analysis — Muse Spark 1.3: Meta reaches the frontier", "https://artificialanalysis.ai/articles/muse-spark-1-3"], ["OpenAI — GPT-6 Astra", "https://openai.com/index/gpt-6-astra/"], ["Stanford HAI — AI Index 2026", "https://hai.stanford.edu/ai-index/2026-ai-index-report"], ["tbench.ai — Terminal-Bench 2.1", "https://www.tbench.ai/leaderboard/terminal-bench/2.1"]],
   users: [["TechCrunch — Gemini passes 1B MAU", "https://techcrunch.com/2026/08/11/googles-gemini-app-surges-to-one-billion-users/"], ["Tech Insider — chatbot web-share, July ’26", "https://tech-insider.org/ie/claude-vs-chatgpt-vs-gemini-2026/"], ["Instant Press — AI statistics", "https://www.instantpress.co/ai-statistics"]],
-  capital: [["TechCrunch — Anthropic ARR to $65B", "https://techcrunch.com/2026/08/17/anthropics-annualized-revenue-surges-to-65b/"], ["Bloomberg — OpenAI ARR tops $40B", "https://www.bloomberg.com/news/articles/2026-08-13/openai-s-revenue-run-rate-tops-40-billion-ahead-of-ipo"], ["MLQ.ai — capex roundup", "https://mlq.ai/news/big-techs-2026-capex-range-reaches-720-billion-to-745-billion/"]],
+  capital: [["Reuters — Anthropic run rate tops $65B, 17 Aug 2026", "https://www.reuters.com/technology/anthropic-revenue-run-rate-tops-65-billion-source-says-2026-08-17/"], ["CNBC — Anthropic $65B in July, 17 Aug 2026", "https://www.cnbc.com/2026/08/17/anthropic-says-annualized-revenue-climbed-to-65-billion-in-july.html"], ["Axios — OpenAI ARR nears $70B, 29 Sep 2026", "https://www.axios.com/2026/09/29/scoop-openais-annual-recurring-revenue-nears-70b"], ["MLQ.ai — capex roundup", "https://mlq.ai/news/big-techs-2026-capex-range-reaches-720-billion-to-745-billion/"]],
   energy: [["Gartner — data center power", "https://www.gartner.com/en/newsroom/press-releases/2026-06-10-gartner-says-data-center-electricity-demand-to-grow-26-percent-in-2026"], ["Forbes — US ~40% of global data-center power", "https://www.forbes.com/sites/rrapier/2026/08/23/the-us-now-uses-nearly-40-of-the-worlds-data-center-electricity/"], ["IEA — Energy and AI", "https://www.iea.org/reports/energy-and-ai/energy-demand-from-ai"], ["Goldman Sachs — US power demand", "https://www.goldmansachs.com/insights/articles/us-data-center-power-demand-projected-to-double-by-2027"]],
   china: [["Dataconomy — Chinese models take top 5 on OpenRouter", "https://dataconomy.com/2026/07/29/chinese-ai-models-openrouter-top-five/"], ["Officechai — US models' OpenRouter share collapses 70%→30%", "https://officechai.com/ai/share-of-us-models-being-used-on-openrouter-has-collapsed-from-70-to-30-over-the-past-year/"], ["Stanford HAI — AI Index 2026", "https://hai.stanford.edu/ai-index/2026-ai-index-report"]],
   storeRanks: STORE_RANK_SOURCES,
@@ -247,7 +305,7 @@ export const JOBS = {
        The index version is whatever the leaderboard shows now. Do not pin a
        version number: Artificial Analysis re-anchors the scale, and a pinned
        version makes the model answer in prose instead of JSON. */
-    prompt: 'Search the web for the current top 8 models on the Artificial Analysis Intelligence Index, with their scores, labs, and the current index version. Report the version the leaderboard shows now; the version string in the JSON example is only a shape. Use scores from that current version only, and do not mix in scores from an older index version. Search only the Artificial Analysis leaderboard. List each model family at most once, choosing its highest-scoring configuration; do not return the same model at several effort levels. Keep the scored configuration in parentheses after the model name exactly as the leaderboard writes it, e.g. "Claude Fable 5.1 (Adaptive Reasoning, Max Effort)" or "GPT-6 Astra (max)"; if the leaderboard names no configuration, give the model name alone. Include Chinese models if they rank. Stop when eight distinct model families are in hand. Do not search again to confirm a score you already have. Your final text block must be a single JSON object and no other characters: {"version":"v4.3.2","models":[{"model":"","lab":"","score":0,"cn":false}]}',
+    prompt: 'Search the web for the current top 8 models on the Artificial Analysis Intelligence Index, with their scores, labs, and the current index version. Report the version the leaderboard shows now; the version string in the JSON example is only a shape. Use scores from that current version only, and do not mix in scores from an older index version. Search only the Artificial Analysis leaderboard. List each model family at most once, choosing its highest-scoring configuration; do not return the same model at several effort levels. Keep the scored configuration in parentheses after the model name exactly as the leaderboard writes it, e.g. "Claude Fable 5.1 (Adaptive Reasoning, Max Effort)" or "GPT-6 Astra (max)"; if the leaderboard names no configuration, give the model name alone. Include Chinese models if they rank. Stop when eight distinct model families are in hand. If you already have at least five distinct families, stop and emit the JSON even if eight are not in hand. Do not search again to confirm a score you already have. Your final text block must be a single JSON object and no other characters: {"version":"v4.3.2","models":[{"model":"","lab":"","score":0,"cn":false}]}',
     apply: (d, j) => {
       const rows = j && Array.isArray(j.models) ? j.models : [];
       const clean = rows
@@ -265,10 +323,11 @@ export const JOBS = {
   },
   users: {
     keys: ["users"],
-    prompt: 'Search the web for the latest monthly active users in millions for AI assistants: Meta AI, ChatGPT, Gemini, Copilot, Claude, Grok. Stop when each assistant has a monthly-active figure. Do not search again to confirm a number you already have. Your final text block must be a single JSON object and no other characters: {"users":{"Meta AI":0,"ChatGPT":0,"Gemini":0,"Copilot":0,"Claude":0,"Grok":0}}',
+    prompt: 'Search the web for the latest monthly active users in millions for AI assistants: Meta AI, ChatGPT, Gemini, Copilot, Claude, Grok. Every number is millions of people: 1.2 billion monthly users is 1200, not 1200000000 and not 1.2. Stop when each assistant has a monthly-active figure. Do not search again to confirm a number you already have. Your final text block must be a single JSON object and no other characters: {"users":{"Meta AI":0,"ChatGPT":0,"Gemini":0,"Copilot":0,"Claude":0,"Grok":0}}',
     apply: (d, j) => (!j.users ? d : { ...d, users: d.users.map((u) => {
-      const n = Number(j.users[u.name]);
-      return n > 0 ? { ...u, users: Math.round(n) } : u;
+      if (!j.users || !Object.prototype.hasOwnProperty.call(j.users, u.name)) return u;
+      const n = normalizeUserMillions(j.users[u.name]);
+      return n == null ? u : { ...u, users: n };
     }).sort((a, b) => b.users - a.users) }),
   },
   share: {
@@ -289,11 +348,19 @@ export const JOBS = {
   },
   capital: {
     keys: ["capex", "rev"],
-    prompt: 'Search the web for (a) 2026 planned capital expenditure in billions USD for Alphabet, Amazon, Microsoft, Meta and (b) latest annualized revenue run-rates in billions USD for Anthropic, OpenAI, xAI. Stop when each company has its figure. Do not search again to confirm a number you already have. Your final text block must be a single JSON object and no other characters: {"capex":{"Alphabet":0,"Amazon":0,"Microsoft":0,"Meta":0},"revenue":{"Anthropic":0,"OpenAI":0,"xAI":0}}',
+    prompt: 'Search the web for (a) 2026 planned capital expenditure in billions USD for Alphabet, Amazon, Microsoft, Meta and (b) latest annualized revenue run-rates in billions USD for Anthropic, OpenAI, xAI. Give each company the revenue figure from its own source. Do not copy one company\'s run rate onto another. Stop when each company has its figure. Do not search again to confirm a number you already have. Your final text block must be a single JSON object and no other characters: {"capex":{"Alphabet":0,"Amazon":0,"Microsoft":0,"Meta":0},"revenue":{"Anthropic":0,"OpenAI":0,"xAI":0}}',
     apply: (d, j) => {
       let n = { ...d };
       if (j.capex) n.capex = n.capex.map((c) => { const v = Number(j.capex[c.name]); return v > 0 ? { ...c, value: v, range: `≈${v}` } : c; });
-      if (j.revenue) n.revenue = n.revenue.map((r) => { const v = Number(j.revenue[r.name]); return v > 0 ? { ...r, value: v } : r; });
+      if (j.revenue) {
+        const { cleaned, ties } = rejectIdenticalCompanyValues(j.revenue);
+        const note = identicalRevenueNote(ties);
+        n.revenue = n.revenue.map((r) => {
+          const v = Number(cleaned[r.name]);
+          return v > 0 ? { ...r, value: v } : r;
+        });
+        if (note) n = { ...n, panelSuspicion: note };
+      }
       return n;
     },
   },
@@ -394,6 +461,7 @@ export const panelTimes = (m) => {
     checkedAt: m.checkedAt || m.at || null,
     changedAt: m.changedAt || null,
     failed: !!m.failed,
+    suspicious: !!m.suspicious,
     error: m.error || null,
     erroredAt: m.erroredAt || null,
   };
@@ -406,8 +474,12 @@ export const unpackValues = (d, p) => {
   n.valuations = d.valuations.map((x) => ({ ...x, value: num(p.val, x.name, x.value) }))
     .sort((a, b) => b.value - a.value);
   n.stocks = d.stocks.map((x) => ({ ...x, price: num(p.stocks, x.ticker, x.price) }));
-  n.users = d.users.map((x) => ({ ...x, users: num(p.users, x.name, x.users) }))
-    .sort((a, b) => b.users - a.users);
+  n.users = d.users.map((x) => {
+    const normalized = p.users && Object.prototype.hasOwnProperty.call(p.users, x.name)
+      ? normalizeUserMillions(p.users[x.name])
+      : null;
+    return { ...x, users: normalized == null ? x.users : normalized };
+  }).sort((a, b) => b.users - a.users);
   n.webShare = d.webShare.map((x) => ({ ...x, value: num(p.share, x.name, x.value) }));
   n.capex = d.capex.map((x) => { const v = num(p.capex, x.name, x.value); return { ...x, value: v, range: v === x.value ? x.range : `≈${v}` }; });
   n.revenue = d.revenue.map((x) => ({ ...x, value: num(p.rev, x.name, x.value) }));
@@ -473,6 +545,11 @@ export const csvToHistory = (text) => {
       if (raw === "" || raw == null) { row[c] = null; return; }
       row[c] = TEXT_COLS.has(c) ? raw : Number(raw);
     });
+    /* Older rows stored ChatGPT and Gemini as raw counts. The chart is millions. */
+    for (const c of ["chatgpt", "claude", "gemini"]) {
+      const normalized = normalizeUserMillions(row[c]);
+      if (normalized != null) row[c] = normalized;
+    }
     return row;
   }).filter(Boolean);
 };
