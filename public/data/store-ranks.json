@@ -197,9 +197,8 @@
       "android": {
         "muse": 1,
         "chatgpt": 2,
-        "claude": 29,
-        "gemini": 73,
-        "grok": 76
+        "claude": 27,
+        "gemini": 71
       }
     }
   ]
