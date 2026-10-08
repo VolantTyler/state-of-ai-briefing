@@ -3,13 +3,13 @@ import test from "node:test";
 import {
   AA_INDEX_VERSION, BASELINE, BRAND_COLOR, EDITION, JOBS, MIN_AA_ROWS, SRC, TRACKERS,
   aaIndexVersion, brandFill, csvToHistory, formatUserMillions, identicalRevenueNote,
-  normalizeUserMillions, packValues, panelTimes, parseAaVersion, rejectIdenticalCompanyValues,
+  checksStamp, identicalCompanyGroups, normalizeUserMillions, packValues, panelTimes, parseAaVersion,
   snapshot, unpackValues,
 } from "./briefing-data.js";
 import {
-  SEARCH_MAX_USES, SHARE_REFRESH_DAYS, SHARE_SKIPPED, VALUATIONS_FULL_RUN_SKIP,
+  SEARCH_MAX_USES, SECOND_SOURCE_MAX_USES, SHARE_REFRESH_DAYS, SHARE_SKIPPED, VALUATIONS_FULL_RUN_SKIP,
   VALUATIONS_MIN_START_MS, WEB_SEARCH_TOOL, orderedModelJobs, parseJobsQuery,
-  shareRefreshDue, shareSkipReason, valuationsTimeSkipReason, webSearchTool,
+  secondSourceSearchTool, shareRefreshDue, shareSkipReason, valuationsTimeSkipReason, webSearchTool,
 } from "./refresh-policy.js";
 
 const SINGLE_TOPIC = ["models", "users", "share", "capital", "energy"];
@@ -49,7 +49,15 @@ test("web search uses the filtered tool and caps each call", () => {
   assert.deepEqual(webSearchTool("valuations").allowed_callers, ["direct"]);
   assert.equal(valuations.allowed_domains, undefined);
   assert.equal(SEARCH_MAX_USES.markets, undefined);
+  assert.equal(SEARCH_MAX_USES.verify, undefined);
   assert.throws(() => webSearchTool("markets"), /no search cap/);
+  assert.equal(SECOND_SOURCE_MAX_USES, 1);
+  const second = secondSourceSearchTool();
+  assert.equal(second.type, WEB_SEARCH_TOOL);
+  assert.equal(second.name, "web_search");
+  assert.equal(second.max_uses, 1);
+  assert.deepEqual(second.allowed_callers, ["direct"]);
+  assert.equal(second.response_inclusion, undefined);
 });
 
 test("jobs query selects a subset and the default run puts valuations last", () => {
@@ -264,9 +272,8 @@ test("user counts are stored in millions and mixed units are normalized", () => 
   assert.match(JOBS.users.prompt, /1200, not 1200000000/);
 });
 
-test("an exact revenue tie keeps the previous values and marks the panel suspicious", () => {
-  const { cleaned, ties } = rejectIdenticalCompanyValues({ Anthropic: 70, OpenAI: 70, xAI: 0.5 });
-  assert.deepEqual(cleaned, { xAI: 0.5 });
+test("an exact revenue tie is flagged and is not written yet", () => {
+  const ties = identicalCompanyGroups({ Anthropic: 70, OpenAI: 70, xAI: 0.5 });
   assert.equal(identicalRevenueNote(ties), "identical revenue rejected: Anthropic and OpenAI both 70; previous values kept");
 
   const next = JOBS.capital.apply(BASELINE, {
@@ -277,15 +284,19 @@ test("an exact revenue tie keeps the previous values and marks the panel suspici
   assert.equal(next.revenue.find((row) => row.name === "OpenAI").value, 40);
   assert.equal(next.revenue.find((row) => row.name === "xAI").value, 0.5);
   assert.equal(next.capex.find((row) => row.name === "Alphabet").value, 210);
-  assert.match(next.panelSuspicion, /Anthropic and OpenAI both 70/);
+  assert.equal(next.panelSuspicion, undefined);
+  assert.deepEqual(next.panelFlags.map((row) => row.name).sort(), ["Anthropic", "OpenAI"]);
+  assert.match(next.panelFlags[0].reason, /Anthropic and OpenAI both 70/);
 
   const distinct = JOBS.capital.apply(BASELINE, { revenue: { Anthropic: 65, OpenAI: 70, xAI: 0.5 } });
   assert.equal(distinct.revenue.find((row) => row.name === "Anthropic").value, 65);
   assert.equal(distinct.revenue.find((row) => row.name === "OpenAI").value, 70);
+  assert.equal(distinct.panelFlags, undefined);
   assert.equal(distinct.panelSuspicion, undefined);
 
-  const three = rejectIdenticalCompanyValues({ Anthropic: 10, OpenAI: 10, xAI: 10 });
-  assert.match(identicalRevenueNote(three.ties), /Anthropic, OpenAI, and xAI all 10/);
+  const three = identicalCompanyGroups({ Anthropic: 10, OpenAI: 10, xAI: 10 });
+  assert.match(identicalRevenueNote(three), /Anthropic, OpenAI, and xAI all 10/);
   assert.equal(panelTimes({ suspicious: true, error: "tie", checkedAt: "2026-10-08T00:00:00.000Z" }).suspicious, true);
+  assert.equal(checksStamp(null), null);
   assert.match(JOBS.capital.prompt, /Do not copy one company's run rate onto another/);
 });

@@ -60,7 +60,7 @@ test("citations are taken from cited source text", () => {
   assert.deepEqual(extractCandidates(passages, "Anduril").candidates.map((c) => c.billions), [100, 61]);
 });
 
-test("code copies the parsed amount only when Choice and Noul agree", () => {
+test("Choice picks the candidate and Noul is only recorded", () => {
   const candidates = [
     { id: "c1", billions: 190 },
     { id: "c2", billions: 5 },
@@ -70,15 +70,18 @@ test("code copies the parsed amount only when Choice and Noul agree", () => {
     completed_c1: { noul: 0.93 },
     completed_c2: { noul: 0.08 },
   });
-  assert.equal(wrote.action, "wrote");
+  assert.equal(wrote.action, "picked");
   assert.equal(wrote.billions, 190);
+  assert.equal(wrote.noul, 0.93);
 
   const unsure = decide(candidates, {
     latest: { choice: "c1" },
     completed_c1: { noul: 0.8 },
   });
-  assert.equal(unsure.action, "kept");
-  assert.equal(unsure.reason, "noul-below-gate");
+  assert.equal(unsure.action, "picked");
+  assert.equal(unsure.reason, "choice");
+  assert.equal(unsure.noul, 0.8);
+  assert.equal(unsure.billions, 190);
 
   const none = decide(candidates, {
     latest: { choice: NONE },
@@ -108,21 +111,25 @@ test("a round size beside a higher mark is not written, including when the unit 
       ask: async () => accept("c1", ["c1"]),
     });
     assert.deepEqual(accepted, {});
+    assert.equal(results[0].action, "flagged");
     assert.equal(results[0].reason, "round-size");
     assert.equal(results[0].billions, 65);
     assert.equal(misplacedAmount(results[0].candidates[0]), "round-size");
   }
 });
 
-test("the post-money mark in that same sentence can still be written", async () => {
-  const { accepted, results } = await judgeValuations({
+test("the post-money mark in that same sentence is flagged when it differs from the stored mark", async () => {
+  const { accepted, results, flagged } = await judgeValuations({
     companies: [{ name: "Anthropic", value: 380 }],
     passages: [{ url: "https://www.anthropic.com/news/series-h", title: "Series H", text: SERIES_H_FULL }],
     ask: async () => accept("c2", ["c1", "c2"]),
   });
-  assert.deepEqual(accepted, { Anthropic: 965 });
-  assert.equal(results[0].action, "wrote");
+  assert.deepEqual(accepted, {});
+  assert.equal(results[0].action, "flagged");
+  assert.equal(results[0].reason, "changed");
   assert.equal(results[0].billions, 965);
+  assert.equal(flagged[0].billions, 965);
+  assert.equal(misplacedAmount(results[0].candidates.find((row) => row.id === "c2")), null);
 });
 
 test("a run rate is not written into the valuation, even when it matches the prior", async () => {
@@ -132,19 +139,52 @@ test("a run rate is not written into the valuation, even when it matches the pri
     ask: async () => accept("c1", ["c1"]),
   });
   assert.deepEqual(accepted, {});
+  assert.equal(results[0].action, "flagged");
   assert.equal(results[0].reason, "revenue");
 });
 
-test("a drop to under a third of the prior mark is refused", () => {
+test("a drop to under a third of the prior mark is flagged", () => {
   const candidate = { id: "c1", span: "$65 billion", billions: 65, snippet: "Anthropic is now valued at $65 billion." };
   const gated = gateWrittenValuation(
     { action: "wrote", reason: "accepted", picked: "c1", noul: 0.9, billions: 65 },
     candidate,
     965,
   );
-  assert.equal(gated.action, "kept");
+  assert.equal(gated.action, "flagged");
   assert.equal(gated.reason, "absurd-drop");
+  assert.equal(gated.billions, 65);
   assert.equal(misplacedAmount(candidate), null);
+});
+
+test("Noul 0.46 does not block a Choice pick of the valuation span", async () => {
+  const ask = async () => ({
+    answers: {
+      latest: { choice: "c2", confidence: 0.46, probabilities: { c2: 0.46, c1: 0.4, [NONE]: 0.14 } },
+      completed_c1: { noul: 0.2 },
+      completed_c2: { noul: 0.46 },
+    },
+    model: "jev-1.13.0",
+    usage: { input_tokens: 900, output_tokens: 40 },
+  });
+  const same = await judgeValuations({
+    companies: [{ name: "Anthropic", value: 965 }],
+    passages: [{ url: "https://www.anthropic.com/news/series-h", title: "Series H", text: SERIES_H_FULL }],
+    ask,
+  });
+  assert.deepEqual(same.accepted, { Anthropic: 965 });
+  assert.equal(same.results[0].action, "wrote");
+  assert.equal(same.results[0].noul, 0.46);
+  assert.equal(same.flagged.length, 0);
+
+  const moved = await judgeValuations({
+    companies: [{ name: "Anthropic", value: 380 }],
+    passages: [{ url: "https://www.anthropic.com/news/series-h", title: "Series H", text: SERIES_H_FULL }],
+    ask,
+  });
+  assert.deepEqual(moved.accepted, {});
+  assert.equal(moved.results[0].action, "flagged");
+  assert.equal(moved.results[0].reason, "changed");
+  assert.equal(moved.results[0].billions, 965);
 });
 
 test("a modest repricing of a real mark still writes", async () => {

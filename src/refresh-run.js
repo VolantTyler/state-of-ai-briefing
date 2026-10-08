@@ -9,16 +9,19 @@ import { fetchMarketQuotes } from "./market-quotes.js";
 import { fetchAaLeaderboard } from "./aa-leaderboard.js";
 import {
   MODEL_JOB_ORDER, SHARE_SKIPPED, VALUATIONS_FULL_RUN_SKIP,
-  orderedModelJobs, resolveJobSelection, shareRefreshDue, shareSkipReason,
+  orderedModelJobs, resolveJobSelection, secondSourceSearchTool, shareRefreshDue, shareSkipReason,
   valuationsTimeSkipReason, webSearchTool,
 } from "./refresh-policy.js";
 import {
   attemptWithRetry, budgetConfigFromEnv, callWindowMs, createBudget, settleWithinBudget, shouldRetry,
 } from "./refresh-budget.js";
 import {
-  JOB_MAX_TOKENS, callWithPauseCap, createUsageLog, modelForJob, postAnthropicMessage,
+  HAIKU_MODEL, JOB_MAX_TOKENS, callWithPauseCap, createUsageLog, modelForJob, postAnthropicMessage,
   refreshMaxUsd, spendCapBlocks, spendCapReason,
 } from "./refresh-usage.js";
+import {
+  commitResolutions, judgeSecondSource, passageFromReply, secondSourcePrompt, typesafeUsageRecord, verifyFlags,
+} from "./flag-verify.js";
 import { writeWithFreshSha } from "./refresh-lock.js";
 import {
   citationsFromContent, judgeValuations, renderJevActions,
@@ -777,7 +780,11 @@ async function runRefreshWithEnv({ jobs, budget: budgetOverride, now, startedAt 
         jevMarkdown = renderJevActions({
           ran: true, at, passageCount: passages.length, results: outcome.value.results,
         });
-        return { valuations: outcome.value.accepted };
+        return {
+          valuations: outcome.value.accepted,
+          flagged: outcome.value.flagged,
+          kept: outcome.value.kept,
+        };
       } finally {
         clearTimeout(timer);
       }
@@ -891,9 +898,96 @@ async function runRefreshWithEnv({ jobs, budget: budgetOverride, now, startedAt 
     const fastSettled = await fastSettledPromise;
     const settled = { ...fastSettled, ...modelSettled };
     const timedOut = ids.filter((id) => settled[id] && settled[id].timedOut);
-    const summary = publishUsage({ timedOut });
+
+    /* A second source starts only after the primary jobs, and only when
+       the clock and the dollar cap both still have room. Haiku is fixed
+       here so an ANTHROPIC_MODEL_* override cannot move this call. */
+    const VERIFY_MIN_REMAINING_MS = 15_000;
+    const canStartVerify = () => {
+      if (budget.expired() || budget.remainingMs() < VERIFY_MIN_REMAINING_MS) {
+        return { ok: false, reason: "time budget" };
+      }
+      if (!activeEnv.ANTHROPIC_API_KEY) return { ok: false, reason: "missing ANTHROPIC_API_KEY" };
+      const spent = usageLog.estimatedUsd();
+      if (spendCapBlocks(spent, maxUsd)) return { ok: false, reason: "spend cap" };
+      return { ok: true };
+    };
+    const lookupSecondSource = async (flag) => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), Math.max(0, budget.remainingMs() - 1000));
+      const model = HAIKU_MODEL;
+      try {
+        const parsed = await callWithPauseCap({
+          initialMessages: [{ role: "user", content: secondSourcePrompt(flag) }],
+          maxContinuations: 0,
+          allowContinuation: () => ({ ok: false, message: "second source does not continue a pause" }),
+          request: ({ messages, continuation }) => postAnthropicMessage({
+            fetchImpl: fetch,
+            apiKey: env("ANTHROPIC_API_KEY"),
+            model,
+            messages,
+            maxTokens: JSON_REFORMAT_MAX_TOKENS,
+            tool: secondSourceSearchTool(),
+            jobId: "verify",
+            attempt: flag.attempt,
+            continuation,
+            signal: controller.signal,
+            usageLog,
+          }),
+          accept: async (content, stopReason) => {
+            if (stopReason === "pause_turn") {
+              try { return extractJSON(content); } catch (e) { return null; }
+            }
+            const decision = canStartVerify();
+            const outcome = await recoverJsonReply({
+              blocks: content,
+              stopReason,
+              reformat: decision && decision.ok !== false
+                ? async (raw) => {
+                  const reformatted = await postAnthropicMessage({
+                    fetchImpl: fetch,
+                    apiKey: env("ANTHROPIC_API_KEY"),
+                    model,
+                    messages: [{ role: "user", content: jsonReformatPrompt(raw) }],
+                    maxTokens: JSON_REFORMAT_MAX_TOKENS,
+                    tool: null,
+                    jobId: "verify",
+                    attempt: flag.attempt,
+                    continuation: "reformat",
+                    signal: controller.signal,
+                    usageLog,
+                  });
+                  return reformatted.content;
+                }
+                : null,
+            });
+            return outcome.value;
+          },
+        });
+        return passageFromReply(parsed, flag.firstSource && flag.firstSource.url);
+      } finally {
+        clearTimeout(timer);
+      }
+    };
+    let judgeClient = null;
+    const judgePassage = async (flag, passage) => {
+      if (!judgeClient) judgeClient = new TypeSafeClient({ timeout: 10_000 });
+      const judged = await judgeSecondSource({
+        flag,
+        passage,
+        ask: (request) => judgeClient.systemOne(request),
+      });
+      usageLog.finish(typesafeUsageRecord({
+        attempt: flag.attempt,
+        model: judged.model,
+        usage: judged.usage,
+      }));
+      return judged;
+    };
 
     meta = { ...prevMeta };
+    const pendingFlags = [];
+    const digestBefore = {};
     const failures = [];
     const refreshed = [];
     const skipped = { ...skipReasons };
@@ -925,12 +1019,19 @@ async function runRefreshWithEnv({ jobs, budget: budgetOverride, now, startedAt 
              split. `at` is still written as the old alias so anything reading
              the previous shape keeps working. */
           const before = panelDigest(data, id);
-          const applied = JOBS[id].apply(data, slot.value);
-          const suspicion = applied && applied.panelSuspicion ? String(applied.panelSuspicion) : "";
-          if (applied && Object.prototype.hasOwnProperty.call(applied, "panelSuspicion")) {
+          let applied = JOBS[id].apply(data, slot.value) || data;
+          const flags = Array.isArray(applied.panelFlags) ? applied.panelFlags : [];
+          const notes = Array.isArray(applied.panelNotes) ? applied.panelNotes : [];
+          if (flags.length || notes.length || Object.prototype.hasOwnProperty.call(applied, "panelSuspicion")) {
+            applied = { ...applied };
+            delete applied.panelFlags;
+            delete applied.panelNotes;
             delete applied.panelSuspicion;
           }
+          if (notes.length) applied = commitResolutions(applied, notes);
+          for (const flag of flags) pendingFlags.push(flag);
           data = applied;
+          digestBefore[id] = before;
           if (id === "storeRanks" && slot.value && slot.value.day) storeRankDay = slot.value.day;
           const changed = panelDigest(data, id) !== before;
           const prior = meta[id] || {};
@@ -947,7 +1048,6 @@ async function runRefreshWithEnv({ jobs, budget: budgetOverride, now, startedAt 
                came back with the same number. */
             changedAt: changed ? now : (prior.changedAt || now),
             failed: false,
-            ...(suspicion ? { suspicious: true, error: suspicion.slice(0, 300) } : {}),
           };
           refreshed.push(id);
           return;
@@ -968,6 +1068,28 @@ async function runRefreshWithEnv({ jobs, budget: budgetOverride, now, startedAt 
       meta[id] = { ...(meta[id] || {}), failed: true, error: (why || "unknown").slice(0, 300), erroredAt: new Date().toISOString() };
       failures.push(id);
     });
+
+    if (pendingFlags.length) {
+      const numbered = pendingFlags.map((flag, index) => ({ ...flag, attempt: index + 1 }));
+      const resolutions = await verifyFlags(numbered, {
+        canStart: canStartVerify,
+        lookup: lookupSecondSource,
+        judge: judgePassage,
+      });
+      data = commitResolutions(data, resolutions);
+      for (const id of refreshed) {
+        const before = digestBefore[id];
+        const stamp = meta[id];
+        if (before == null || !stamp || stamp.failed) continue;
+        const changed = panelDigest(data, id) !== before;
+        const prior = prevMeta[id] || {};
+        meta[id] = {
+          ...stamp,
+          changedAt: changed ? stamp.checkedAt : (prior.changedAt || stamp.checkedAt),
+        };
+      }
+    }
+    const summary = publishUsage({ timedOut });
 
     const outcome = partitionRefreshJobs({ ids, refreshed, failures, skipped });
     if (failures.length > 0 && refreshed.length === 0) {

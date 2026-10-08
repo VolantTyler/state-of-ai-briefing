@@ -6,9 +6,6 @@ import { choice, noul } from "@typesafe-ai/sdk";
 
 export const MODEL = "jev-latest";
 export const NONE = "none";
-/* Example gate from the TypeSafe Noul docs (`YES = 0.8`). Not tuned on this
-   briefing's sources. A value at or below the gate keeps the prior number. */
-export const NOUL_YES = 0.8;
 export const MIN_BILLIONS = 1;
 export const MAX_CANDIDATES = 12;
 /* A completed price does not fall by 3× overnight. Round size and run rate
@@ -145,22 +142,32 @@ export function questionsFor(candidates) {
   return questions;
 }
 
+/* Choice picks the candidate. Noul is recorded and is not a write gate. */
 export function decide(candidates, answers) {
   const latest = answers && answers.latest;
   const picked = latest && latest.choice;
   const candidate = candidates.find((c) => c.id === picked);
-  if (!candidate || picked === NONE) {
-    return { action: "kept", reason: "none", picked: picked || NONE, noul: null };
-  }
-  const noulAnswer = answers[`completed_${candidate.id}`];
+  const noulAnswer = candidate && answers[`completed_${candidate.id}`];
   const probability = noulAnswer && typeof noulAnswer.noul === "number" ? noulAnswer.noul : null;
-  if (probability == null) {
-    return { action: "kept", reason: "missing-noul", picked, noul: null };
+  if (!candidate || picked === NONE) {
+    return { action: "kept", reason: "none", picked: picked || NONE, noul: probability };
   }
-  if (probability > NOUL_YES) {
-    return { action: "wrote", reason: "accepted", picked, noul: probability, billions: candidate.billions };
-  }
-  return { action: "kept", reason: "noul-below-gate", picked, noul: probability };
+  return { action: "picked", reason: "choice", picked, noul: probability, billions: candidate.billions };
+}
+
+export function valuationFlagReason(reason) {
+  if (reason === "round-size") return "The figure is the size of a round next to a higher valuation.";
+  if (reason === "revenue") return "The figure is revenue or a run rate, not a valuation.";
+  if (reason === "absurd-drop") return "The figure fell to under one third of the stored mark.";
+  if (reason === "changed") return "The figure moved.";
+  return "The figure needs a second source.";
+}
+
+export function keptReasonText(reason) {
+  if (reason === "no-candidates") return "No cited amount named this company, so the previous mark stays.";
+  if (reason === "none") return "No cited passage was a completed price, so the previous mark stays.";
+  if (reason === "error") return "The valuation judgment failed, so the previous mark stays.";
+  return "No completed price was cited, so the previous mark stays.";
 }
 
 const NEAR = 48;
@@ -206,18 +213,20 @@ export function misplacedAmount(candidate) {
   return null;
 }
 
-/* Last gate on a figure Choice and Noul already accepted. */
+/* A pick that matches the stored mark is published. A pick that moves, that
+   falls to under one third, or that is a round size or a run rate is flagged
+   for a second source. Nothing here discards the candidate. */
 export function gateWrittenValuation(decision, candidate, prior) {
-  if (!decision || decision.action !== "wrote") return decision;
-  const why = candidate && misplacedAmount(candidate);
-  if (why) {
-    return { action: "kept", reason: why, picked: decision.picked, noul: decision.noul, billions: decision.billions };
-  }
+  if (!decision || (decision.action !== "picked" && decision.action !== "wrote")) return decision;
   const next = decision.billions;
-  if (typeof prior === "number" && prior > 0 && typeof next === "number" && next > 0 && prior / next >= ABSURD_DROP) {
-    return { action: "kept", reason: "absurd-drop", picked: decision.picked, noul: decision.noul, billions: next };
+  const why = candidate && misplacedAmount(candidate);
+  const drop = typeof prior === "number" && prior > 0 && typeof next === "number" && next > 0 && prior / next >= ABSURD_DROP;
+  const differs = !(typeof prior === "number" && next === prior);
+  if (why || drop || differs) {
+    const reason = why || (drop ? "absurd-drop" : "changed");
+    return { action: "flagged", reason, picked: decision.picked, noul: decision.noul, billions: next };
   }
-  return decision;
+  return { action: "wrote", reason: "accepted", picked: decision.picked, noul: decision.noul, billions: next };
 }
 
 export async function judgeValuations({ companies, passages, ask }) {
@@ -271,8 +280,32 @@ export async function judgeValuations({ companies, passages, ask }) {
   }));
 
   const accepted = {};
+  const flagged = [];
+  const kept = [];
   for (const result of results) {
     if (result.action === "wrote") accepted[result.company] = result.billions;
+    const candidate = (result.candidates || []).find((row) => row.id === result.picked);
+    if (result.action === "flagged") {
+      flagged.push({
+        company: result.company,
+        prior: result.prior,
+        billions: result.billions,
+        reason: result.reason,
+        reasonText: valuationFlagReason(result.reason),
+        source: candidate && candidate.source || "",
+        snippet: candidate && candidate.snippet || "",
+      });
+    }
+    if (result.action === "kept") {
+      kept.push({
+        company: result.company,
+        prior: result.prior,
+        reason: result.reason,
+        reasonText: result.error
+          ? `The valuation judgment failed, so the previous mark stays. ${result.error}`
+          : keptReasonText(result.reason),
+      });
+    }
   }
   const withCandidates = results.filter((r) => r.candidates.length);
   const failed = withCandidates.filter((r) => r.error);
@@ -281,7 +314,7 @@ export async function judgeValuations({ companies, passages, ask }) {
     error.results = results;
     throw error;
   }
-  return { results, accepted };
+  return { results, accepted, flagged, kept };
 }
 
 function pct(n) {
@@ -300,22 +333,10 @@ function actionSentence(result) {
   if (result.reason === "none") {
     return `Kept ${money(result.prior)}. Choice selected none, so code did not copy an amount.`;
   }
-  if (result.reason === "missing-noul") {
-    return `Kept ${money(result.prior)}. Choice selected ${result.picked}, and that candidate had no Noul answer.`;
+  if (result.reason === "round-size" || result.reason === "revenue" || result.reason === "absurd-drop" || result.reason === "changed") {
+    return `Flagged ${money(result.billions)}. Choice selected ${result.picked}. ${valuationFlagReason(result.reason)} A second source checks it before it is published.`;
   }
-  if (result.reason === "noul-below-gate") {
-    return `Kept ${money(result.prior)}. Choice selected ${result.picked}, and the Noul on that snippet was ${pct(result.noul)}, which is not above ${NOUL_YES}.`;
-  }
-  if (result.reason === "round-size") {
-    return `Kept ${money(result.prior)}. Choice selected ${result.picked} (${money(result.billions)}), and that amount is the size of the round in a snippet that also states a higher valuation.`;
-  }
-  if (result.reason === "revenue") {
-    return `Kept ${money(result.prior)}. Choice selected ${result.picked} (${money(result.billions)}), and that amount is revenue or a run rate, which is not a valuation.`;
-  }
-  if (result.reason === "absurd-drop") {
-    return `Kept ${money(result.prior)}. Choice selected ${result.picked} (${money(result.billions)}), which is under 1/${ABSURD_DROP} of the prior mark, so code left the valuation unchanged.`;
-  }
-  return `Wrote ${money(result.billions)}. Choice selected ${result.picked} and the Noul on that snippet was ${pct(result.noul)}, above ${NOUL_YES}, so code copied the amount the regex had parsed.`;
+  return `Wrote ${money(result.billions)}. Choice selected ${result.picked}, so code copied the amount the regex had parsed.`;
 }
 
 export function renderJevActions(report = {}) {
@@ -346,7 +367,7 @@ export function renderJevActions(report = {}) {
   lines.push(`- **Yes:** ${COMPLETED_PRICE_TRUE}`);
   lines.push(`- **No:** ${COMPLETED_PRICE_FALSE}`);
   lines.push("");
-  lines.push(`The answer is the probability of yes. Code writes the chosen amount only when Choice picks that candidate and this probability is above ${NOUL_YES}. Otherwise the panel keeps its previous number. ${NOUL_YES} is the example gate from the TypeSafe docs. It is not fitted to these sources.`);
+  lines.push("The answer is the probability of yes. Code records it and does not use it as a write gate. Choice's pick is the candidate. A pick that matches the stored mark is published. A pick that moves, or that the snippet marks as a round size or a run rate, is flagged for a second source.");
   lines.push("");
   lines.push("A yes covers a private last-round mark and the market cap of a company that itself trades. Whether a source is trustworthy is a different question.");
   lines.push("");
@@ -356,7 +377,7 @@ export function renderJevActions(report = {}) {
   lines.push("");
   lines.push("## What code does after Jev");
   lines.push("");
-  lines.push("Code still refuses the chosen amount when its snippet shows a round size beside a higher valuation, or when the amount is revenue or a run rate. Code also refuses a drop to less than one third of the prior mark. The panel keeps its previous number. A bare dollar figure with the unit cut off is used only to notice the higher valuation, and is never written.");
+  lines.push("Code flags the chosen amount when its snippet shows a round size beside a higher valuation, when the amount is revenue or a run rate, or when it falls to less than one third of the prior mark. A second source and a later Choice then decide whether to publish it. A bare dollar figure with the unit cut off is used only to notice the higher valuation, and is never written.");
   lines.push("");
   lines.push("## Latest run");
   lines.push("");
