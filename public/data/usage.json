@@ -1,7 +1,7 @@
 {
-  "runAt": "2026-10-07T14:49:57.756Z",
+  "runAt": "2026-10-08T15:38:36.545Z",
   "fatal": false,
-  "wallClockMs": 36326,
+  "wallClockMs": 35170,
   "budget": {
     "maxDurationMs": 1500000,
     "tailReserveMs": 120000,
@@ -47,7 +47,7 @@
   },
   "spendCap": {
     "maxUsd": 1,
-    "estimatedUsd": 0.227453,
+    "estimatedUsd": 0.220159,
     "skipped": []
   },
   "calls": [
@@ -56,11 +56,11 @@
       "attempt": 1,
       "continuation": 0,
       "model": "claude-haiku-4-5-20251001",
-      "durationMs": 13286,
+      "durationMs": 12363,
       "stopReason": "end_turn",
       "httpStatus": 200,
-      "inputTokens": 32768,
-      "outputTokens": 1052,
+      "inputTokens": 32855,
+      "outputTokens": 1029,
       "cacheCreationInputTokens": 0,
       "cacheReadInputTokens": 0,
       "cacheCreation": {
@@ -78,14 +78,14 @@
       },
       "serviceTier": "standard",
       "usage": {
-        "input_tokens": 32768,
+        "input_tokens": 32855,
         "cache_creation_input_tokens": 0,
         "cache_read_input_tokens": 0,
         "cache_creation": {
           "ephemeral_5m_input_tokens": 0,
           "ephemeral_1h_input_tokens": 0
         },
-        "output_tokens": 1052,
+        "output_tokens": 1029,
         "service_tier": "standard",
         "inference_geo": "not_available",
         "server_tool_use": {
@@ -93,62 +93,13 @@
           "web_fetch_requests": 0
         }
       },
-      "estimatedUsd": 0.058028,
+      "estimatedUsd": 0.058,
       "estimateComplete": true,
       "unpriced": [],
       "notes": [],
       "webSearchUsd": 0.02,
-      "inputUsd": 0.032768,
-      "outputUsd": 0.00526,
-      "cacheReadUsd": 0,
-      "cacheWrite5mUsd": 0,
-      "cacheWrite1hUsd": 0,
-      "billed": true,
-      "aborted": false,
-      "error": null
-    },
-    {
-      "jobId": "models",
-      "attempt": 1,
-      "continuation": "reformat",
-      "model": "claude-haiku-4-5-20251001",
-      "durationMs": 483,
-      "stopReason": "end_turn",
-      "httpStatus": 200,
-      "inputTokens": 950,
-      "outputTokens": 22,
-      "cacheCreationInputTokens": 0,
-      "cacheReadInputTokens": 0,
-      "cacheCreation": {
-        "ephemeral_5m_input_tokens": 0,
-        "ephemeral_1h_input_tokens": 0
-      },
-      "cacheWrite": {
-        "ephemeral5m": 0,
-        "ephemeral1h": 0,
-        "assumed5m": false
-      },
-      "serverToolUse": {},
-      "serviceTier": "standard",
-      "usage": {
-        "input_tokens": 950,
-        "cache_creation_input_tokens": 0,
-        "cache_read_input_tokens": 0,
-        "cache_creation": {
-          "ephemeral_5m_input_tokens": 0,
-          "ephemeral_1h_input_tokens": 0
-        },
-        "output_tokens": 22,
-        "service_tier": "standard",
-        "inference_geo": "not_available"
-      },
-      "estimatedUsd": 0.00106,
-      "estimateComplete": true,
-      "unpriced": [],
-      "notes": [],
-      "webSearchUsd": 0,
-      "inputUsd": 0.00095,
-      "outputUsd": 0.00011,
+      "inputUsd": 0.032855,
+      "outputUsd": 0.005145,
       "cacheReadUsd": 0,
       "cacheWrite5mUsd": 0,
       "cacheWrite1hUsd": 0,
@@ -161,11 +112,11 @@
       "attempt": 1,
       "continuation": 0,
       "model": "claude-haiku-4-5-20251001",
-      "durationMs": 5556,
+      "durationMs": 6391,
       "stopReason": "end_turn",
       "httpStatus": 200,
-      "inputTokens": 24370,
-      "outputTokens": 550,
+      "inputTokens": 24871,
+      "outputTokens": 476,
       "cacheCreationInputTokens": 0,
       "cacheReadInputTokens": 0,
       "cacheCreation": {
@@ -183,14 +134,14 @@
       },
       "serviceTier": "standard",
       "usage": {
-        "input_tokens": 24370,
+        "input_tokens": 24871,
         "cache_creation_input_tokens": 0,
         "cache_read_input_tokens": 0,
         "cache_creation": {
           "ephemeral_5m_input_tokens": 0,
           "ephemeral_1h_input_tokens": 0
         },
-        "output_tokens": 550,
+        "output_tokens": 476,
         "service_tier": "standard",
         "inference_geo": "not_available",
         "server_tool_use": {
@@ -198,13 +149,13 @@
           "web_fetch_requests": 0
         }
       },
-      "estimatedUsd": 0.05712,
+      "estimatedUsd": 0.057251,
       "estimateComplete": true,
       "unpriced": [],
       "notes": [],
       "webSearchUsd": 0.03,
-      "inputUsd": 0.02437,
-      "outputUsd": 0.00275,
+      "inputUsd": 0.024871,
+      "outputUsd": 0.00238,
       "cacheReadUsd": 0,
       "cacheWrite5mUsd": 0,
       "cacheWrite1hUsd": 0,
@@ -217,11 +168,11 @@
       "attempt": 1,
       "continuation": "reformat",
       "model": "claude-haiku-4-5-20251001",
-      "durationMs": 802,
+      "durationMs": 745,
       "stopReason": "end_turn",
       "httpStatus": 200,
-      "inputTokens": 309,
-      "outputTokens": 55,
+      "inputTokens": 417,
+      "outputTokens": 56,
       "cacheCreationInputTokens": 0,
       "cacheReadInputTokens": 0,
       "cacheCreation": {
@@ -236,24 +187,24 @@
       "serverToolUse": {},
       "serviceTier": "standard",
       "usage": {
-        "input_tokens": 309,
+        "input_tokens": 417,
         "cache_creation_input_tokens": 0,
         "cache_read_input_tokens": 0,
         "cache_creation": {
           "ephemeral_5m_input_tokens": 0,
           "ephemeral_1h_input_tokens": 0
         },
-        "output_tokens": 55,
+        "output_tokens": 56,
         "service_tier": "standard",
         "inference_geo": "not_available"
       },
-      "estimatedUsd": 0.000584,
+      "estimatedUsd": 0.000697,
       "estimateComplete": true,
       "unpriced": [],
       "notes": [],
       "webSearchUsd": 0,
-      "inputUsd": 0.000309,
-      "outputUsd": 0.000275,
+      "inputUsd": 0.000417,
+      "outputUsd": 0.00028,
       "cacheReadUsd": 0,
       "cacheWrite5mUsd": 0,
       "cacheWrite1hUsd": 0,
@@ -266,11 +217,11 @@
       "attempt": 1,
       "continuation": 0,
       "model": "claude-haiku-4-5-20251001",
-      "durationMs": 10307,
+      "durationMs": 6457,
       "stopReason": "end_turn",
       "httpStatus": 200,
-      "inputTokens": 37312,
-      "outputTokens": 612,
+      "inputTokens": 23759,
+      "outputTokens": 680,
       "cacheCreationInputTokens": 0,
       "cacheReadInputTokens": 0,
       "cacheCreation": {
@@ -288,14 +239,14 @@
       },
       "serviceTier": "standard",
       "usage": {
-        "input_tokens": 37312,
+        "input_tokens": 23759,
         "cache_creation_input_tokens": 0,
         "cache_read_input_tokens": 0,
         "cache_creation": {
           "ephemeral_5m_input_tokens": 0,
           "ephemeral_1h_input_tokens": 0
         },
-        "output_tokens": 612,
+        "output_tokens": 680,
         "service_tier": "standard",
         "inference_geo": "not_available",
         "server_tool_use": {
@@ -303,13 +254,62 @@
           "web_fetch_requests": 0
         }
       },
-      "estimatedUsd": 0.070372,
+      "estimatedUsd": 0.057159,
       "estimateComplete": true,
       "unpriced": [],
       "notes": [],
       "webSearchUsd": 0.03,
-      "inputUsd": 0.037312,
-      "outputUsd": 0.00306,
+      "inputUsd": 0.023759,
+      "outputUsd": 0.0034,
+      "cacheReadUsd": 0,
+      "cacheWrite5mUsd": 0,
+      "cacheWrite1hUsd": 0,
+      "billed": true,
+      "aborted": false,
+      "error": null
+    },
+    {
+      "jobId": "capital",
+      "attempt": 1,
+      "continuation": "reformat",
+      "model": "claude-haiku-4-5-20251001",
+      "durationMs": 779,
+      "stopReason": "end_turn",
+      "httpStatus": 200,
+      "inputTokens": 411,
+      "outputTokens": 52,
+      "cacheCreationInputTokens": 0,
+      "cacheReadInputTokens": 0,
+      "cacheCreation": {
+        "ephemeral_5m_input_tokens": 0,
+        "ephemeral_1h_input_tokens": 0
+      },
+      "cacheWrite": {
+        "ephemeral5m": 0,
+        "ephemeral1h": 0,
+        "assumed5m": false
+      },
+      "serverToolUse": {},
+      "serviceTier": "standard",
+      "usage": {
+        "input_tokens": 411,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 52,
+        "service_tier": "standard",
+        "inference_geo": "not_available"
+      },
+      "estimatedUsd": 0.000671,
+      "estimateComplete": true,
+      "unpriced": [],
+      "notes": [],
+      "webSearchUsd": 0,
+      "inputUsd": 0.000411,
+      "outputUsd": 0.00026,
       "cacheReadUsd": 0,
       "cacheWrite5mUsd": 0,
       "cacheWrite1hUsd": 0,
@@ -322,11 +322,11 @@
       "attempt": 1,
       "continuation": 0,
       "model": "claude-haiku-4-5-20251001",
-      "durationMs": 5504,
+      "durationMs": 7853,
       "stopReason": "end_turn",
       "httpStatus": 200,
-      "inputTokens": 17894,
-      "outputTokens": 479,
+      "inputTokens": 23591,
+      "outputTokens": 558,
       "cacheCreationInputTokens": 0,
       "cacheReadInputTokens": 0,
       "cacheCreation": {
@@ -344,14 +344,14 @@
       },
       "serviceTier": "standard",
       "usage": {
-        "input_tokens": 17894,
+        "input_tokens": 23591,
         "cache_creation_input_tokens": 0,
         "cache_read_input_tokens": 0,
         "cache_creation": {
           "ephemeral_5m_input_tokens": 0,
           "ephemeral_1h_input_tokens": 0
         },
-        "output_tokens": 479,
+        "output_tokens": 558,
         "service_tier": "standard",
         "inference_geo": "not_available",
         "server_tool_use": {
@@ -359,13 +359,13 @@
           "web_fetch_requests": 0
         }
       },
-      "estimatedUsd": 0.040289,
+      "estimatedUsd": 0.046381,
       "estimateComplete": true,
       "unpriced": [],
       "notes": [],
       "webSearchUsd": 0.02,
-      "inputUsd": 0.017894,
-      "outputUsd": 0.002395,
+      "inputUsd": 0.023591,
+      "outputUsd": 0.00279,
       "cacheReadUsd": 0,
       "cacheWrite5mUsd": 0,
       "cacheWrite1hUsd": 0,
@@ -376,42 +376,42 @@
   ],
   "jobs": {
     "models": {
-      "attempts": 2,
-      "inputTokens": 33718,
-      "outputTokens": 1074,
+      "attempts": 1,
+      "inputTokens": 32855,
+      "outputTokens": 1029,
       "cacheCreationInputTokens": 0,
       "cacheReadInputTokens": 0,
       "serverToolUse": {
         "web_search_requests": 2,
         "web_fetch_requests": 0
       },
-      "durationMs": 13769,
+      "durationMs": 12363,
       "stopReasons": [
         "end_turn"
       ],
-      "estimatedUsd": 0.059088,
+      "estimatedUsd": 0.058,
       "estimateComplete": true,
       "unpriced": [],
       "timedOut": false,
-      "billedAttempts": 2,
+      "billedAttempts": 1,
       "unbilledAttempts": 0,
       "likelyBilledAttempts": 0
     },
     "users": {
       "attempts": 2,
-      "inputTokens": 24679,
-      "outputTokens": 605,
+      "inputTokens": 25288,
+      "outputTokens": 532,
       "cacheCreationInputTokens": 0,
       "cacheReadInputTokens": 0,
       "serverToolUse": {
         "web_search_requests": 3,
         "web_fetch_requests": 0
       },
-      "durationMs": 6358,
+      "durationMs": 7136,
       "stopReasons": [
         "end_turn"
       ],
-      "estimatedUsd": 0.057704,
+      "estimatedUsd": 0.057948,
       "estimateComplete": true,
       "unpriced": [],
       "timedOut": false,
@@ -420,42 +420,42 @@
       "likelyBilledAttempts": 0
     },
     "capital": {
-      "attempts": 1,
-      "inputTokens": 37312,
-      "outputTokens": 612,
+      "attempts": 2,
+      "inputTokens": 24170,
+      "outputTokens": 732,
       "cacheCreationInputTokens": 0,
       "cacheReadInputTokens": 0,
       "serverToolUse": {
         "web_search_requests": 3,
         "web_fetch_requests": 0
       },
-      "durationMs": 10307,
+      "durationMs": 7236,
       "stopReasons": [
         "end_turn"
       ],
-      "estimatedUsd": 0.070372,
+      "estimatedUsd": 0.05783,
       "estimateComplete": true,
       "unpriced": [],
       "timedOut": false,
-      "billedAttempts": 1,
+      "billedAttempts": 2,
       "unbilledAttempts": 0,
       "likelyBilledAttempts": 0
     },
     "energy": {
       "attempts": 1,
-      "inputTokens": 17894,
-      "outputTokens": 479,
+      "inputTokens": 23591,
+      "outputTokens": 558,
       "cacheCreationInputTokens": 0,
       "cacheReadInputTokens": 0,
       "serverToolUse": {
         "web_search_requests": 2,
         "web_fetch_requests": 0
       },
-      "durationMs": 5504,
+      "durationMs": 7853,
       "stopReasons": [
         "end_turn"
       ],
-      "estimatedUsd": 0.040289,
+      "estimatedUsd": 0.046381,
       "estimateComplete": true,
       "unpriced": [],
       "timedOut": false,
@@ -466,17 +466,17 @@
   },
   "totals": {
     "calls": 6,
-    "inputTokens": 113603,
-    "outputTokens": 2770,
+    "inputTokens": 105904,
+    "outputTokens": 2851,
     "cacheCreationInputTokens": 0,
     "cacheReadInputTokens": 0,
     "serverToolUse": {
       "web_search_requests": 10,
       "web_fetch_requests": 0
     },
-    "summedCallDurationMs": 35938,
-    "wallClockMs": 36326,
-    "estimatedUsd": 0.227453,
+    "summedCallDurationMs": 34588,
+    "wallClockMs": 35170,
+    "estimatedUsd": 0.220159,
     "estimateComplete": true,
     "unpriced": [],
     "tokensIncomplete": false,
