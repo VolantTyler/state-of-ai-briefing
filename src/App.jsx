@@ -8,7 +8,7 @@ import {
   EDITION, INK, PAPER, FAINT, RULE_SOFT, C, TEXT_BRICK, TEXT_CLAY,
   BRAND_COLOR, BRAND_OF, brandFill,
   BASELINE, TRACKERS, SRC, snapshot, panelTimes,
-  AA_INDEX_VERSION, aaIndexVersion, formatUserMillions,
+  AA_INDEX_VERSION, aaIndexVersion, formatUserMillions, checksStamp,
 } from "./briefing-data.js";
 import {
   DEFAULT_STORE_APP_IDS, STORE_APP_BY_ID, STORE_RANK_DEPTH, weeklyRankSeries,
@@ -63,7 +63,39 @@ const isStale = (iso, id) => !iso || Date.now() - new Date(iso).getTime() > stal
    Tone carries the same split as the words, so the distinction survives a
    glance that doesn't stop to read: faint for the two healthy states, clay
    for a stalled check, brick for an outright failure. */
-const refreshStamp = (meta, id) => {
+const noteHost = (url) => {
+  try { return new URL(url).host.replace(/^www\./, ""); }
+  catch (e) { return "source"; }
+};
+
+/* Confirmed values stay quiet. Single-source and unconfirmed values get a
+   short line under the chart. Unconfirmed lines also carry both links. */
+const ValueNotes = ({ group }) => {
+  const rows = Object.entries(group || {}).filter(([, row]) =>
+    row && (row.status === "single source" || row.status === "unconfirmed"));
+  if (!rows.length) return null;
+  return (
+    <div style={{ marginTop: 8 }}>
+      {rows.map(([name, row]) => (
+        <div key={name} style={{ ...mono, fontSize: 10, lineHeight: 1.55, color: row.status === "unconfirmed" ? TEXT_BRICK : FAINT, marginTop: 3 }}>
+          <span>{name} · {row.status}. {row.reason}</span>
+          {row.status === "unconfirmed" && Array.isArray(row.sources) && row.sources.length > 0 && (
+            <span>
+              {" "}
+              {row.sources.map((url, index) => (
+                <a key={`${name}-${url}`} href={url} target="_blank" rel="noreferrer" style={{ color: "inherit", marginLeft: index ? 8 : 0 }}>
+                  {noteHost(url)}
+                </a>
+              ))}
+            </span>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+};
+
+const refreshStamp = (meta, id, checks) => {
   const t = panelTimes(meta);
   if (!t) return { text: "Baseline data", tone: "faint" };
 
@@ -86,12 +118,18 @@ const refreshStamp = (meta, id) => {
     };
   }
 
+  const flagged = checksStamp(checks);
+  if (flagged) {
+    const when = t.checkedAt ? `Refreshed ${ago(t.checkedAt)} · ` : "";
+    return { text: `${when}${flagged.text}`, tone: "warn", title: flagged.title };
+  }
+
   if (t.suspicious) {
     const when = t.checkedAt ? `Refreshed ${ago(t.checkedAt)} · ` : "";
     return {
-      text: `${when}tie rejected, previous value kept`,
+      text: `${when}needs a second look`,
       tone: "warn",
-      title: t.error || "Identical figures across companies were not written.",
+      title: t.error || "A figure on this panel was held.",
     };
   }
 
@@ -763,8 +801,8 @@ const chip = (on) => ({
 });
 
 /* ——— Panel: card with read-only timestamp ——— */
-const Panel = ({ id, label, meta, children, sources }) => {
-  const stamp = refreshStamp(meta, id);
+const Panel = ({ id, label, meta, children, sources, checks }) => {
+  const stamp = refreshStamp(meta, id, checks);
   return (
     <div style={{ border: `1px solid ${INK}`, borderRadius: 2, background: PAPER, padding: 22, marginBottom: 18, boxShadow: "3px 3px 0 rgba(25,23,20,0.08)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>
@@ -874,7 +912,7 @@ export default function App() {
 
         {/* §01 Valuations */}
         <SectionHead id="sec-01" n="01" title="Private-market valuations" sub="The most valuable startups ever built, priced in billions of dollars" />
-        <Panel id="valuations" label="Latest disclosed round · $ billions" meta={meta.valuations} sources={SRC.valuations}>
+        <Panel id="valuations" label="Latest disclosed round · $ billions" meta={meta.valuations} checks={data.checks && data.checks.val} sources={SRC.valuations}>
           <div style={{ height: 32 + valuations.length * 34 }}>
             <ResponsiveContainer>
               <BarChart data={valuations} layout="vertical" margin={{ left: 8, right: 64, top: 8 }}>
@@ -892,6 +930,7 @@ export default function App() {
           <div style={{ ...mono, fontSize: 10, color: FAINT, marginTop: 6 }}>
             ■ colored bars use each company's brand color from the web-traffic chart (§04), plus Meta (teal), added when Muse Spark reached the frontier{showCN ? " · tan = China-based labs without a tracked brand color" : ""}
           </div>
+          <ValueNotes group={data.checks && data.checks.val} />
           <Commentary>
             Anthropic's $65B Series H still makes it the most valuable private AI lab at $965B, ahead of OpenAI's $852B;
             Databricks jumped from $134B to $190B on a fresh $5B round in August, and Anduril is reportedly negotiating
@@ -987,7 +1026,7 @@ export default function App() {
 
         {/* §04 Users */}
         <SectionHead id="sec-04" n="04" title="Who's actually using this" sub="Assistant user bases and the redistribution of attention" />
-        <Panel id="users" label="Reported users · millions (mixed bases)" meta={meta.users} sources={SRC.users}>
+        <Panel id="users" label="Reported users · millions (mixed bases)" meta={meta.users} checks={data.checks && data.checks.users} sources={SRC.users}>
           <div style={{ height: 250 }}>
             <ResponsiveContainer>
               <BarChart data={data.users} layout="vertical" margin={{ left: 8, right: 72, top: 8 }}>
@@ -1003,6 +1042,7 @@ export default function App() {
             </ResponsiveContainer>
           </div>
           <div style={{ ...mono, fontSize: 10, color: FAINT, marginTop: 6 }}>■ bars use each product's brand color · Meta AI now carries Meta's teal, added to the palette in §03 when Muse Spark reached the frontier</div>
+          <ValueNotes group={data.checks && data.checks.users} />
           <Commentary>
             Read the bases before the bars: Meta AI's 1,500M counts anyone who touched it inside WhatsApp or Instagram,
             while ChatGPT's reflects deliberate use. Gemini crossed 1 billion monthly actives in mid-August — Google's
@@ -1011,7 +1051,7 @@ export default function App() {
             {showCN && " ByteDance's Doubao is China's most-used assistant but publishes no comparable MAU figure, so it can't honestly be placed on this chart."}
           </Commentary>
         </Panel>
-        <Panel id="share" label="Global chatbot web-traffic share · Similarweb" meta={meta.share} sources={SRC.users}>
+        <Panel id="share" label="Global chatbot web-traffic share · Similarweb" meta={meta.share} checks={data.checks && data.checks.share} sources={SRC.users}>
           <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
             <div style={{ height: 240, flex: "1 1 260px", minWidth: 240 }}>
               <ResponsiveContainer>
@@ -1033,6 +1073,7 @@ export default function App() {
               ))}
             </div>
           </div>
+          <ValueNotes group={data.checks && data.checks.share} />
           <Commentary>
             A year ago this was one big circle: ChatGPT held ~79%. The redistribution since — while total category
             visits still grew ~49% — is the clearest evidence the single-vendor era is over. This refresh shows
@@ -1117,7 +1158,7 @@ export default function App() {
 
         {/* §06 Capital */}
         <SectionHead id="sec-06" n="06" title="The capital behind it" sub="What the industry is spending and earning" />
-        <Panel id="capital" label="2026 capex plans & lab run-rates · $ billions" meta={meta.capital} sources={SRC.capital}>
+        <Panel id="capital" label="2026 capex plans & lab run-rates · $ billions" meta={meta.capital} checks={data.checks && data.checks.rev} sources={SRC.capital}>
           <div style={{ height: 210 }}>
             <ResponsiveContainer>
               <BarChart data={data.capex} margin={{ left: 0, right: 12, top: 22 }}>
@@ -1147,6 +1188,7 @@ export default function App() {
               </BarChart>
             </ResponsiveContainer>
           </div>
+          <ValueNotes group={data.checks && data.checks.rev} />
           <Commentary>
             Four companies plan roughly three-quarters of a trillion dollars of capex in 2026, most of it AI data
             centers. Against that, Anthropic's reported run rate was about $65B at the end of July 2026, and OpenAI's

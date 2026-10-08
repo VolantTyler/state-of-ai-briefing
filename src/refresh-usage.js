@@ -361,7 +361,11 @@ export const summarizeUsage = (calls, {
   const jobs = {};
   const totals = blankJob();
   const unpriced = [];
-  for (const call of calls) {
+  /* Typesafe rows stay on `calls` so the input-token log is in the file.
+     They are not Anthropic usage, and a null output count must not mark
+     the Anthropic estimate incomplete. */
+  const priced = calls.filter((call) => call.provider !== "typesafe");
+  for (const call of priced) {
     if (!jobs[call.jobId]) jobs[call.jobId] = blankJob();
     addCallToJob(jobs[call.jobId], call);
     addCallToJob(totals, call);
@@ -373,7 +377,7 @@ export const summarizeUsage = (calls, {
     if (!jobs[id]) jobs[id] = blankJob();
     jobs[id].timedOut = true;
   }
-  const tokensIncomplete = calls.some((call) => call.inputTokens == null || call.outputTokens == null);
+  const tokensIncomplete = priced.some((call) => call.inputTokens == null || call.outputTokens == null);
   let estimateComplete = totals.estimateComplete && !tokensIncomplete;
   /* A job cut off before its response was read has no meter reading.
      Anthropic may still have billed the in-flight request. */
@@ -396,7 +400,7 @@ export const summarizeUsage = (calls, {
     calls,
     jobs,
     totals: {
-      calls: calls.length,
+      calls: priced.length,
       inputTokens: totals.inputTokens,
       outputTokens: totals.outputTokens,
       cacheCreationInputTokens: totals.cacheCreationInputTokens,

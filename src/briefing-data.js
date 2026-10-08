@@ -84,12 +84,24 @@ export const USER_RAW_COUNT_AT = 100_000;
 export const USER_MILLIONS_MIN = 1;
 export const USER_MILLIONS_MAX = 10_000;
 
-export const normalizeUserMillions = (raw) => {
+/* Unit repair only. A raw count becomes millions. The 1–10,000 band is not
+   applied here: an out-of-band figure is a flag at refresh time, and a stored
+   number outside that band is still shown. */
+export const convertUserMillions = (raw) => {
   let n = Number(raw);
   if (!Number.isFinite(n) || n <= 0) return null;
   if (n >= USER_RAW_COUNT_AT) n /= 1_000_000;
-  if (!Number.isFinite(n) || n < USER_MILLIONS_MIN || n > USER_MILLIONS_MAX) return null;
+  if (!Number.isFinite(n) || n <= 0) return null;
   return Math.round(n);
+};
+
+export const userCountInBand = (millions) =>
+  Number.isFinite(millions) && millions >= USER_MILLIONS_MIN && millions <= USER_MILLIONS_MAX;
+
+export const normalizeUserMillions = (raw) => {
+  const n = convertUserMillions(raw);
+  if (!userCountInBand(n)) return null;
+  return n;
 };
 
 export const formatUserMillions = (value) => {
@@ -98,9 +110,9 @@ export const formatUserMillions = (value) => {
   return `${Math.round(n).toLocaleString("en-US")}M`;
 };
 
-/* An exact tie across companies is a copied figure, not two sources that
-   happened to match. Those companies keep their previous values. */
-export const rejectIdenticalCompanyValues = (incoming) => {
+/* An exact tie across companies is flagged, not dropped. Callers still
+   publish a company that is not in one of these groups. */
+export const identicalCompanyGroups = (incoming) => {
   const groups = new Map();
   for (const [name, raw] of Object.entries(incoming || {})) {
     const v = Number(raw);
@@ -110,14 +122,68 @@ export const rejectIdenticalCompanyValues = (incoming) => {
     names.push(name);
     groups.set(key, names);
   }
-  const cleaned = { ...(incoming || {}) };
   const ties = [];
   for (const [key, names] of groups) {
     if (names.length < 2) continue;
     ties.push({ value: Number(key), names: [...names] });
-    for (const name of names) delete cleaned[name];
   }
-  return { cleaned, ties };
+  return ties;
+};
+
+export const SHARE_SUM_MIN = 90;
+export const SHARE_SUM_MAX = 110;
+
+const CHECK_FIELDS = ["val", "rev", "users", "share"];
+const CHECK_STATUS = new Set(["confirmed", "unconfirmed", "single source"]);
+
+export const readChecks = (raw) => {
+  if (!raw || typeof raw !== "object") return {};
+  const out = {};
+  for (const field of CHECK_FIELDS) {
+    const group = raw[field];
+    if (!group || typeof group !== "object") continue;
+    const next = {};
+    for (const [name, row] of Object.entries(group)) {
+      if (!row || typeof row !== "object" || !CHECK_STATUS.has(row.status)) continue;
+      const candidate = row.candidate == null || row.candidate === "" ? null : Number(row.candidate);
+      next[name] = {
+        status: row.status,
+        value: Number.isFinite(Number(row.value)) ? Number(row.value) : null,
+        candidate: Number.isFinite(candidate) ? candidate : null,
+        reason: typeof row.reason === "string" ? row.reason : "",
+        sources: Array.isArray(row.sources) ? row.sources.filter((url) => typeof url === "string" && url) : [],
+      };
+    }
+    if (Object.keys(next).length) out[field] = next;
+  }
+  return out;
+};
+
+export const dropCheck = (data, field, name) => {
+  const group = data.checks && data.checks[field];
+  if (!group || !Object.prototype.hasOwnProperty.call(group, name)) return data;
+  const nextGroup = { ...group };
+  delete nextGroup[name];
+  const checks = { ...data.checks };
+  if (Object.keys(nextGroup).length) checks[field] = nextGroup;
+  else delete checks[field];
+  return { ...data, checks };
+};
+
+/* Stamp for one wire field. Confirmed values stay quiet. The reason is the
+   tooltip; the per-value note under the chart carries the same words. */
+export const checksStamp = (group) => {
+  const rows = Object.entries(group || {}).filter(([, row]) =>
+    row && (row.status === "unconfirmed" || row.status === "single source"));
+  if (!rows.length) return null;
+  const text = rows.length === 1
+    ? `${rows[0][0]} · ${rows[0][1].status}`
+    : rows.map(([name, row]) => `${name} · ${row.status}`).join("; ");
+  return {
+    text,
+    title: rows.map(([name, row]) => `${name}: ${row.reason}`).join("\n"),
+    tone: "warn",
+  };
 };
 
 export const identicalRevenueNote = (ties) => {
@@ -273,15 +339,59 @@ export const JOBS = {
        company's completed price is decided in api/valuation-judgment.js.
        This panel does not ask a model to emit the number. */
     apply: (d, j) => {
-      if (!j.valuations) return d;
+      if (!j.valuations && !Array.isArray(j.flagged) && !Array.isArray(j.kept)) return d;
+      const flaggedByName = new Map((j.flagged || []).map((row) => [row.company, row]));
+      const keptByName = new Map((j.kept || []).map((row) => [row.company, row]));
+      const panelFlags = [];
+      const panelNotes = [];
+      let next = d;
       const v = d.valuations.map((x) => {
-        const n = Number(j.valuations[x.name]);
-        return n > 0 ? { ...x, value: n } : x;
+        const flagged = flaggedByName.get(x.name);
+        if (flagged && Number(flagged.billions) > 0) {
+          panelFlags.push({
+            field: "val",
+            panel: "valuations",
+            name: x.name,
+            prior: x.value,
+            candidate: Number(flagged.billions),
+            reason: flagged.reasonText || flagged.reason || "The figure needs a second source.",
+            quantity: "completed valuation or market capitalization in billions of USD",
+            unit: "billion USD",
+            firstSource: flagged.source ? { url: flagged.source, text: flagged.snippet || "" } : null,
+          });
+          return x;
+        }
+        const kept = keptByName.get(x.name);
+        if (kept) {
+          panelNotes.push({
+            field: "val",
+            name: x.name,
+            publish: x.value,
+            check: {
+              status: "unconfirmed",
+              value: x.value,
+              candidate: null,
+              reason: kept.reasonText || "No completed price was cited, so the previous mark stays.",
+              sources: [],
+            },
+          });
+          return x;
+        }
+        const n = j.valuations ? Number(j.valuations[x.name]) : NaN;
+        if (!(n > 0)) return x;
+        next = dropCheck(next, "val", x.name);
+        return { ...x, value: n };
       }).sort((a, b) => b.value - a.value);
       const race = [...d.race];
       const a = v.find((x) => x.name === "Anthropic"), o = v.find((x) => x.name === "OpenAI");
       race[race.length - 1] = { ...race[race.length - 1], Anthropic: a ? a.value : null, OpenAI: o ? o.value : null };
-      return { ...d, valuations: v, race };
+      return {
+        ...next,
+        valuations: v,
+        race,
+        ...(panelFlags.length ? { panelFlags } : {}),
+        ...(panelNotes.length ? { panelNotes } : {}),
+      };
     },
   },
   markets: {
@@ -324,26 +434,83 @@ export const JOBS = {
   users: {
     keys: ["users"],
     prompt: 'Search the web for the latest monthly active users in millions for AI assistants: Meta AI, ChatGPT, Gemini, Copilot, Claude, Grok. Every number is millions of people: 1.2 billion monthly users is 1200, not 1200000000 and not 1.2. Stop when each assistant has a monthly-active figure. Do not search again to confirm a number you already have. Your final text block must be a single JSON object and no other characters: {"users":{"Meta AI":0,"ChatGPT":0,"Gemini":0,"Copilot":0,"Claude":0,"Grok":0}}',
-    apply: (d, j) => (!j.users ? d : { ...d, users: d.users.map((u) => {
-      if (!j.users || !Object.prototype.hasOwnProperty.call(j.users, u.name)) return u;
-      const n = normalizeUserMillions(j.users[u.name]);
-      return n == null ? u : { ...u, users: n };
-    }).sort((a, b) => b.users - a.users) }),
+    apply: (d, j) => {
+      if (!j.users) return d;
+      const panelFlags = [];
+      let next = d;
+      const users = d.users.map((u) => {
+        if (!Object.prototype.hasOwnProperty.call(j.users, u.name)) return u;
+        const n = convertUserMillions(j.users[u.name]);
+        if (n == null) return u;
+        if (!userCountInBand(n)) {
+          panelFlags.push({
+            field: "users",
+            panel: "users",
+            name: u.name,
+            prior: u.users,
+            candidate: n,
+            reason: `${n} million is outside 1–${USER_MILLIONS_MAX.toLocaleString("en-US")} million.`,
+            quantity: "monthly active users in millions",
+            unit: "million",
+            firstSource: null,
+          });
+          return u;
+        }
+        next = dropCheck(next, "users", u.name);
+        return { ...u, users: n };
+      }).sort((a, b) => b.users - a.users);
+      return { ...next, users, ...(panelFlags.length ? { panelFlags } : {}) };
+    },
   },
   share: {
     keys: ["share"],
     prompt: 'Search the web for the latest global AI chatbot web-traffic share percentages (Similarweb) for ChatGPT, Gemini, Claude, Grok, Copilot, Perplexity. Stop when each product has a share percentage. Do not search again to confirm a number you already have. Your final text block must be a single JSON object and no other characters: {"share":{"ChatGPT":0,"Gemini":0,"Claude":0,"Grok":0,"Copilot":0,"Perplexity":0}}',
     apply: (d, j) => {
       if (!j.share) return d;
-      let sum = 0;
-      const next = d.webShare.map((s) => {
-        if (s.name === "Others") return s;
+      const named = d.webShare.filter((s) => s.name !== "Others");
+      const parsed = [];
+      for (const s of named) {
+        if (!Object.prototype.hasOwnProperty.call(j.share, s.name)) continue;
         const n = Number(j.share[s.name]);
-        const val = n > 0 ? Math.round(n * 10) / 10 : s.value;
-        sum += val;
+        if (!(n > 0)) continue;
+        parsed.push({ name: s.name, prior: s.value, candidate: Math.round(n * 10) / 10 });
+      }
+      const sum = Math.round(parsed.reduce((total, row) => total + row.candidate, 0) * 10) / 10;
+      const complete = parsed.length === named.length;
+      const broken = sum > SHARE_SUM_MAX || (complete && sum < SHARE_SUM_MIN);
+      if (broken) {
+        return {
+          ...d,
+          panelFlags: parsed.map((row) => ({
+            field: "share",
+            panel: "share",
+            name: row.name,
+            prior: row.prior,
+            candidate: row.candidate,
+            reason: `Named shares sum to ${sum}, outside ${SHARE_SUM_MIN}–${SHARE_SUM_MAX}.`,
+            quantity: "global chatbot web-traffic share percent",
+            unit: "percent",
+            firstSource: null,
+          })),
+        };
+      }
+      let next = d;
+      let total = 0;
+      const webShare = d.webShare.map((s) => {
+        if (s.name === "Others") return s;
+        const hit = parsed.find((row) => row.name === s.name);
+        const val = hit ? hit.candidate : s.value;
+        total += val;
+        if (hit) next = dropCheck(next, "share", s.name);
         return { ...s, value: val };
       });
-      return { ...d, webShare: next.map((s) => s.name === "Others" ? { ...s, value: Math.max(0, Math.round((100 - sum) * 10) / 10) } : s) };
+      total = Math.round(total * 10) / 10;
+      const withOthers = webShare.map((s) => (
+        s.name === "Others"
+          ? { ...s, value: Math.max(0, Math.round((100 - total) * 10) / 10) }
+          : s
+      ));
+      return { ...next, webShare: withOthers };
     },
   },
   capital: {
@@ -352,16 +519,37 @@ export const JOBS = {
     apply: (d, j) => {
       let n = { ...d };
       if (j.capex) n.capex = n.capex.map((c) => { const v = Number(j.capex[c.name]); return v > 0 ? { ...c, value: v, range: `≈${v}` } : c; });
+      const panelFlags = [];
       if (j.revenue) {
-        const { cleaned, ties } = rejectIdenticalCompanyValues(j.revenue);
+        const ties = identicalCompanyGroups(j.revenue);
+        const tied = new Set(ties.flatMap((tie) => tie.names));
         const note = identicalRevenueNote(ties);
-        n.revenue = n.revenue.map((r) => {
-          const v = Number(cleaned[r.name]);
-          return v > 0 ? { ...r, value: v } : r;
+        const cleared = [];
+        const revenue = n.revenue.map((r) => {
+          if (!Object.prototype.hasOwnProperty.call(j.revenue, r.name)) return r;
+          const v = Number(j.revenue[r.name]);
+          if (!(v > 0)) return r;
+          if (tied.has(r.name)) {
+            panelFlags.push({
+              field: "rev",
+              panel: "capital",
+              name: r.name,
+              prior: r.value,
+              candidate: v,
+              reason: note,
+              quantity: "annualized revenue run rate in billions of USD",
+              unit: "billion USD",
+              firstSource: null,
+            });
+            return r;
+          }
+          cleared.push(r.name);
+          return { ...r, value: v };
         });
-        if (note) n = { ...n, panelSuspicion: note };
+        for (const name of cleared) n = dropCheck(n, "rev", name);
+        n = { ...n, revenue };
       }
-      return n;
+      return panelFlags.length ? { ...n, panelFlags } : n;
     },
   },
   storeRanks: {
@@ -424,6 +612,7 @@ export const packValues = (d, meta, lastRunAt) => ({
   energy: d.energyStats,
   aa: d.aaIndex.map((m) => [m.model, m.lab, m.score, m.cn ? 1 : 0]),
   ...(d.aaVersion ? { aaVersion: d.aaVersion } : {}),
+  ...(d.checks && Object.keys(d.checks).length ? { checks: d.checks } : {}),
   ranks: {
     ios: (d.storeRanks && d.storeRanks.ios) || {},
     android: (d.storeRanks && d.storeRanks.android) || {},
@@ -475,10 +664,9 @@ export const unpackValues = (d, p) => {
     .sort((a, b) => b.value - a.value);
   n.stocks = d.stocks.map((x) => ({ ...x, price: num(p.stocks, x.ticker, x.price) }));
   n.users = d.users.map((x) => {
-    const normalized = p.users && Object.prototype.hasOwnProperty.call(p.users, x.name)
-      ? normalizeUserMillions(p.users[x.name])
-      : null;
-    return { ...x, users: normalized == null ? x.users : normalized };
+    if (!p.users || !Object.prototype.hasOwnProperty.call(p.users, x.name)) return x;
+    const converted = convertUserMillions(p.users[x.name]);
+    return { ...x, users: converted == null ? x.users : converted };
   }).sort((a, b) => b.users - a.users);
   n.webShare = d.webShare.map((x) => ({ ...x, value: num(p.share, x.name, x.value) }));
   n.capex = d.capex.map((x) => { const v = num(p.capex, x.name, x.value); return { ...x, value: v, range: v === x.value ? x.range : `≈${v}` }; });
@@ -494,6 +682,8 @@ export const unpackValues = (d, p) => {
       .sort((a, b) => b.score - a.score);
   }
   if (typeof p.aaVersion === "string" && p.aaVersion.trim()) n.aaVersion = p.aaVersion.trim();
+  const checks = readChecks(p.checks);
+  if (Object.keys(checks).length) n.checks = checks;
   if (p.ranks && typeof p.ranks === "object") {
     const keep = (ranks) => {
       const out = {};
@@ -547,8 +737,8 @@ export const csvToHistory = (text) => {
     });
     /* Older rows stored ChatGPT and Gemini as raw counts. The chart is millions. */
     for (const c of ["chatgpt", "claude", "gemini"]) {
-      const normalized = normalizeUserMillions(row[c]);
-      if (normalized != null) row[c] = normalized;
+      const converted = convertUserMillions(row[c]);
+      if (converted != null) row[c] = converted;
     }
     return row;
   }).filter(Boolean);

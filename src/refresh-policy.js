@@ -49,6 +49,17 @@ export const SEARCH_ALLOWED_DOMAINS = {
 export const SIMPLE_MODEL_JOBS = ["models", "users", "share", "capital", "energy"];
 export const MODEL_JOB_ORDER = [...SIMPLE_MODEL_JOBS, "valuations"];
 
+/* One independent page per flagged figure. Not part of SEARCH_MAX_USES:
+   the nightly ceiling prices the primary jobs only. */
+export const SECOND_SOURCE_MAX_USES = 1;
+
+export const secondSourceSearchTool = () => ({
+  type: WEB_SEARCH_TOOL,
+  name: "web_search",
+  max_uses: SECOND_SOURCE_MAX_USES,
+  allowed_callers: ["direct"],
+});
+
 export const webSearchTool = (jobId, model) => {
   const maxUses = SEARCH_MAX_USES[jobId];
   if (!maxUses) throw new Error(`no search cap for ${jobId}`);

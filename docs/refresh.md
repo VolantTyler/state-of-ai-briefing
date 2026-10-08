@@ -122,8 +122,34 @@ previous board. Haiku with `web_search` runs only when those pages cannot
 be read. The official API (`/api/v2/language/models`) needs an
 `x-api-key` even on the free tier, so there is no
 `ARTIFICIAL_ANALYSIS_API_KEY` secret. User counts are stored in millions.
-A revenue tie across companies keeps the previous values for those
-companies and marks the capital panel suspicious.
+A raw count of 100,000 or more is divided by one million once. A converted
+count outside 1–10,000 million is flagged. On read, that stored number is
+kept; it is not replaced with the seeded baseline.
+
+An exact revenue tie, a named share total outside 90–110, and a valuation
+that moves, that the snippet marks as a round size or a run rate, or that
+falls to under one third of the stored mark, are flagged the same way.
+The candidate is not written until the check below finishes. A Choice of
+`none`, or no cited amount, keeps the previous mark and records why. Noul
+is recorded and is not a write gate.
+
+## A flagged figure is checked
+
+After the primary jobs, each flag gets one Haiku call
+(`claude-haiku-4-5-20251001`, `web_search` with `max_uses` 1, no pause
+continuation) inside the same `REFRESH_MAX_USD`. One System One Choice
+then says whether that passage supports the candidate, contradicts it, or
+says nothing. Supports publishes the candidate as confirmed. Contradicts
+keeps the previous value and marks it unconfirmed, naming both figures.
+If the lookup cannot run — spend cap, time budget, error, no independent
+passage, or the Choice says nothing — the candidate is published as single
+source. Typesafe input tokens are logged on the usage row and are not
+added to `estimatedUsd`.
+
+`checks` on `values.json` holds that status per value (`val`, `rev`,
+`users`, `share`). Older files without `checks` still load. The page
+shows a short note on single-source and unconfirmed values. Confirmed
+values are stored and not stamped.
 
 Each entry in `calls` has the model, token counts, `server_tool_use`
 (including `web_search_requests`), `stop_reason`, and that call's
