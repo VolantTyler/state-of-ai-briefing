@@ -209,9 +209,9 @@
       "ios": {
         "muse": 1,
         "chatgpt": 4,
-        "claude": 10,
+        "claude": 11,
         "gemini": 12,
-        "grok": 39,
+        "grok": 33,
         "copilot": 42
       },
       "android": {
