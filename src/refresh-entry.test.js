@@ -11,7 +11,7 @@ import {
   DAILY_REFRESH_CRON, VALUATIONS_REFRESH_CRON, dailyJobIds, jobsForInvocation,
   resolveJobSelection, selectJobsFromEnv,
 } from "./refresh-policy.js";
-import { runRefresh } from "./refresh-run.js";
+import { DEFAULT_COMMIT_IDENTITY, runRefresh } from "./refresh-run.js";
 import { main } from "../scripts/refresh.js";
 
 const workflow = readFileSync(new URL("../.github/workflows/refresh.yml", import.meta.url), "utf8");
@@ -52,6 +52,7 @@ const driveOnce = async ({ jobs, env = {}, budget, now, valuesText = null, failR
   const anthropicBodies = [];
   const urls = [];
   const logs = [];
+  let authorization = "";
   console.log = (line) => { logs.push(String(line)); };
   globalThis.fetch = async (url, opts = {}) => {
     const href = String(url);
@@ -86,6 +87,7 @@ const driveOnce = async ({ jobs, env = {}, budget, now, valuesText = null, failR
       };
     }
     if (!href.includes("api.github.com")) throw new Error(`unexpected fetch ${href}`);
+    if (!authorization && opts.headers) authorization = opts.headers.Authorization || "";
     const marker = "/contents/";
     const at = href.indexOf(marker);
     const path = at < 0 ? "" : decodeURIComponent(href.slice(at + marker.length).split("?")[0]);
@@ -101,6 +103,8 @@ const driveOnce = async ({ jobs, env = {}, budget, now, valuesText = null, failR
         path,
         message: body.message,
         text: Buffer.from(body.content, "base64").toString("utf8"),
+        author: body.author,
+        committer: body.committer,
       });
       return { ok: true, status: 200, text: async () => "{}" };
     }
@@ -115,7 +119,7 @@ const driveOnce = async ({ jobs, env = {}, budget, now, valuesText = null, failR
   };
   try {
     const result = await runRefresh({ jobs, env: bag, budget, now });
-    return { result, puts, anthropicBodies, urls, logs };
+    return { result, puts, anthropicBodies, urls, logs, authorization };
   } finally {
     globalThis.fetch = originalFetch;
     console.log = originalLog;
@@ -238,6 +242,8 @@ test("the workflow cron, concurrency, timeout, and secret names match the runner
   assert.equal(workflow.includes("pull_request"), false);
   for (const name of [
     "ANTHROPIC_API_KEY",
+    "GH_APP_ID",
+    "GH_APP_PRIVATE_KEY",
     "GH_CONTENTS_TOKEN",
     "TYPESAFE_API_KEY",
     "AGENTMAIL_API_KEY",
@@ -248,7 +254,23 @@ test("the workflow cron, concurrency, timeout, and secret names match the runner
   ]) {
     assert.match(workflow, new RegExp(`secrets\\.${name}\\b`));
   }
-  assert.match(workflow, /GITHUB_TOKEN: \$\{\{ secrets\.GH_CONTENTS_TOKEN \}\}/);
+  assert.match(workflow, /uses:\s*actions\/create-github-app-token@v3/);
+  assert.match(workflow, /permission-contents:\s*write/);
+  assert.match(workflow, /owner:\s*\$\{\{\s*github\.repository_owner\s*\}\}/);
+  assert.match(workflow, /repositories:\s*\$\{\{\s*github\.repository\s*\}\}/);
+  assert.match(workflow, /app-id:\s*\$\{\{\s*secrets\.GH_APP_ID\s*\}\}/);
+  assert.match(workflow, /private-key:\s*\$\{\{\s*secrets\.GH_APP_PRIVATE_KEY\s*\}\}/);
+  assert.match(workflow, /continue-on-error:\s*true/);
+  assert.match(workflow, /Contents token path: GitHub App installation token\./);
+  assert.match(workflow, /Contents token path: GH_CONTENTS_TOKEN fallback\./);
+  assert.match(workflow, /GITHUB_TOKEN: \$\{\{ case\(steps\.contents-auth\.outputs\.source == 'app', steps\.app-token\.outputs\.token, secrets\.GH_CONTENTS_TOKEN\) \}\}/);
+  assert.match(workflow, new RegExp(`GITHUB_COMMIT_NAME: ${DEFAULT_COMMIT_IDENTITY.name}`));
+  assert.match(workflow, new RegExp(`GITHUB_COMMIT_EMAIL: ${DEFAULT_COMMIT_IDENTITY.email}`));
+  assert.equal(workflow.includes("secrets.GITHUB_TOKEN"), false);
+  assert.equal(workflow.includes("set -x"), false);
+  assert.equal(workflow.includes("curl -v"), false);
+  assert.equal(/echo[^\n]*\$\{?APP_TOKEN\}?/.test(workflow), false);
+  assert.equal(/echo[^\n]*\$\{?PAT\}?/.test(workflow), false);
   assert.match(workflow, /node scripts\/refresh\.js/);
 });
 
@@ -291,6 +313,9 @@ test("a markets refresh writes the same data files and records the Actions budge
   const usagePut = run.puts.filter((put) => put.path === "public/data/usage.json").at(-1);
   assert.match(usagePut.message, /^data: usage /);
   assert.match(run.puts.find((put) => put.path === "public/data/trend.csv").message, /^data: trend log /);
+  assert.deepEqual(usagePut.author, DEFAULT_COMMIT_IDENTITY);
+  assert.deepEqual(usagePut.committer, DEFAULT_COMMIT_IDENTITY);
+  assert.equal(usagePut.author.date, undefined);
 });
 
 test("web-share stays on its weekly clock through the new entry point", async () => {
@@ -349,6 +374,48 @@ test("a failed read still records usage and does not call Claude", async () => {
   assert.equal(run.anthropicBodies.length, 0);
   assert.ok(run.puts.some((put) => put.path === "public/data/usage.json"));
   assert.equal(run.puts.some((put) => put.path === "dev/refresh-lock.json"), false);
+});
+
+test("contents calls use GH_CONTENTS_TOKEN when GITHUB_TOKEN is empty", async () => {
+  const run = await drive({
+    jobs: "markets",
+    env: { GITHUB_TOKEN: "", GH_CONTENTS_TOKEN: "fallback-pat" },
+  });
+  assert.equal(run.result.status, 200);
+  assert.equal(run.authorization, "Bearer fallback-pat");
+  const usagePut = run.puts.find((put) => put.path === "public/data/usage.json");
+  assert.deepEqual(usagePut.author, DEFAULT_COMMIT_IDENTITY);
+  assert.deepEqual(usagePut.committer, DEFAULT_COMMIT_IDENTITY);
+});
+
+test("a contents write can override the commit identity as a pair", async () => {
+  const run = await drive({
+    jobs: "markets",
+    env: { GITHUB_COMMIT_NAME: "Ada Lovelace", GITHUB_COMMIT_EMAIL: "ada@example.com" },
+  });
+  assert.equal(run.result.status, 200);
+  const usagePut = run.puts.find((put) => put.path === "public/data/usage.json");
+  assert.deepEqual(usagePut.author, { name: "Ada Lovelace", email: "ada@example.com" });
+  assert.deepEqual(usagePut.committer, usagePut.author);
+});
+
+test("a half-set commit identity fails before a contents write", async () => {
+  const run = await drive({
+    jobs: "markets",
+    env: { GITHUB_COMMIT_NAME: "Ada Lovelace" },
+  });
+  assert.equal(run.result.status, 500);
+  assert.match(run.result.body.error, /GITHUB_COMMIT_NAME and GITHUB_COMMIT_EMAIL must both be set/);
+  assert.equal(run.puts.length, 0);
+});
+
+test("contents calls require GITHUB_TOKEN or GH_CONTENTS_TOKEN", async () => {
+  const run = await drive({
+    jobs: "markets",
+    env: { GITHUB_TOKEN: "", GH_CONTENTS_TOKEN: "" },
+  });
+  assert.equal(run.result.status, 500);
+  assert.match(run.result.body.error, /missing env var GITHUB_TOKEN/);
 });
 
 test("the script entry point selects jobs from argv and does not call Claude for markets", async () => {
