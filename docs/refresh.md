@@ -93,6 +93,17 @@ clock, so a hung call is aborted in JavaScript and the usage file can still
 be committed. The per-run spend cap is unchanged: once the running estimate
 reaches `REFRESH_MAX_USD`, later Claude calls are not started.
 
+## Token expiry
+
+`.github/workflows/token-expiry.yml` checks `GH_CONTENTS_TOKEN` every Monday
+at 12:41 UTC (8:41 AM EDT / 7:41 AM EST), and when someone runs it from
+Actions. The minute is 41 so the run misses :00 and :30. The job calls the
+GitHub API with that token and reads `github-authentication-token-expiration`.
+It fails if the secret is empty, the response is not 2xx (including 401 and
+403), the expiry header is missing, or the token expires in under 14 days.
+When it fails, rotate the fine-grained PAT and update the `GH_CONTENTS_TOKEN`
+Actions secret. The next refresh reads the new value.
+
 ## What happened to Vercel and the lock
 
 `vercel.json` has `crons: []`. Do not add the refresh cron back. `api/refresh.js`
