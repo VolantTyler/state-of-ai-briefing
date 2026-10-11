@@ -29,9 +29,11 @@ concurrency:
   group: state-of-ai-refresh
   cancel-in-progress: false
 
-# Checkout only. Commits use the fine-grained PAT in GH_CONTENTS_TOKEN.
-# The built-in GITHUB_TOKEN is not enough: those commits are authored by
-# github-actions[bot], and Vercel does not deploy them.
+# Checkout only. Writes use a GitHub App installation token scoped to this
+# repository, or GH_CONTENTS_TOKEN when that token was not minted. The
+# built-in GITHUB_TOKEN is not used for those commits. The script reads
+# GITHUB_TOKEN. Each contents PUT sets the repo-owner author. See
+# docs/refresh.md.
 permissions:
   contents: read
 
@@ -48,6 +50,53 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Note GitHub App secret presence
+        id: app-secrets
+        env:
+          GH_APP_ID: ${{ secrets.GH_APP_ID }}
+          GH_APP_PRIVATE_KEY: ${{ secrets.GH_APP_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -n "${GH_APP_ID:-}" ] && [ -n "${GH_APP_PRIVATE_KEY:-}" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+            echo "GitHub App secrets are set. Minting an installation token."
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "GitHub App secrets are missing."
+          fi
+      - name: Mint GitHub App installation token
+        id: app-token
+        if: steps.app-secrets.outputs.present == 'true'
+        continue-on-error: true
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.GH_APP_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.repository }}
+          permission-contents: write
+      - name: Select contents token
+        id: contents-auth
+        env:
+          APP_TOKEN: ${{ steps.app-token.outputs.token }}
+          PAT: ${{ secrets.GH_CONTENTS_TOKEN }}
+          APP_SECRETS_PRESENT: ${{ steps.app-secrets.outputs.present }}
+        run: |
+          set -euo pipefail
+          if [ -n "${APP_TOKEN:-}" ]; then
+            echo "Contents token path: GitHub App installation token."
+            echo "source=app" >> "$GITHUB_OUTPUT"
+          elif [ -n "${PAT:-}" ]; then
+            if [ "${APP_SECRETS_PRESENT:-}" = "true" ]; then
+              echo "Contents token path: GH_CONTENTS_TOKEN fallback. Installation token minting failed."
+            else
+              echo "Contents token path: GH_CONTENTS_TOKEN fallback. GitHub App secrets are missing."
+            fi
+            echo "source=pat" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::No contents token. Set GH_APP_ID and GH_APP_PRIVATE_KEY, or GH_CONTENTS_TOKEN."
+            exit 1
+          fi
       - name: Refresh
         run: node scripts/refresh.js
         env:
@@ -55,7 +104,9 @@ jobs:
           REFRESH_SCHEDULE: ${{ github.event.schedule }}
           REFRESH_JOBS: ${{ github.event.inputs.jobs }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          GITHUB_TOKEN: ${{ secrets.GH_CONTENTS_TOKEN }}
+          GITHUB_TOKEN: ${{ case(steps.contents-auth.outputs.source == 'app', steps.app-token.outputs.token, secrets.GH_CONTENTS_TOKEN) }}
+          GITHUB_COMMIT_NAME: Tyler Stahl
+          GITHUB_COMMIT_EMAIL: tylerstahl@gmail.com
           GITHUB_REPO: ${{ github.repository }}
           GITHUB_BRANCH: main
           TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}

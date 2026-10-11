@@ -76,11 +76,12 @@ gh repo create state-of-ai-briefing --public --source=. --push
 
 **2. Import into Vercel** — framework preset Vite, everything else default.
 
-**3. Create a GitHub token** for the data commits. Settings → Developer
-settings → Personal access tokens → Fine-grained. Scope it to *this
-repository only*, with **Contents: Read and write**. Nothing else. Store it
-as the Actions secret `GH_CONTENTS_TOKEN`. The built-in `GITHUB_TOKEN` cannot
-do this job: Vercel will not deploy commits authored by `github-actions[bot]`.
+**3. Create a GitHub App** for the data commits, as `docs/refresh.md`
+describes. Contents: Read and write, this repository only. Store the App ID
+as `GH_APP_ID` and the private key as `GH_APP_PRIVATE_KEY`. Until that app
+has minted a token on a real run, the fine-grained PAT in
+`GH_CONTENTS_TOKEN` is the fallback. The built-in `GITHUB_TOKEN` is not
+used for those commits.
 
 **4. Add the Actions secrets** listed in `docs/refresh.md`. The refresh does
 not read Vercel environment variables, and `crons` stays empty.
@@ -98,7 +99,9 @@ This section says where each one *lives* and how to replace it.
 | Variable | Issued by | Where the job reads it | Blast radius of a rotation |
 |---|---|---|---|
 | `ANTHROPIC_API_KEY` | Anthropic | Actions secret of the same name | Anything else using the same key |
-| `GH_CONTENTS_TOKEN` | GitHub fine-grained PAT | Actions secret; the workflow assigns it to `GITHUB_TOKEN` | This repo only, if scoped correctly |
+| `GH_APP_ID` | GitHub App | Actions secret; workflow input `app-id` | This repo only, if the app is installed only here |
+| `GH_APP_PRIVATE_KEY` | GitHub App PEM | Actions secret | This repo only, if the app is installed only here |
+| `GH_CONTENTS_TOKEN` | GitHub fine-grained PAT | Actions secret; fallback when the app token is not minted. The workflow assigns the chosen token to `GITHUB_TOKEN` | This repo only, if scoped correctly |
 | `ANTHROPIC_MODEL` | — | Actions variable, optional | Not a secret. Selects valuations only; simple panels default to Haiku unless `ANTHROPIC_MODEL_<JOB>` is set |
 | `REFRESH_MAX_USD` | — | Actions variable, optional | Not a secret. Default `1` |
 | `GITHUB_REPO`, `GITHUB_BRANCH` | — | Set by the workflow | Not secrets |
@@ -125,12 +128,15 @@ Test the backup before destroying the original.
 
 ### Rotating
 
-`ANTHROPIC_API_KEY` and `GH_CONTENTS_TOKEN` rotate at the issuer first, then
-update the Actions secret of the same name. A workflow run reads the secret
-at start, so the next run picks up the new value with no redeploy. Fine-grained
-GitHub PATs expire — 30 days by default — so record the expiry date in
-1Password next to the value. A refresh that goes quiet is often just an
-expired token.
+`ANTHROPIC_API_KEY` rotates at the issuer first, then update the Actions
+secret of the same name. A workflow run reads the secret at start, so the
+next run picks up the new value with no redeploy. The app private key
+rotates by generating a new key on the GitHub App, updating
+`GH_APP_PRIVATE_KEY`, then deleting the old key. The refresh mints a new
+installation token each run. `GH_CONTENTS_TOKEN`, while it remains the
+fallback, is a fine-grained PAT and expires — 30 days by default — so
+record that date in 1Password next to the value. A refresh that goes quiet
+on the fallback path is often just an expired token.
 
 ### Reading a secret without putting it on disk
 

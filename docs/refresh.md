@@ -10,12 +10,27 @@ Failures still send the AgentMail email and the Grok Bot `refresh_failed`
 webhook. A clean run still posts `refresh_succeeded`. Nothing in the browser
 calls Anthropic.
 
-Commits go through the GitHub contents API, as they did on Vercel. The token
-is a fine-grained personal access token, so the commit author is that GitHub
-user and Vercel's Git integration deploys production. The built-in
-`GITHUB_TOKEN` is not used for those commits. Actions would author them as
-`github-actions[bot]`, and Vercel does not deploy a commit whose author is
-not a member of the project.
+Commits go through the GitHub contents API. `.github/workflows/refresh.yml`
+mints a GitHub App installation token with
+`actions/create-github-app-token@v3` when `GH_APP_ID` and
+`GH_APP_PRIVATE_KEY` are both set. The token is scoped to this repository,
+with contents write, and the workflow passes it to the script as
+`GITHUB_TOKEN`. That is the name `src/refresh-run.js` reads. If
+`GITHUB_TOKEN` is empty, the script uses `GH_CONTENTS_TOKEN`. The workflow
+does the same when the app secrets are missing or minting fails, and it
+logs which path it used. It does not log the token. Minting failure does
+not fail the refresh job when `GH_CONTENTS_TOKEN` is set.
+
+The installation token authenticates as the app bot (`<app-slug>[bot]`).
+The contents API uses that user as author and committer when the request
+omits them. Every contents PUT sets both to Tyler Stahl
+`tylerstahl@gmail.com`, the identity on the data commits already on `main`.
+`GITHUB_COMMIT_NAME` and `GITHUB_COMMIT_EMAIL` override that pair, and they
+have to be set together. The built-in Actions token is not used for these
+commits. Do not create an Actions secret named `GITHUB_TOKEN`.
+
+Removing `GH_CONTENTS_TOKEN` waits until a real app-token run has committed
+and Vercel has deployed that commit.
 
 ## Schedule
 
@@ -63,7 +78,9 @@ The names have to match. Empty optional secrets are off, not errors.
 | Secret | Required | What it is |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | Yes | Anthropic key for the panel calls. Never reaches the browser. |
-| `GH_CONTENTS_TOKEN` | Yes | Fine-grained PAT, this repository only, **Contents: Read and write**. The workflow maps it to `GITHUB_TOKEN` inside the job. Commits are made as the user who owns the token, which is what makes Vercel production deploy. Do not name this secret `GITHUB_TOKEN`; Actions reserves that name for the built-in token. |
+| `GH_APP_ID` | App path | Numeric App ID. Passed to `actions/create-github-app-token@v3` as `app-id`. v3 prints a deprecation annotation that prefers the app's client id. The App ID still mints the token. |
+| `GH_APP_PRIVATE_KEY` | App path | PEM private key for that app. The contents of the downloaded `.pem`, not a path. Delete the `.pem` after the secret is set. |
+| `GH_CONTENTS_TOKEN` | Fallback | Fine-grained PAT, this repository only, **Contents: Read and write**. Used when the app secrets are missing or minting fails. The script also accepts this name when `GITHUB_TOKEN` is unset. Removing it is a follow-up after the app path has deployed. Do not name a secret `GITHUB_TOKEN`; Actions reserves that name for the built-in token. |
 | `TYPESAFE_API_KEY` | Yes for valuations | TypeSafe key used when the valuations panel judges cited passages. The daily run does not construct that client. |
 | `AGENTMAIL_API_KEY` | Optional | AgentMail key. All three AgentMail values are required before a failure email is sent. |
 | `AGENTMAIL_INBOX_ID` | Optional | AgentMail inbox the message is sent from. |
@@ -93,16 +110,67 @@ clock, so a hung call is aborted in JavaScript and the usage file can still
 be committed. The per-run spend cap is unchanged: once the running estimate
 reaches `REFRESH_MAX_USD`, later Claude calls are not started.
 
-## Token expiry
+## Vercel and the commit author
 
-`.github/workflows/token-expiry.yml` checks `GH_CONTENTS_TOKEN` every Monday
-at 12:41 UTC (8:41 AM EDT / 7:41 AM EST), and when someone runs it from
-Actions. The minute is 41 so the run misses :00 and :30. The job calls the
-GitHub API with that token and reads `github-authentication-token-expiration`.
-It fails if the secret is empty, the response is not 2xx (including 401 and
-403), the expiry header is missing, or the token expires in under 14 days.
-When it fails, rotate the fine-grained PAT and update the `GH_CONTENTS_TOKEN`
+The Vercel project `state-of-ai-briefing` is on the Hobby team
+`volanttyler's projects`. The GitHub repository is public.
+
+Vercel's collaboration docs say collaboration is free for public
+repositories. For a private repository on Hobby, a deployment is created
+when the commit author is the owner of that Hobby team. Vercel compares
+that author with the Git login connected to the owner. The same page says
+a private-repository deployment can fail when Vercel cannot identify the
+commit author. The bot section says to configure bots so their commits are
+clearly automated.
+
+Data commits on `main` are author and committer Tyler Stahl
+`tylerstahl@gmail.com`. GitHub links that email to VolantTyler. Those
+commits are unsigned, and Vercel has production deployments for them. The
+contents API left author and committer unset, so the PAT user became both.
+
+An installation token would otherwise author the commit as `<app-slug>[bot]`.
+The contents API documents the alternative: set `author` and `committer`
+name and email, and those values are the commit identity. Omitting them
+uses the authenticated user. The PUT now sets both to the VolantTyler
+identity above. An unsigned commit with that identity is the path that
+already deploys.
+
+The first real run that mints an app token still has to confirm two facts
+this change cannot check without pushing: GitHub attributes that commit's
+author and committer to VolantTyler, and Vercel creates a production
+deployment for that SHA. If the commit is attributed to the app bot and no
+deployment appears, the author fields did not stick.
+
+## Contents credentials
+
+`.github/workflows/token-expiry.yml` runs every Monday at 12:41 UTC
+(8:41 AM EDT / 7:41 AM EST), and when someone runs it from Actions. The
+minute is 41 so the run misses :00 and :30. The workflow name is **Check
+contents credentials**.
+
+Installation tokens expire about an hour after minting.
+`actions/create-github-app-token@v3` also revokes the token when the job
+finishes. The refresh mints one in that same job, after `npm ci`, and the
+script runs before the revocation. The private key and the installation can still be
+revoked, so the Monday job mints a token when `GH_APP_ID` and
+`GH_APP_PRIVATE_KEY` are both set, with contents write scoped to this
+repository, and reads `public/data/values.json`. Minting or that read
+failing fails the job. This check does not use `continue-on-error`. The
+refresh job does, so a mint failure there still falls back to the PAT.
+
+When the app secrets are missing, refresh is on the PAT fallback, and the
+Monday job checks `GH_CONTENTS_TOKEN` as before. It fails if the secret is
+empty, the response is not 2xx (including 401 and 403), the
+`github-authentication-token-expiration` header is missing, or the token
+expires in under 14 days. Rotate the fine-grained PAT and update the
 Actions secret. The next refresh reads the new value.
+
+When the app token minted and the contents read succeeded, the same PAT
+check is a warning. Refresh will use the app, so an expired fallback
+secret does not fail the Monday job. Rotate or remove that secret in the
+follow-up that drops the fallback.
+
+When neither credential is set, the job fails.
 
 ## What happened to Vercel and the lock
 

@@ -5,7 +5,7 @@ import test from "node:test";
 const workflow = readFileSync(new URL("../.github/workflows/token-expiry.yml", import.meta.url), "utf8");
 const docs = readFileSync(new URL("../docs/refresh.md", import.meta.url), "utf8");
 
-test("the token expiry workflow checks GH_CONTENTS_TOKEN on Monday morning Eastern", () => {
+test("the weekly check mints an app token and still checks the PAT fallback", () => {
   assert.match(workflow, /cron:\s*"41 12 \* \* 1"/);
   assert.match(workflow, /8:41 AM EDT/);
   assert.match(workflow, /7:41 AM EST/);
@@ -18,24 +18,43 @@ test("the token expiry workflow checks GH_CONTENTS_TOKEN on Monday morning Easte
   assert.equal(workflow.includes("set -x"), false);
   assert.equal(workflow.includes("--trace"), false);
   assert.equal(workflow.includes("curl -v"), false);
-  assert.equal(/echo[^\n]*\$\{?GH_CONTENTS_TOKEN\}?/.test(workflow), false);
   assert.equal(workflow.includes("secrets.GITHUB_TOKEN"), false);
-  assert.equal((workflow.match(/secrets\.GH_CONTENTS_TOKEN/g) || []).length, 1);
+  assert.equal(/echo[^\n]*\$\{GH_CONTENTS_TOKEN\}/.test(workflow), false);
+  assert.equal(/echo[^\n]*\$GH_CONTENTS_TOKEN\b/.test(workflow), false);
+  assert.equal(/echo[^\n]*\$\{GH_APP_PRIVATE_KEY\}/.test(workflow), false);
+  assert.equal(/echo[^\n]*\$GH_APP_PRIVATE_KEY\b/.test(workflow), false);
+  assert.equal(/echo[^\n]*\$\{APP_TOKEN\}/.test(workflow), false);
+  assert.equal(/echo[^\n]*\$APP_TOKEN\b/.test(workflow), false);
+  assert.match(workflow, /actions\/create-github-app-token@v3/);
+  assert.match(workflow, /permission-contents:\s*write/);
+  assert.match(workflow, /owner:\s*\$\{\{\s*github\.repository_owner\s*\}\}/);
+  assert.match(workflow, /repositories:\s*\$\{\{\s*github\.repository\s*\}\}/);
+  assert.match(workflow, /secrets\.GH_APP_ID/);
+  assert.match(workflow, /secrets\.GH_APP_PRIVATE_KEY/);
+  assert.match(workflow, /secrets\.GH_CONTENTS_TOKEN/);
+  assert.equal(workflow.includes("continue-on-error"), false);
   assert.match(workflow, /EXPIRY_MIN_DAYS:\s*"14"/);
   assert.match(workflow, /github-authentication-token-expiration/);
+  assert.match(workflow, /contents\/public\/data\/values\.json/);
   assert.match(workflow, /::error::/);
-  assert.match(workflow, /api\.github\.com\/repos\/\$\{REPO\}/);
+  assert.match(workflow, /::warning::/);
   assert.match(workflow, /Authorization: Bearer \$\{GH_CONTENTS_TOKEN\}/);
-  const run = workflow.split("run: |")[1];
-  assert.equal(/\b14\b/.test(run), false);
+  assert.match(workflow, /Authorization: Bearer \$\{APP_TOKEN\}/);
+  const runs = workflow.split("run: |");
+  const patCheck = runs[runs.length - 1];
+  assert.equal(/\b14\b/.test(patCheck), false);
 });
 
-test("the refresh doc says to rotate the PAT when the expiry check fails", () => {
+test("the refresh doc describes the app token, the PAT fallback, and the weekly check", () => {
   assert.match(docs, /\.github\/workflows\/token-expiry\.yml/);
   assert.match(docs, /8:41 AM EDT/);
   assert.match(docs, /7:41 AM EST/);
   assert.match(docs, /12:41 UTC/);
   assert.match(docs, /under 14 days/);
-  assert.match(docs, /rotate the fine-grained PAT/i);
+  assert.match(docs, /GH_APP_ID/);
+  assert.match(docs, /GH_APP_PRIVATE_KEY/);
   assert.match(docs, /GH_CONTENTS_TOKEN/);
+  assert.match(docs, /fallback/i);
+  assert.match(docs, /create-github-app-token@v3/);
+  assert.match(docs, /tylerstahl@gmail\.com/);
 });

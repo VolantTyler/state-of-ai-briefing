@@ -33,9 +33,9 @@ import {
    `runRefresh` is the job. `scripts/refresh.js` calls it from GitHub
    Actions. Nothing in the browser ever touches the Anthropic API. The
    output is the panel files plus public/data/usage.json, committed back
-   through the GitHub contents API. A push by the contents token is what
-   makes Vercel rebuild and serve the files from the CDN. Git history *is*
-   the trend log: every refresh is a dated commit you can diff, replay or
+   through the GitHub contents API. A push of those commits is what makes
+   Vercel rebuild and serve the files from the CDN. Git history *is* the
+   trend log: every refresh is a dated commit you can diff, replay or
    revert.
 
    Actions concurrency is the overlap guard. This path does not write
@@ -69,12 +69,39 @@ const env = (k) => {
 
 const branchName = () => activeEnv.GITHUB_BRANCH || "main";
 
+/* The workflow passes an installation token as GITHUB_TOKEN. A caller that
+   still sets only GH_CONTENTS_TOKEN keeps working. */
+const githubToken = () => {
+  const token = activeEnv.GITHUB_TOKEN || activeEnv.GH_CONTENTS_TOKEN;
+  if (!token) throw new Error("missing env var GITHUB_TOKEN");
+  return token;
+};
+
+/* Data commits on main use this identity, and Vercel production deploys
+   them. The contents API would otherwise author the commit as whoever the
+   token authenticates: the PAT owner, or `<app>[bot]` for an installation
+   token. Set GITHUB_COMMIT_NAME and GITHUB_COMMIT_EMAIL together to override. */
+export const DEFAULT_COMMIT_IDENTITY = {
+  name: "Tyler Stahl",
+  email: "tylerstahl@gmail.com",
+};
+
+const commitIdentity = () => {
+  const name = activeEnv.GITHUB_COMMIT_NAME || "";
+  const email = activeEnv.GITHUB_COMMIT_EMAIL || "";
+  if (!name && !email) return DEFAULT_COMMIT_IDENTITY;
+  if (!name || !email) {
+    throw new Error("GITHUB_COMMIT_NAME and GITHUB_COMMIT_EMAIL must both be set");
+  }
+  return { name, email };
+};
+
 /* ——— GitHub contents API ———
    Reads carry the blob sha, and writes must echo it back. That sha is the
    optimistic lock: if anything else touched the file since we read it, the
    PUT is rejected rather than silently clobbering. */
 const ghHeaders = () => ({
-  Authorization: `Bearer ${env("GITHUB_TOKEN")}`,
+  Authorization: `Bearer ${githubToken()}`,
   Accept: "application/vnd.github+json",
   "X-GitHub-Api-Version": "2022-11-28",
   "User-Agent": "state-of-ai-briefing",
@@ -107,12 +134,17 @@ const ghRequest = async (path, method, body) => {
   return text ? JSON.parse(text) : null;
 };
 
-const ghPut = (path, text, sha, message) => ghRequest(path, "PUT", {
-  message,
-  content: Buffer.from(text, "utf8").toString("base64"),
-  branch: branchName(),
-  ...(sha ? { sha } : {}),
-});
+const ghPut = (path, text, sha, message) => {
+  const identity = commitIdentity();
+  return ghRequest(path, "PUT", {
+    message,
+    content: Buffer.from(text, "utf8").toString("base64"),
+    branch: branchName(),
+    author: identity,
+    committer: identity,
+    ...(sha ? { sha } : {}),
+  });
+};
 
 /* Data files re-read the blob sha immediately before the PUT and retry once
    on a 409 or a sha 422. */
