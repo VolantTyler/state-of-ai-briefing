@@ -1,7 +1,7 @@
 {
-  "runAt": "2026-10-11T14:56:43.748Z",
+  "runAt": "2026-10-11T14:57:42.016Z",
   "fatal": false,
-  "wallClockMs": 930,
+  "wallClockMs": 834,
   "budget": {
     "maxDurationMs": 1500000,
     "tailReserveMs": 120000,
@@ -60,7 +60,7 @@
     "cacheReadInputTokens": 0,
     "serverToolUse": {},
     "summedCallDurationMs": 0,
-    "wallClockMs": 930,
+    "wallClockMs": 834,
     "estimatedUsd": 0,
     "estimateComplete": true,
     "unpriced": [],
