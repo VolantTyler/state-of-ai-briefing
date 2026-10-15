@@ -330,9 +330,9 @@
         "muse": 1,
         "chatgpt": 3,
         "claude": 7,
-        "gemini": 10,
-        "grok": 38,
-        "copilot": 58
+        "gemini": 9,
+        "grok": 37,
+        "copilot": 60
       },
       "android": {
         "muse": 1,
