@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  BASELINE, JOBS, checksStamp, convertUserMillions, packValues, readChecks, unpackValues,
+  BASELINE, JOBS, checksStamp, convertUserMillions, packValues, readChecks, unpackValues, visibleCheckRows,
 } from "./briefing-data.js";
 import { gateWrittenValuation } from "../api/valuation-judgment.js";
 import { summarizeUsage } from "./refresh-usage.js";
@@ -253,6 +253,24 @@ test("checks pack and unpack, and confirmed values stay off the stamp", () => {
   assert.equal(stamp.text, "Grok · single source");
   assert.match(stamp.title, /spend cap/);
   assert.equal(checksStamp(unpacked.checks.val), null);
+
+  const hidden = {
+    xAI: {
+      status: "unconfirmed",
+      value: 230,
+      candidate: 250,
+      reason: "Kept 230 billion USD. Candidate 250 billion USD was contradicted by 240 billion USD.",
+      sources: ["https://first.example/a", "https://second.example/b"],
+    },
+    Grok: unpacked.checks.users.Grok,
+  };
+  const mixed = checksStamp(hidden);
+  assert.equal(mixed.text, "Grok · single source");
+  assert.doesNotMatch(mixed.text, /unconfirmed|250|first\.example/);
+  assert.doesNotMatch(mixed.title, /250|first\.example/);
+  assert.equal(checksStamp({ xAI: hidden.xAI }), null);
+  assert.deepEqual(visibleCheckRows(hidden).map(([name]) => name), ["Grok"]);
+  assert.equal(JSON.stringify(hidden.xAI).includes("250"), true);
 
   const oldFile = unpackValues(BASELINE, { val: { Anthropic: 100 } });
   assert.equal(oldFile.checks, undefined);
