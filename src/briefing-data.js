@@ -170,11 +170,17 @@ export const dropCheck = (data, field, name) => {
   return { ...data, checks };
 };
 
-/* Stamp for one wire field. Confirmed values stay quiet. The reason is the
-   tooltip; the per-value note under the chart carries the same words. */
+/* Rows the public page is allowed to mention. Confirmed values stay quiet.
+   Unconfirmed values stay in `checks` — the kept number, the candidate, the
+   reason, and the source links — and are not drawn. The chart shows the
+   kept value with the ordinary label. */
+export const visibleCheckRows = (group) =>
+  Object.entries(group || {}).filter(([, row]) => row && row.status === "single source");
+
+/* Stamp for one wire field. Single-source values get a short note; the
+   reason is the tooltip. Unconfirmed rows are omitted. */
 export const checksStamp = (group) => {
-  const rows = Object.entries(group || {}).filter(([, row]) =>
-    row && (row.status === "unconfirmed" || row.status === "single source"));
+  const rows = visibleCheckRows(group);
   if (!rows.length) return null;
   const text = rows.length === 1
     ? `${rows[0][0]} · ${rows[0][1].status}`

@@ -7,160 +7,28 @@ import { useBriefingData } from "./useBriefingData.js";
 import {
   EDITION, INK, PAPER, FAINT, RULE_SOFT, C, TEXT_BRICK, TEXT_CLAY,
   BRAND_COLOR, BRAND_OF, brandFill,
-  BASELINE, TRACKERS, SRC, snapshot, panelTimes,
-  AA_INDEX_VERSION, aaIndexVersion, formatUserMillions, checksStamp,
+  BASELINE, TRACKERS, SRC, snapshot,
+  AA_INDEX_VERSION, aaIndexVersion, formatUserMillions, visibleCheckRows,
 } from "./briefing-data.js";
 import {
   DEFAULT_STORE_APP_IDS, STORE_APP_BY_ID, STORE_RANK_DEPTH, weeklyRankSeries,
 } from "./store-ranks.js";
-import { SHARE_REFRESH_DAYS } from "./refresh-policy.js";
+import { refreshStamp, runStamp } from "./panel-freshness.js";
 
-/* ——— How old is it? ———
-   One vocabulary for every timestamp on the page. `span` is the bare
-   magnitude ("9 days"), `ago` is the same thing as an age ("9 days ago").
-   Everything spells the unit out: at 10px mono in a card corner "9d" reads
-   as a code, and the whole point of these stamps is that a reader can tell
-   at a glance whether a number is current. */
-const span = (iso) => {
-  if (!iso) return null;
-  const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
-  if (mins < 1) return null;
-  if (mins < 60) return `${mins} minute${mins === 1 ? "" : "s"}`;
-  const h = Math.floor(mins / 60);
-  if (h < 24) return `${h} hour${h === 1 ? "" : "s"}`;
-  const d = Math.floor(h / 24);
-  return `${d} day${d === 1 ? "" : "s"}`;
-};
-
-const ago = (iso) => {
-  const s = span(iso);
-  return s ? `${s} ago` : iso ? "just now" : null;
-};
-
-/* The nightly cron fires at 08:00 UTC, and Vercel fires it within the hour,
-   so a panel checked inside the last two days is on schedule — one late run
-   is not a fault. Past that, something is actually wrong. Web-share is
-   checked weekly, so its line is that week plus the same two-day grace. */
-const STALE_MS = 2 * 24 * 60 * 60 * 1000;
-const SHARE_STALE_MS = (SHARE_REFRESH_DAYS + 2) * 24 * 60 * 60 * 1000;
-const staleLimit = (id) => (id === "share" ? SHARE_STALE_MS : STALE_MS);
-const isStale = (iso, id) => !iso || Date.now() - new Date(iso).getTime() > staleLimit(id);
-
-/* ——— What the corner of a panel says ———
-
-   The old stamp said "Refreshed 9d ago" whether the job had run nightly and
-   found nothing new, or had not run at all since August. Those are opposite
-   situations — one is the dashboard working, the other is the dashboard
-   broken — and they read identically, so a healthy panel looked like a fault.
-
-   Four states now, and only the last two are problems:
-
-     Refreshed 5 hours ago                            checked, numbers moved
-     Refreshed 5 hours ago · no change in 9 days      checked, nothing to move
-     Last checked 9 days ago                          the check itself stopped
-     Refresh failed 5 hours ago                       the check ran and errored
-
-   Tone carries the same split as the words, so the distinction survives a
-   glance that doesn't stop to read: faint for the two healthy states, clay
-   for a stalled check, brick for an outright failure. */
-const noteHost = (url) => {
-  try { return new URL(url).host.replace(/^www\./, ""); }
-  catch (e) { return "source"; }
-};
-
-/* Confirmed values stay quiet. Single-source and unconfirmed values get a
-   short line under the chart. Unconfirmed lines also carry both links. */
+/* Confirmed values stay quiet. Single-source values get a short line under
+   the chart. Unconfirmed rows stay in the data file and are not drawn. */
 const ValueNotes = ({ group }) => {
-  const rows = Object.entries(group || {}).filter(([, row]) =>
-    row && (row.status === "single source" || row.status === "unconfirmed"));
+  const rows = visibleCheckRows(group);
   if (!rows.length) return null;
   return (
     <div style={{ marginTop: 8 }}>
       {rows.map(([name, row]) => (
-        <div key={name} style={{ ...mono, fontSize: 10, lineHeight: 1.55, color: row.status === "unconfirmed" ? TEXT_BRICK : FAINT, marginTop: 3 }}>
-          <span>{name} · {row.status}. {row.reason}</span>
-          {row.status === "unconfirmed" && Array.isArray(row.sources) && row.sources.length > 0 && (
-            <span>
-              {" "}
-              {row.sources.map((url, index) => (
-                <a key={`${name}-${url}`} href={url} target="_blank" rel="noreferrer" style={{ color: "inherit", marginLeft: index ? 8 : 0 }}>
-                  {noteHost(url)}
-                </a>
-              ))}
-            </span>
-          )}
+        <div key={name} style={{ ...mono, fontSize: 10, lineHeight: 1.55, color: FAINT, marginTop: 3 }}>
+          {name} · {row.status}. {row.reason}
         </div>
       ))}
     </div>
   );
-};
-
-const refreshStamp = (meta, id, checks) => {
-  const t = panelTimes(meta);
-  if (!t) return { text: "Baseline data", tone: "faint" };
-
-  if (t.failed) {
-    /* A panel with no `checkedAt` at all has never once come back clean, so
-       there are no "prior values" from a refresh to point at — it is showing
-       the seeded baseline. Saying "failed 5 hours ago" there would imply a
-       working panel that had one bad night. */
-    if (!t.checkedAt) {
-      return {
-        text: "Refresh has never succeeded · showing seeded values",
-        tone: "bad",
-        title: t.error ? `Reason: ${t.error}` : "This panel has no successful refresh on record.",
-      };
-    }
-    return {
-      text: `Refresh failed ${ago(t.erroredAt || t.checkedAt)} · showing values from ${ago(t.checkedAt)}`,
-      tone: "bad",
-      title: t.error ? `Reason: ${t.error}` : undefined,
-    };
-  }
-
-  const flagged = checksStamp(checks);
-  if (flagged) {
-    const when = t.checkedAt ? `Refreshed ${ago(t.checkedAt)} · ` : "";
-    return { text: `${when}${flagged.text}`, tone: "warn", title: flagged.title };
-  }
-
-  if (t.suspicious) {
-    const when = t.checkedAt ? `Refreshed ${ago(t.checkedAt)} · ` : "";
-    return {
-      text: `${when}needs a second look`,
-      tone: "warn",
-      title: t.error || "A figure on this panel was held.",
-    };
-  }
-
-  if (!t.checkedAt) return { text: "Awaiting first refresh", tone: "warn" };
-
-  if (isStale(t.checkedAt, id)) {
-    return {
-      text: `Last checked ${ago(t.checkedAt)}`,
-      tone: "warn",
-      title: id === "share"
-        ? "Web-share is checked weekly. This panel has not had a successful check since then — the values shown are that old."
-        : "The nightly refresh has not successfully checked this panel since then — the values shown are that old.",
-    };
-  }
-
-  /* Checked on schedule. If the numbers themselves haven't moved, say so
-     rather than letting the reader assume the check is what went quiet.
-
-     Only worth saying once a full day has passed without a move, though: on
-     a nightly job every panel is trivially "unchanged since this morning",
-     and a suffix that never goes away stops carrying information.
-     `changedAt` is also null for panels last written before the two
-     timestamps were split, where there is nothing truthful to add. */
-  const heldSince = t.changedAt && t.changedAt < t.checkedAt ? t.changedAt : null;
-  const held = heldSince && Date.now() - new Date(heldSince).getTime() >= 24 * 60 * 60 * 1000
-    ? span(heldSince) : null;
-  return {
-    text: `Refreshed ${ago(t.checkedAt)}${held ? ` · no change in ${held}` : ""}`,
-    tone: "faint",
-    title: held ? `Checked ${id === "share" ? "weekly" : "nightly"}. The last time any figure in this panel moved was ${ago(heldSince)}.` : undefined,
-  };
 };
 
 /* ——— In-page navigation ———
@@ -735,41 +603,6 @@ const PaperTooltip = ({ active, payload, label, unit = "" }) => {
 const tick = { ...mono, fontSize: 11, fill: INK };
 const tickFaint = { ...mono, fontSize: 10.5, fill: FAINT };
 
-/* ——— The masthead line ———
-   Reads off the panels rather than off `updatedAt`, because `updatedAt` also
-   moves when a human edits the file by hand — which would report a nightly
-   job as healthy on a day it never ran. The newest successful panel check is
-   the honest answer to "when did this last refresh". */
-const runStamp = (lastRunAt, updatedAt, meta) => {
-  const panels = Object.entries(meta || {}).flatMap(([id, entry]) => {
-    const t = panelTimes(entry);
-    return t ? [{ id, ...t }] : [];
-  });
-  if (!panels.length) return { text: `Refreshed nightly · last successful check ${ago(updatedAt)}`, tone: "faint" };
-
-  const checks = panels.map((p) => p.checkedAt).filter(Boolean);
-  const newest = checks.length ? checks.reduce((a, b) => (a > b ? a : b)) : null;
-  const behind = panels.filter((p) => p.failed || isStale(p.checkedAt, p.id)).length;
-
-  /* The job fired and every panel came back empty. Worth its own sentence:
-     the fix is upstream — an API key, a rate limit — not in the data. */
-  if (lastRunAt && !isStale(lastRunAt) && behind === panels.length) {
-    return { text: `Nightly refresh ran ${ago(lastRunAt)} · every panel failed`, tone: "bad" };
-  }
-
-  if (isStale(newest)) {
-    return {
-      text: newest ? `Nightly refresh has not run in ${span(newest)}` : "Nightly refresh has not run yet",
-      tone: "warn",
-    };
-  }
-
-  const lead = `Refreshed nightly · last successful check ${ago(newest)}`;
-  return behind
-    ? { text: `${lead} · ${behind} of ${panels.length} panels behind`, tone: "warn" }
-    : { text: lead, tone: "faint" };
-};
-
 const STAMP_COLOR = { faint: FAINT, warn: TEXT_CLAY, bad: TEXT_BRICK };
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -927,9 +760,6 @@ export default function App() {
               </BarChart>
             </ResponsiveContainer>
           </div>
-          <div style={{ ...mono, fontSize: 10, color: FAINT, marginTop: 6 }}>
-            ■ colored bars use each company's brand color from the web-traffic chart (§04), plus Meta (teal), added when Muse Spark reached the frontier{showCN ? " · tan = China-based labs without a tracked brand color" : ""}
-          </div>
           <ValueNotes group={data.checks && data.checks.val} />
           <Commentary>
             Anthropic's $65B Series H still makes it the most valuable private AI lab at $965B, ahead of OpenAI's $852B;
@@ -1041,7 +871,6 @@ export default function App() {
               </BarChart>
             </ResponsiveContainer>
           </div>
-          <div style={{ ...mono, fontSize: 10, color: FAINT, marginTop: 6 }}>■ bars use each product's brand color · Meta AI now carries Meta's teal, added to the palette in §03 when Muse Spark reached the frontier</div>
           <ValueNotes group={data.checks && data.checks.users} />
           <Commentary>
             Read the bases before the bars: Meta AI's 1,500M counts anyone who touched it inside WhatsApp or Instagram,

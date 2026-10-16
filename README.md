@@ -274,6 +274,8 @@ look broken:
 | `Refreshed 5 hours ago` | Checked on schedule; a figure moved. |
 | `Refreshed 5 hours ago · no change in 9 days` | Checked on schedule every night; the world hasn't moved. **Not an error.** |
 | `Last checked 9 days ago` | The check itself stopped running. Clay-colored. |
+| `Updated weekly · last updated Oct 11` | Private-market valuations, checked on Sunday. On schedule. |
+| `Updated weekly · last updated Oct 3 · overdue` | That Sunday check is more than 8 days old. Clay-colored. |
 | `Refresh failed 5 hours ago` | The check ran and errored. Brick-colored, reason in the tooltip. |
 | `Refresh has never succeeded` | No successful refresh on record; the card is showing seeded values. |
 
@@ -281,9 +283,12 @@ The masthead summarizes the same thing across every panel, and reads
 from `lastRunAt`/`checkedAt` rather than `updatedAt`, because `updatedAt`
 also advances on a hand edit — which would report a dead cron as healthy.
 
-"Behind" is more than two days without a successful check. The daily job
-runs once a morning, and GitHub may start it a few minutes late, so one late
-run is not a fault.
+"Behind" is more than two days without a successful check for a nightly
+panel. The daily job runs once a morning, and GitHub may start it a few
+minutes late, so one late run is not a fault. Web-share is weekly, with the
+same two-day grace on top of its seven-day cadence. Private-market
+valuations refresh on Sunday, so that panel is behind only when the last
+successful check is more than 8 days old.
 
 ## Running valuations on their own
 

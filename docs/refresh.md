@@ -227,8 +227,10 @@ added to `estimatedUsd`.
 
 `checks` on `values.json` holds that status per value (`val`, `rev`,
 `users`, `share`). Older files without `checks` still load. The page
-shows a short note on single-source and unconfirmed values. Confirmed
-values are stored and not stamped.
+shows a short note on single-source values. Unconfirmed values stay in
+`checks` and in the refresh log, and are not rendered: no note, no
+alternate figure, no source link. The kept value is shown with the
+ordinary label. Confirmed values are stored and not stamped.
 
 Each entry in `calls` has the model, token counts, `server_tool_use`
 (including `web_search_requests`), `stop_reason`, and that call's
