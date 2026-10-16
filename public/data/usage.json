@@ -1,7 +1,7 @@
 {
-  "runAt": "2026-10-16T08:21:24.508Z",
+  "runAt": "2026-10-16T13:16:32.920Z",
   "fatal": false,
-  "wallClockMs": 1348,
+  "wallClockMs": 1422,
   "budget": {
     "maxDurationMs": 1500000,
     "tailReserveMs": 120000,
@@ -56,7 +56,7 @@
       "attempt": 1,
       "continuation": 0,
       "model": "claude-haiku-4-5-20251001",
-      "durationMs": 379,
+      "durationMs": 410,
       "stopReason": null,
       "httpStatus": 400,
       "inputTokens": null,
@@ -87,14 +87,14 @@
       "billed": false,
       "likelyBilled": false,
       "aborted": false,
-      "error": "{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"You have reached your specified workspace API usage limits. You will regain access on 2026-11-01 at 00:00 UTC.\"},\"request_id\":\"req_011Cg5bFa4JR38urebxvWBLt\"}"
+      "error": "{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"You have reached your specified workspace API usage limits. You will regain access on 2026-11-01 at 00:00 UTC.\"},\"request_id\":\"req_011Cg5ykwGsBoH9BiL3BVVhD\"}"
     },
     {
       "jobId": "capital",
       "attempt": 1,
       "continuation": 0,
       "model": "claude-haiku-4-5-20251001",
-      "durationMs": 157,
+      "durationMs": 136,
       "stopReason": null,
       "httpStatus": 400,
       "inputTokens": null,
@@ -125,14 +125,14 @@
       "billed": false,
       "likelyBilled": false,
       "aborted": false,
-      "error": "{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"You have reached your specified workspace API usage limits. You will regain access on 2026-11-01 at 00:00 UTC.\"},\"request_id\":\"req_011Cg5bFbUNjosXQKNEceBQv\"}"
+      "error": "{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"You have reached your specified workspace API usage limits. You will regain access on 2026-11-01 at 00:00 UTC.\"},\"request_id\":\"req_011Cg5ykxfDu14TCsYjhUfYz\"}"
     },
     {
       "jobId": "energy",
       "attempt": 1,
       "continuation": 0,
       "model": "claude-haiku-4-5-20251001",
-      "durationMs": 220,
+      "durationMs": 150,
       "stopReason": null,
       "httpStatus": 400,
       "inputTokens": null,
@@ -163,7 +163,7 @@
       "billed": false,
       "likelyBilled": false,
       "aborted": false,
-      "error": "{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"You have reached your specified workspace API usage limits. You will regain access on 2026-11-01 at 00:00 UTC.\"},\"request_id\":\"req_011Cg5bFc6LGJrb6fdhpNDwm\"}"
+      "error": "{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"You have reached your specified workspace API usage limits. You will regain access on 2026-11-01 at 00:00 UTC.\"},\"request_id\":\"req_011Cg5ykyHRdfscXQwBNMyrm\"}"
     }
   ],
   "jobs": {
@@ -174,7 +174,7 @@
       "cacheCreationInputTokens": 0,
       "cacheReadInputTokens": 0,
       "serverToolUse": {},
-      "durationMs": 379,
+      "durationMs": 410,
       "stopReasons": [],
       "estimatedUsd": 0,
       "estimateComplete": false,
@@ -193,7 +193,7 @@
       "cacheCreationInputTokens": 0,
       "cacheReadInputTokens": 0,
       "serverToolUse": {},
-      "durationMs": 157,
+      "durationMs": 136,
       "stopReasons": [],
       "estimatedUsd": 0,
       "estimateComplete": false,
@@ -212,7 +212,7 @@
       "cacheCreationInputTokens": 0,
       "cacheReadInputTokens": 0,
       "serverToolUse": {},
-      "durationMs": 220,
+      "durationMs": 150,
       "stopReasons": [],
       "estimatedUsd": 0,
       "estimateComplete": false,
@@ -232,8 +232,8 @@
     "cacheCreationInputTokens": 0,
     "cacheReadInputTokens": 0,
     "serverToolUse": {},
-    "summedCallDurationMs": 756,
-    "wallClockMs": 1348,
+    "summedCallDurationMs": 696,
+    "wallClockMs": 1422,
     "estimatedUsd": 0,
     "estimateComplete": false,
     "unpriced": [
