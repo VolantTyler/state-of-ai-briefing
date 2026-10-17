@@ -371,15 +371,15 @@
         "chatgpt": 4,
         "claude": 11,
         "gemini": 14,
-        "grok": 40,
-        "copilot": 92
+        "grok": 36,
+        "copilot": 91
       },
       "android": {
         "muse": 1,
         "chatgpt": 2,
         "claude": 30,
-        "gemini": 88,
-        "grok": 90
+        "gemini": 90,
+        "grok": 91
       }
     }
   ]
