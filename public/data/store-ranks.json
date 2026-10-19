@@ -408,16 +408,16 @@
       "ios": {
         "muse": 1,
         "chatgpt": 3,
-        "claude": 10,
-        "gemini": 12,
-        "grok": 40
+        "claude": 9,
+        "gemini": 11,
+        "grok": 35
       },
       "android": {
         "muse": 1,
         "chatgpt": 2,
         "claude": 34,
         "gemini": 86,
-        "grok": 89
+        "grok": 90
       }
     }
   ]
