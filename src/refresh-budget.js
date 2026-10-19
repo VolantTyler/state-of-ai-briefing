@@ -127,6 +127,7 @@ export const shouldRetry = ({
   billed = false,
   aborted = false,
   spendCap = false,
+  fallbackAttempted = false,
   httpStatus = null,
   attemptDurationMs = 0,
   remainingMs = 0,
@@ -136,6 +137,9 @@ export const shouldRetry = ({
 } = {}) => {
   if (spendCap) return { retry: false, reason: "spend-cap" };
   if (aborted) return { retry: false, reason: "aborted" };
+  /* OpenRouter already replaced this call. Another Anthropic attempt would
+     bill the fallback twice when the first fallback was the thing that failed. */
+  if (fallbackAttempted) return { retry: false, reason: "fallback-attempted" };
   if (billed || (typeof httpStatus === "number" && httpStatus >= 200 && httpStatus < 300)) {
     return { retry: false, reason: "billed" };
   }
@@ -160,6 +164,7 @@ export const attemptWithRetry = async (run, { decide, remainingMs, now = Date.no
       billed: Boolean(first && first.billed),
       aborted: Boolean(first && (first.aborted || first.timedOut)),
       spendCap: Boolean(first && first.spendCap),
+      fallbackAttempted: Boolean(first && first.fallbackAttempted),
       httpStatus: first && first.httpStatus != null ? first.httpStatus : null,
       attemptDurationMs: Math.max(0, now() - started),
       remainingMs: remainingMs(),
