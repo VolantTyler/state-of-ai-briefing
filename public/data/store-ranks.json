@@ -443,18 +443,18 @@
       "iosDepth": 100,
       "androidDepth": 100,
       "ios": {
-        "muse": 3,
+        "muse": 2,
         "chatgpt": 4,
         "claude": 6,
-        "gemini": 8,
-        "grok": 29,
-        "copilot": 88
+        "gemini": 7,
+        "grok": 26,
+        "copilot": 90
       },
       "android": {
         "muse": 1,
         "chatgpt": 2,
         "claude": 35,
-        "grok": 86,
+        "grok": 87,
         "gemini": 92
       }
     }
