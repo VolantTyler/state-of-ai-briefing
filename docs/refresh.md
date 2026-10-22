@@ -7,8 +7,13 @@ Yahoo for closes, the store charts, then commits of `public/data/values.json`,
 `public/data/trend.csv`, `public/data/store-ranks.json`, and
 `public/data/usage.json`. A valuations run also commits `dev/jev-actions.md`.
 Failures still send the AgentMail email and the Grok Bot `refresh_failed`
-webhook. A clean run still posts `refresh_succeeded`. Nothing in the browser
-calls Anthropic.
+webhook. The workflow posts that webhook again only when the script did
+not already deliver it, including a failure before the script runs. A clean
+run still posts `refresh_succeeded`. A panel produced by the OpenRouter
+fallback also posts `refresh_degraded` (lower urgency, webhook only). The
+log line for each model call is `Model path: Anthropic (<model>) section <job>`
+or `Model path: OpenRouter fallback (<model>) section <job>`. Nothing in the
+browser calls Anthropic.
 
 Commits go through the GitHub contents API. `.github/workflows/refresh.yml`
 mints a GitHub App installation token with
@@ -72,12 +77,27 @@ start a second runner or hit the old 300 second limit.
 
 ## Secrets
 
-Add these under **Settings → Secrets and variables → Actions → Secrets**.
-The names have to match. Empty optional secrets are off, not errors.
+Add these under **Settings → Secrets and variables → Actions → Secrets**
+on `VolantTyler/state-of-ai-briefing`. The names have to match. Empty
+optional secrets are off, not errors.
+
+`OPENROUTER_API_KEY`, `GROK_BOT_WEBHOOK_URL`, and `GROK_BOT_WEBHOOK_KEY`
+are the three to add for fallback and the Grok Bot alert. Each command
+prompts for the value:
+
+```bash
+gh secret set OPENROUTER_API_KEY -R VolantTyler/state-of-ai-briefing
+gh secret set GROK_BOT_WEBHOOK_URL -R VolantTyler/state-of-ai-briefing
+gh secret set GROK_BOT_WEBHOOK_KEY -R VolantTyler/state-of-ai-briefing
+```
+
+`FALLBACK_MODEL` is an Actions variable, not a secret. Unset uses
+`anthropic/claude-sonnet-5.5`.
 
 | Secret | Required | What it is |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | Yes | Anthropic key for the panel calls. Never reaches the browser. |
+| `OPENROUTER_API_KEY` | Fallback | OpenRouter key. Used when an Anthropic call fails with a usage-limit or credit error, or any other non-retryable 4xx. A 429 uses it only after the Anthropic retry. Without this secret the Anthropic error fails the panel, and the log says no fallback is configured. |
 | `GH_APP_ID` | App path | Numeric App ID. Passed to `actions/create-github-app-token@v3` as `app-id`. v3 prints a deprecation annotation that prefers the app's client id. The App ID still mints the token. |
 | `GH_APP_PRIVATE_KEY` | App path | PEM private key for that app. The contents of the downloaded `.pem`, not a path. Delete the `.pem` after the secret is set. |
 | `GH_CONTENTS_TOKEN` | Fallback | Fine-grained PAT, this repository only, **Contents: Read and write**. Used when the app secrets are missing or minting fails. The script also accepts this name when `GITHUB_TOKEN` is unset. Removing it is a follow-up after the app path has deployed. Do not name a secret `GITHUB_TOKEN`; Actions reserves that name for the built-in token. |
@@ -85,8 +105,8 @@ The names have to match. Empty optional secrets are off, not errors.
 | `AGENTMAIL_API_KEY` | Optional | AgentMail key. All three AgentMail values are required before a failure email is sent. |
 | `AGENTMAIL_INBOX_ID` | Optional | AgentMail inbox the message is sent from. |
 | `NOTIFY_EMAIL` | Optional | Address that receives the failure email. |
-| `GROK_BOT_WEBHOOK_URL` | Optional | Grok Bot webhook URL. Both webhook values are required. Success and failure both post. |
-| `GROK_BOT_WEBHOOK_KEY` | Optional | Bearer key for that webhook. |
+| `GROK_BOT_WEBHOOK_URL` | Optional | Grok Bot webhook URL. Both webhook values are required. Success, failure, and a degraded fallback all post. The workflow failure step uses the same pair. |
+| `GROK_BOT_WEBHOOK_KEY` | Optional | Value sent as `Authorization: Bearer <key>`. |
 
 `GITHUB_REPO` and `GITHUB_BRANCH` are set by the workflow (`github.repository`
 and `main`). They are not secrets.
@@ -98,6 +118,7 @@ and budgets. Leave them unset to keep the defaults.
 |---|---|
 | `REFRESH_MAX_USD` | `1` |
 | `ANTHROPIC_MODEL` | `claude-sonnet-4-6` (valuations only) |
+| `FALLBACK_MODEL` | `anthropic/claude-sonnet-5.5` (OpenRouter id; unset keeps this) |
 | `ANTHROPIC_MODEL_VALUATIONS`, `ANTHROPIC_MODEL_MODELS`, `ANTHROPIC_MODEL_USERS`, `ANTHROPIC_MODEL_SHARE`, `ANTHROPIC_MODEL_CAPITAL`, `ANTHROPIC_MODEL_ENERGY` | unset; simple panels stay on Haiku 4.5 |
 | `REFRESH_MAX_DURATION_MS` | `1500000` (25 minutes) |
 | `REFRESH_TAIL_RESERVE_MS` | `120000` (2 minutes, kept for the commits and the alert) |

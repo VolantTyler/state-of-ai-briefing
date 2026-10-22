@@ -16,9 +16,11 @@ import {
   attemptWithRetry, budgetConfigFromEnv, callWindowMs, createBudget, settleWithinBudget, shouldRetry,
 } from "./refresh-budget.js";
 import {
-  HAIKU_MODEL, JOB_MAX_TOKENS, callWithPauseCap, createUsageLog, modelForJob, postAnthropicMessage,
+  HAIKU_MODEL, JOB_MAX_TOKENS, callWithPauseCap, createUsageLog, modelForJob,
   refreshMaxUsd, spendCapBlocks, spendCapReason,
 } from "./refresh-usage.js";
+import { postModelMessage } from "./model-fallback.js";
+import { buildDegradedAlert, runContextFromEnv, truncateAlert } from "./grok-alert.js";
 import {
   commitResolutions, judgeSecondSource, passageFromReply, secondSourcePrompt, typesafeUsageRecord, verifyFlags,
 } from "./flag-verify.js";
@@ -60,6 +62,19 @@ For each company report only the company name, the dollar figure, and whether it
 /* `runRefresh` points this at the env it was given. Helpers below read it
    at call time, so a test can pass a bag without leaking into the next one. */
 let activeEnv = process.env;
+let budgetRemainingMs = () => Number.POSITIVE_INFINITY;
+let fallbackUses = [];
+
+/* Anthropic first. A usage-limit, credit, or other non-retryable 4xx — and
+   a 429 only after that retry is done — goes to OpenRouter once. The key
+   is optional: without it the Anthropic error still fails the call. */
+const postModel = (args) => postModelMessage({
+  fetchImpl: fetch,
+  env: activeEnv,
+  remainingMs: () => budgetRemainingMs(),
+  onFallback: (info) => { fallbackUses.push(info); },
+  ...args,
+});
 
 const env = (k) => {
   const v = activeEnv[k];
@@ -365,8 +380,7 @@ const askClaude = async ({ prompt, jobId, attempt, signal, usageLog, allowContin
   return callWithPauseCap({
     initialMessages: [{ role: "user", content: prompt }],
     allowContinuation,
-    request: ({ messages, continuation }) => postAnthropicMessage({
-      fetchImpl: fetch,
+    request: ({ messages, continuation }) => postModel({
       apiKey: env("ANTHROPIC_API_KEY"),
       model,
       messages,
@@ -375,6 +389,7 @@ const askClaude = async ({ prompt, jobId, attempt, signal, usageLog, allowContin
       jobId,
       attempt,
       continuation,
+      retriesExhausted: attempt >= 2,
       signal,
       usageLog,
     }),
@@ -389,8 +404,7 @@ const askClaude = async ({ prompt, jobId, attempt, signal, usageLog, allowContin
         onUnparsed: logUnparsed,
         reformat: decision && decision.ok !== false
           ? async (raw) => {
-            const reformatted = await postAnthropicMessage({
-              fetchImpl: fetch,
+            const reformatted = await postModel({
               apiKey: env("ANTHROPIC_API_KEY"),
               model,
               messages: [{ role: "user", content: jsonReformatPrompt(raw, jsonShape(prompt)) }],
@@ -399,6 +413,7 @@ const askClaude = async ({ prompt, jobId, attempt, signal, usageLog, allowContin
               jobId,
               attempt,
               continuation: "reformat",
+              retriesExhausted: attempt >= 2,
               signal,
               usageLog,
             });
@@ -438,40 +453,59 @@ const truncate = (s, n = 400) => {
   return t.length > n ? `${t.slice(0, n - 1)}…` : t;
 };
 
-export const buildAlert = ({ severity, runAt, failures = [], errors = {}, error, usage = null, timedOut = [], skipped = null }) => {
+export const buildAlert = ({ severity, runAt, failures = [], errors = {}, error, usage = null, timedOut = [], skipped = null, context = null }) => {
   const stamp = (runAt || new Date().toISOString()).slice(0, 10);
   const subject =
     severity === "fatal" ? `State of AI refresh crashed · ${stamp}`
     : severity === "all" ? `State of AI refresh failed (all panels) · ${stamp}`
     : `State of AI refresh partial failure · ${stamp}`;
 
+  const safeErrors = Object.fromEntries(
+    Object.entries(errors).map(([k, v]) => [k, truncateAlert(v, 500)]),
+  );
+  const safeError = error ? truncateAlert(error, 500) : null;
+  const errorSummary = truncateAlert(
+    safeError
+    || failures.map((id) => (safeErrors[id] ? `${id}: ${safeErrors[id]}` : id)).join("; ")
+    || "refresh failed",
+    500,
+  ) || "refresh failed";
+
   const lines = [
     `severity: ${severity}`,
     `runAt: ${runAt || "(unknown)"}`,
   ];
+  if (context && context.runUrl) lines.push(`runUrl: ${context.runUrl}`);
   if (failures.length) lines.push(`failures: ${failures.join(", ")}`);
   if (skipped && Object.keys(skipped).length) lines.push(`skipped: ${JSON.stringify(skipped)}`);
   if (timedOut.length) lines.push(`timedOut: ${timedOut.join(", ")}`);
-  if (error) lines.push(`error: ${truncate(error)}`);
+  if (safeError) lines.push(`error: ${truncate(safeError)}`);
   if (usage && usage.totals && usage.totals.estimatedUsd != null) {
     const complete = usage.totals.estimateComplete ? "complete" : "incomplete";
     lines.push(`estimatedUsd: ${usage.totals.estimatedUsd} (${complete})`);
   }
   for (const id of failures) {
-    if (errors[id]) lines.push(`  ${id}: ${truncate(errors[id], 240)}`);
+    if (safeErrors[id]) lines.push(`  ${id}: ${truncate(safeErrors[id], 240)}`);
   }
   lines.push("", "Dashboard keeps prior values until the next successful refresh.");
 
   return {
     source: "state-of-ai-briefing",
     event: "refresh_failed",
+    urgency: "high",
     severity,
     runAt: runAt || null,
+    ...(context ? {
+      repo: context.repo || null,
+      workflow: context.workflow || null,
+      runUrl: context.runUrl || null,
+      job: context.job || null,
+      step: context.step || null,
+    } : {}),
     failures,
-    errors: Object.fromEntries(
-      Object.entries(errors).map(([k, v]) => [k, truncate(v, 500)]),
-    ),
-    error: error ? truncate(error, 500) : null,
+    errors: safeErrors,
+    error: safeError,
+    errorSummary,
     subject,
     message: lines.join("\n"),
     usage,
@@ -509,7 +543,10 @@ const sendEmailAlert = async (alert) => {
 const notifyGrokBot = async (body) => {
   const url = activeEnv.GROK_BOT_WEBHOOK_URL;
   const key = activeEnv.GROK_BOT_WEBHOOK_KEY;
-  if (!url || !key) return { skipped: "grok bot unset" };
+  if (!url || !key) {
+    console.log("Grok Bot alert skipped: GROK_BOT_WEBHOOK_URL or GROK_BOT_WEBHOOK_KEY is not set.");
+    return { skipped: "grok bot unset" };
+  }
 
   const res = await fetch(url, {
     method: "POST",
@@ -541,16 +578,61 @@ const notifySuccess = async ({ runAt, panels, usage, skipped = null }) => {
   } catch (e) { /* a notify error must never change the refresh result or response */ }
 };
 
+const FAILURE_SUMMARY_PATH = ".refresh-error-summary.txt";
+const GROK_NOTIFIED_PATH = ".refresh-grok-notified";
+
 const notifyFailure = async (payload) => {
-  const alert = buildAlert(payload);
+  const alert = buildAlert({ ...payload, context: runContextFromEnv(activeEnv) });
+  try {
+    await writeFile(FAILURE_SUMMARY_PATH, `${alert.errorSummary}\n`);
+  } catch (e) { /* the workflow step still posts a generic line */ }
   const results = await Promise.allSettled([
     sendEmailAlert(alert),
     notifyGrokBot(alert),
   ]);
+  const grokBot = results[1].status === "fulfilled"
+    ? results[1].value
+    : { error: String(results[1].reason?.message || results[1].reason) };
+  if (grokBot && grokBot.ok) {
+    try { await writeFile(GROK_NOTIFIED_PATH, "sent\n"); } catch (e) { /* the workflow step may post again */ }
+  }
   return {
     email: results[0].status === "fulfilled" ? results[0].value : { error: String(results[0].reason?.message || results[0].reason) },
-    grokBot: results[1].status === "fulfilled" ? results[1].value : { error: String(results[1].reason?.message || results[1].reason) },
+    grokBot,
   };
+};
+
+/* Lower urgency than a failed job. The panels that fell back still
+   published, so this does not change ok/partial and it does not email. */
+const degradedSections = (failureIds = []) => {
+  const failed = new Set(failureIds);
+  const seen = new Set();
+  const out = [];
+  for (const info of fallbackUses) {
+    if (!info || failed.has(info.jobId) || seen.has(info.jobId)) continue;
+    seen.add(info.jobId);
+    out.push(info);
+  }
+  return out;
+};
+
+const notifyDegraded = async (runAt, fallbacks) => {
+  if (!fallbacks || !fallbacks.length) return null;
+  const context = runContextFromEnv(activeEnv);
+  const alert = buildDegradedAlert({ runAt, fallbacks, ...context });
+  console.log(JSON.stringify({
+    source: "state-of-ai-briefing",
+    event: "refresh_degraded",
+    urgency: "low",
+    sections: fallbacks.map((row) => row.jobId),
+    model: fallbacks[0] && fallbacks[0].model || null,
+  }));
+  try {
+    return await notifyGrokBot(alert);
+  } catch (e) {
+    console.log("Grok Bot degraded alert failed");
+    return { error: "post failed" };
+  }
 };
 
 export const jobsQueryFromRequest = (req) => {
@@ -615,6 +697,8 @@ async function runRefreshWithEnv({ jobs, budget: budgetOverride, now, startedAt 
     tailReserveMs: budgetSettings.tailReserveMs,
     now,
   });
+  fallbackUses = [];
+  budgetRemainingMs = () => budget.remainingMs();
   const callCapMs = budgetSettings.callTimeoutMs;
   const valuationsCallCapMs = budgetSettings.valuationsCallTimeoutMs;
   const valuationsMinStartMs = budgetSettings.valuationsMinStartMs;
@@ -732,8 +816,10 @@ async function runRefreshWithEnv({ jobs, budget: budgetOverride, now, startedAt 
        as long as the first one. A 200 whose JSON or valuation judgment
        failed has already paid for its search; a second call would bill that
        job twice. A 400 such as the workspace limit or an empty credit
-       balance will not succeed on a retry either. A spend-cap refusal is
-       not a retry either. */
+       balance will not succeed on another Anthropic try. That call, and any
+       other non-retryable 4xx, is sent once through OpenRouter when
+       OPENROUTER_API_KEY is set. A 429 takes that path only after the
+       Anthropic retry is done. A spend-cap refusal is not a retry either. */
     const ids = selected.ids;
     const allowContinuation = (signal) => {
       if ((signal && signal.aborted) || budget.expired()) {
@@ -750,8 +836,7 @@ async function runRefreshWithEnv({ jobs, budget: budgetOverride, now, startedAt 
       const passages = await callWithPauseCap({
         initialMessages: [{ role: "user", content: VALUATION_SEARCH }],
         allowContinuation: () => allowContinuation(signal),
-        request: ({ messages, continuation }) => postAnthropicMessage({
-          fetchImpl: fetch,
+        request: ({ messages, continuation }) => postModel({
           apiKey: env("ANTHROPIC_API_KEY"),
           model,
           messages,
@@ -760,6 +845,7 @@ async function runRefreshWithEnv({ jobs, budget: budgetOverride, now, startedAt 
           jobId: "valuations",
           attempt,
           continuation,
+          retriesExhausted: attempt >= 2,
           signal,
           usageLog,
         }),
@@ -953,8 +1039,7 @@ async function runRefreshWithEnv({ jobs, budget: budgetOverride, now, startedAt 
           initialMessages: [{ role: "user", content: secondSourcePrompt(flag) }],
           maxContinuations: 0,
           allowContinuation: () => ({ ok: false, message: "second source does not continue a pause" }),
-          request: ({ messages, continuation }) => postAnthropicMessage({
-            fetchImpl: fetch,
+          request: ({ messages, continuation }) => postModel({
             apiKey: env("ANTHROPIC_API_KEY"),
             model,
             messages,
@@ -963,6 +1048,7 @@ async function runRefreshWithEnv({ jobs, budget: budgetOverride, now, startedAt 
             jobId: "verify",
             attempt: flag.attempt,
             continuation,
+            retriesExhausted: true,
             signal: controller.signal,
             usageLog,
           }),
@@ -976,8 +1062,7 @@ async function runRefreshWithEnv({ jobs, budget: budgetOverride, now, startedAt 
               stopReason,
               reformat: decision && decision.ok !== false
                 ? async (raw) => {
-                  const reformatted = await postAnthropicMessage({
-                    fetchImpl: fetch,
+                  const reformatted = await postModel({
                     apiKey: env("ANTHROPIC_API_KEY"),
                     model,
                     messages: [{ role: "user", content: jsonReformatPrompt(raw) }],
@@ -986,6 +1071,7 @@ async function runRefreshWithEnv({ jobs, budget: budgetOverride, now, startedAt 
                     jobId: "verify",
                     attempt: flag.attempt,
                     continuation: "reformat",
+                    retriesExhausted: true,
                     signal: controller.signal,
                     usageLog,
                   });
@@ -1147,6 +1233,7 @@ async function runRefreshWithEnv({ jobs, budget: budgetOverride, now, startedAt 
         );
       } catch (e) { /* the run already failed; a failed write changes nothing */ }
       await saveTrace();
+      const degraded = await notifyDegraded(runAt, degradedSections(failures));
       const notified = await notifyFailure({
         severity: "all", runAt, failures, errors, usage: summary, timedOut, skipped: outcome.skipped,
       });
@@ -1157,6 +1244,7 @@ async function runRefreshWithEnv({ jobs, budget: budgetOverride, now, startedAt 
         timedOut,
         usage: summary,
         notified,
+        ...(degraded ? { degraded } : {}),
       });
     }
 
@@ -1180,6 +1268,7 @@ async function runRefreshWithEnv({ jobs, budget: budgetOverride, now, startedAt 
     }
     await saveTrace();
 
+    const degraded = await notifyDegraded(runAt, degradedSections(failures));
     const notified = failures.length
       ? await notifyFailure({
         severity: "partial", runAt, failures, errors, usage: summary, timedOut, skipped: outcome.skipped,
@@ -1196,6 +1285,7 @@ async function runRefreshWithEnv({ jobs, budget: budgetOverride, now, startedAt 
       timedOut,
       usage: summary,
       ...(notified ? { notified } : {}),
+      ...(degraded ? { degraded } : {}),
     });
   } catch (e) {
     await saveTrace();
@@ -1211,11 +1301,13 @@ async function runRefreshWithEnv({ jobs, budget: budgetOverride, now, startedAt 
         );
       } catch (writeError) { /* the alert still fires */ }
     }
+    const degraded = await notifyDegraded(runAt, degradedSections());
     const notified = await notifyFailure({
       severity: "fatal", runAt, error, usage: summary, timedOut: summary.timedOut || [],
     });
     return finish(500, {
       ok: false, error, jobs: selected.ids, usage: summary, notified,
+      ...(degraded ? { degraded } : {}),
     });
   }
 }

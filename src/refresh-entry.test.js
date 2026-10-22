@@ -45,11 +45,12 @@ const githubFail = (status, body) => ({
 /* Fake GitHub, Yahoo, and a refusing Anthropic. No request leaves the test. */
 const drive = (options) => exclusive(() => driveOnce(options));
 
-const driveOnce = async ({ jobs, env = {}, budget, now, valuesText = null, failRead = null } = {}) => {
+const driveOnce = async ({ jobs, env = {}, budget, now, valuesText = null, failRead = null, openRouterText = null } = {}) => {
   const originalFetch = globalThis.fetch;
   const originalLog = console.log;
   const puts = [];
   const anthropicBodies = [];
+  const openRouterBodies = [];
   const urls = [];
   const logs = [];
   let authorization = "";
@@ -65,6 +66,11 @@ const driveOnce = async ({ jobs, env = {}, budget, now, valuesText = null, failR
         status: 400,
         text: async () => JSON.stringify({ type: "error", error: { type: "invalid_request_error", message: "test refusal" } }),
       };
+    }
+    if (href.includes("openrouter.ai")) {
+      if (!openRouterText) throw new Error(`unexpected fetch ${href}`);
+      openRouterBodies.push(String(opts.body || ""));
+      return { ok: true, status: 200, text: async () => openRouterText };
     }
     if (href.includes("query1.finance.yahoo.com")) {
       const symbol = decodeURIComponent(href.split("/chart/")[1].split("?")[0]);
@@ -119,7 +125,7 @@ const driveOnce = async ({ jobs, env = {}, budget, now, valuesText = null, failR
   };
   try {
     const result = await runRefresh({ jobs, env: bag, budget, now });
-    return { result, puts, anthropicBodies, urls, logs, authorization };
+    return { result, puts, anthropicBodies, openRouterBodies, urls, logs, authorization };
   } finally {
     globalThis.fetch = originalFetch;
     console.log = originalLog;
@@ -251,6 +257,7 @@ test("the workflow cron, concurrency, timeout, and secret names match the runner
     "NOTIFY_EMAIL",
     "GROK_BOT_WEBHOOK_URL",
     "GROK_BOT_WEBHOOK_KEY",
+    "OPENROUTER_API_KEY",
   ]) {
     assert.match(workflow, new RegExp(`secrets\\.${name}\\b`));
   }
@@ -272,6 +279,12 @@ test("the workflow cron, concurrency, timeout, and secret names match the runner
   assert.equal(/echo[^\n]*\$\{?APP_TOKEN\}?/.test(workflow), false);
   assert.equal(/echo[^\n]*\$\{?PAT\}?/.test(workflow), false);
   assert.match(workflow, /node scripts\/refresh\.js/);
+  assert.match(workflow, /OPENROUTER_API_KEY: \$\{\{ secrets\.OPENROUTER_API_KEY \}\}/);
+  assert.match(workflow, /FALLBACK_MODEL: \$\{\{ vars\.FALLBACK_MODEL \}\}/);
+  assert.match(workflow, /if: failure\(\)/);
+  assert.match(workflow, /Grok Bot alert skipped: GROK_BOT_WEBHOOK_URL or GROK_BOT_WEBHOOK_KEY is not set\./);
+  assert.match(workflow, /node scripts\/grok-failure-alert\.js/);
+  assert.equal(workflow.includes("steps.app-token.outcome"), false);
 });
 
 test("an unknown job list never calls GitHub or Claude", async () => {
@@ -298,7 +311,9 @@ test("the daily entry point does not start valuations and does not write the loc
   assert.equal(usage.budget.callTimeoutMs, ACTIONS_CALL_TIMEOUT_MS);
   assert.equal(usage.budget.valuationsMinStartMs, ACTIONS_VALUATIONS_MIN_START_MS);
   assert.equal(usage.lockReleased, undefined);
-  const start = run.logs.map((line) => JSON.parse(line)).find((row) => row.event === "refresh_start");
+  const start = run.logs.map((line) => {
+    try { return JSON.parse(line); } catch (e) { return null; }
+  }).find((row) => row && row.event === "refresh_start");
   assert.equal(start.preset, "daily");
   assert.equal(start.jobs.includes("valuations"), false);
 });
@@ -351,6 +366,40 @@ test("valuations does not start when the remaining window is under the minimum",
   assert.equal(run.result.body.ok, true);
   assert.match(run.result.body.skipped.valuations, /not started/);
   assert.equal(run.anthropicBodies.length, 0);
+});
+
+test("a non-retryable 400 is published through OpenRouter without a second Anthropic call", async () => {
+  const run = await drive({
+    jobs: "capital",
+    env: { OPENROUTER_API_KEY: "sk-or-test" },
+    openRouterText: JSON.stringify({
+      model: "anthropic/claude-sonnet-5.5",
+      choices: [{
+        finish_reason: "stop",
+        message: {
+          content: "{\"capex\":{\"Alphabet\":210,\"Amazon\":220,\"Microsoft\":175,\"Meta\":137},\"revenue\":{\"Anthropic\":65,\"OpenAI\":40,\"xAI\":0.5}}",
+        },
+      }],
+      usage: { prompt_tokens: 12, completion_tokens: 30, cost: 0.02 },
+    }),
+  });
+  assert.equal(run.result.status, 200);
+  assert.equal(run.result.body.ok, true);
+  assert.deepEqual(run.result.body.refreshed, ["capital"]);
+  assert.equal(run.anthropicBodies.length, 1);
+  assert.equal(run.openRouterBodies.length, 1);
+  assert.equal(run.urls.filter((url) => url.includes("api.anthropic.com")).length, 1);
+  const sent = JSON.parse(run.openRouterBodies[0]);
+  assert.equal(sent.model, "anthropic/claude-sonnet-5.5");
+  assert.equal(sent.plugins[0].max_results, 3);
+  assert.equal(JSON.stringify(sent).includes("test-key"), false);
+  assert.equal(JSON.stringify(sent).includes("sk-or-test"), false);
+  assert.ok(run.logs.some((line) => line.startsWith("Model path: OpenRouter fallback (anthropic/claude-sonnet-5.5) section capital")));
+  const values = JSON.parse(run.puts.find((put) => put.path === "public/data/values.json").text);
+  assert.equal(values.capex.Alphabet, 210);
+  assert.equal(run.result.body.degraded.skipped, "grok bot unset");
+  const usage = JSON.parse(run.puts.find((put) => put.path === "public/data/usage.json").text);
+  assert.equal(usage.calls.some((call) => call.provider === "openrouter" && call.estimatedUsd === 0.02), true);
 });
 
 test("a valuations run with room left calls Claude and does not call it twice on a 400", async () => {

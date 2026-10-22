@@ -5,3 +5,5 @@ dist
 .env
 .env.*
 !.env.example
+.refresh-grok-notified
+.refresh-error-summary.txt

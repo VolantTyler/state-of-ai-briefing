@@ -43,13 +43,16 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        id: checkout
         with:
           persist-credentials: false
       - uses: actions/setup-node@v4
+        id: setup-node
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      - id: npm-ci
+        run: npm ci
       - name: Note GitHub App secret presence
         id: app-secrets
         env:
@@ -98,12 +101,15 @@ jobs:
             exit 1
           fi
       - name: Refresh
+        id: refresh
         run: node scripts/refresh.js
         env:
           REFRESH_EVENT: ${{ github.event_name }}
           REFRESH_SCHEDULE: ${{ github.event.schedule }}
           REFRESH_JOBS: ${{ github.event.inputs.jobs }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          FALLBACK_MODEL: ${{ vars.FALLBACK_MODEL }}
           GITHUB_TOKEN: ${{ case(steps.contents-auth.outputs.source == 'app', steps.app-token.outputs.token, secrets.GH_CONTENTS_TOKEN) }}
           GITHUB_COMMIT_NAME: Tyler Stahl
           GITHUB_COMMIT_EMAIL: tylerstahl@gmail.com
@@ -128,3 +134,73 @@ jobs:
           REFRESH_CALL_TIMEOUT_MS: ${{ vars.REFRESH_CALL_TIMEOUT_MS }}
           REFRESH_VALUATIONS_CALL_TIMEOUT_MS: ${{ vars.REFRESH_VALUATIONS_CALL_TIMEOUT_MS }}
           REFRESH_VALUATIONS_MIN_START_MS: ${{ vars.REFRESH_VALUATIONS_MIN_START_MS }}
+      # Fires for a real job failure. The app-token step is continue-on-error,
+      # so a mint failure that still refreshes through GH_CONTENTS_TOKEN does
+      # not alert. The script posts first when it can; this step skips when
+      # that post was delivered, and when the webhook secrets are absent.
+      - name: Alert Grok Bot
+        if: failure() && (steps.refresh.outcome == 'failure' || steps.contents-auth.outcome == 'failure' || steps.npm-ci.outcome == 'failure' || steps.checkout.outcome == 'failure' || steps.setup-node.outcome == 'failure' || steps.app-secrets.outcome == 'failure')
+        env:
+          GROK_BOT_WEBHOOK_URL: ${{ secrets.GROK_BOT_WEBHOOK_URL }}
+          GROK_BOT_WEBHOOK_KEY: ${{ secrets.GROK_BOT_WEBHOOK_KEY }}
+          ALERT_REPO: ${{ github.repository }}
+          ALERT_WORKFLOW: ${{ github.workflow }}
+          ALERT_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          ALERT_JOB: ${{ github.job }}
+          CHECKOUT_OUTCOME: ${{ steps.checkout.outcome }}
+          SETUP_NODE_OUTCOME: ${{ steps.setup-node.outcome }}
+          NPM_OUTCOME: ${{ steps.npm-ci.outcome }}
+          APP_SECRETS_OUTCOME: ${{ steps.app-secrets.outcome }}
+          CONTENTS_OUTCOME: ${{ steps.contents-auth.outcome }}
+          REFRESH_OUTCOME: ${{ steps.refresh.outcome }}
+        run: |
+          set -euo pipefail
+          if [ -f scripts/grok-failure-alert.js ] && command -v node >/dev/null 2>&1; then
+            node scripts/grok-failure-alert.js
+            exit 0
+          fi
+          python3 - << 'PY'
+          import json, os, urllib.request
+          url = os.environ.get("GROK_BOT_WEBHOOK_URL", "").strip()
+          key = os.environ.get("GROK_BOT_WEBHOOK_KEY", "").strip()
+          if not url or not key:
+              print("Grok Bot alert skipped: GROK_BOT_WEBHOOK_URL or GROK_BOT_WEBHOOK_KEY is not set.")
+              raise SystemExit(0)
+          step = "checkout"
+          for name, var in (
+              ("setup-node", "SETUP_NODE_OUTCOME"),
+              ("npm ci", "NPM_OUTCOME"),
+              ("Note GitHub App secret presence", "APP_SECRETS_OUTCOME"),
+              ("Select contents token", "CONTENTS_OUTCOME"),
+              ("Refresh", "REFRESH_OUTCOME"),
+          ):
+              if os.environ.get(var) == "failure":
+                  step = name
+                  break
+          payload = {
+              "source": "state-of-ai-briefing",
+              "event": "refresh_failed",
+              "urgency": "high",
+              "repo": os.environ.get("ALERT_REPO") or None,
+              "workflow": os.environ.get("ALERT_WORKFLOW") or None,
+              "runUrl": os.environ.get("ALERT_RUN_URL") or None,
+              "job": os.environ.get("ALERT_JOB") or "refresh",
+              "step": step,
+              "error": "Refresh job failed before a panel error was recorded.",
+          }
+          req = urllib.request.Request(
+              url,
+              data=json.dumps(payload).encode(),
+              headers={
+                  "Authorization": "Bearer " + key,
+                  "Content-Type": "application/json",
+                  "User-Agent": "state-of-ai-briefing",
+              },
+              method="POST",
+          )
+          try:
+              with urllib.request.urlopen(req, timeout=15) as res:
+                  print("Grok Bot alert posted (%s)." % res.status)
+          except Exception:
+              print("Grok Bot alert failed: network")
+          PY
