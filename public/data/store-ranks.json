@@ -465,17 +465,17 @@
       "ios": {
         "muse": 3,
         "chatgpt": 5,
-        "claude": 7,
+        "claude": 6,
         "gemini": 8,
-        "grok": 32,
-        "copilot": 82
+        "grok": 26,
+        "copilot": 83
       },
       "android": {
         "muse": 1,
         "chatgpt": 2,
-        "claude": 29,
+        "claude": 31,
         "gemini": 83,
-        "grok": 92
+        "grok": 93
       }
     }
   ]
