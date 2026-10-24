@@ -506,15 +506,15 @@
         "muse": 4,
         "chatgpt": 5,
         "claude": 9,
-        "gemini": 11,
-        "grok": 46,
-        "copilot": 99
+        "gemini": 12,
+        "grok": 44,
+        "copilot": 100
       },
       "android": {
         "muse": 1,
         "chatgpt": 2,
         "claude": 31,
-        "gemini": 81,
+        "gemini": 83,
         "grok": 86
       }
     }
