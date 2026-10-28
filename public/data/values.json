@@ -53,7 +53,7 @@
   },
   "val": {
     "Anthropic": 965,
-    "OpenAI": 300,
+    "OpenAI": 852,
     "xAI": 230,
     "Databricks": 190,
     "DeepSeek": 74,
@@ -74,7 +74,7 @@
   "users": {
     "Meta AI": 1200,
     "ChatGPT": 1100,
-    "Gemini": 950,
+    "Gemini": 1000,
     "Claude": 245,
     "Grok": 118,
     "Copilot": 111
@@ -199,16 +199,6 @@
         "candidate": null,
         "reason": "No cited amount named this company, so the previous mark stays.",
         "sources": []
-      },
-      "OpenAI": {
-        "status": "confirmed",
-        "value": 300,
-        "candidate": 300,
-        "reason": "The figure moved. A second source agrees with 300 billion USD.",
-        "sources": [
-          "https://techfundingnews.com/can-openai-hold-its-300b-lead-as-xai-and-anthropic-close-in/",
-          "https://www.cnbc.com/2025/03/31/openai-closes-40-billion-in-funding-the-largest-private-fundraise-in-history-softbank-chatgpt.html"
-        ]
       }
     }
   },
