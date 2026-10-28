@@ -224,11 +224,13 @@ be read. The official API (`/api/v2/language/models`) needs an
 `ARTIFICIAL_ANALYSIS_API_KEY` secret. User counts are stored in millions.
 A raw count of 100,000 or more is divided by one million once. A converted
 count outside 1–10,000 million is flagged. On read, that stored number is
-kept; it is not replaced with the seeded baseline.
+kept; it is not replaced with the seeded baseline. Three or more assistants
+with the same converted count are not written: their previous counts stay
+and the tie is flagged. A pair with the same count still publishes.
 
 An exact revenue tie, a named share total outside 90–110, and a valuation
 that moves, that the snippet marks as a round size or a run rate, or that
-falls to under one third of the stored mark, are flagged the same way.
+falls to half or less of the stored mark, are flagged the same way.
 The candidate is not written until the check below finishes. A Choice of
 `none`, or no cited amount, keeps the previous mark and records why. Noul
 is recorded and is not a write gate.
@@ -243,8 +245,12 @@ says nothing. Supports publishes the candidate as confirmed. Contradicts
 keeps the previous value and marks it unconfirmed, naming both figures.
 If the lookup cannot run — spend cap, time budget, error, no independent
 passage, or the Choice says nothing — the candidate is published as single
-source. Typesafe input tokens are logged on the usage row and are not
-added to `estimatedUsd`.
+source. A valuation whose candidate is half or less of the stored mark is
+the exception: supports, says nothing, and a skipped lookup all keep the
+previous mark, mark the check unconfirmed, and record both figures.
+Passage dates are not on the flag, so this hold does not yet distinguish
+a newer mark from an older round. Typesafe input tokens are logged on the
+usage row and are not added to `estimatedUsd`.
 
 `checks` on `values.json` holds that status per value (`val`, `rev`,
 `users`, `share`). Older files without `checks` still load. The page

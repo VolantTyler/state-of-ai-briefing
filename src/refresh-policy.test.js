@@ -272,6 +272,48 @@ test("user counts are stored in millions and mixed units are normalized", () => 
   assert.match(JOBS.users.prompt, /1200, not 1200000000/);
 });
 
+test("three assistants at the same user count keep their previous values", () => {
+  const prior = {
+    ...BASELINE,
+    users: BASELINE.users.map((row) => {
+      if (row.name === "Meta AI") return { ...row, users: 1200 };
+      if (row.name === "ChatGPT") return { ...row, users: 1100 };
+      if (row.name === "Gemini") return { ...row, users: 1000 };
+      return row;
+    }),
+  };
+  const held = JOBS.users.apply(prior, {
+    users: { "Meta AI": 1000, ChatGPT: 1000, Gemini: 1000, Copilot: 130 },
+  });
+  assert.equal(held.users.find((row) => row.name === "Meta AI").users, 1200);
+  assert.equal(held.users.find((row) => row.name === "ChatGPT").users, 1100);
+  assert.equal(held.users.find((row) => row.name === "Gemini").users, 1000);
+  assert.equal(held.users.find((row) => row.name === "Copilot").users, 130);
+  assert.equal(held.users.find((row) => row.name === "Claude").users, 245);
+  assert.deepEqual(held.panelFlags.map((row) => row.name), ["Meta AI", "ChatGPT", "Gemini"]);
+  assert.equal(
+    held.panelFlags[0].reason,
+    "identical users rejected: Meta AI, ChatGPT, and Gemini all 1000; previous values kept",
+  );
+  assert.equal(held.panelFlags[0].prior, 1200);
+  assert.equal(held.panelFlags[1].candidate, 1000);
+  assert.equal(held.panelFlags[0].field, "users");
+
+  const pair = JOBS.users.apply(prior, { users: { ChatGPT: 1000, Gemini: 1000 } });
+  assert.equal(pair.users.find((row) => row.name === "ChatGPT").users, 1000);
+  assert.equal(pair.users.find((row) => row.name === "Gemini").users, 1000);
+  assert.equal(pair.users.find((row) => row.name === "Meta AI").users, 1200);
+  assert.equal(pair.panelFlags, undefined);
+
+  const converted = JOBS.users.apply(prior, {
+    users: { "Meta AI": 1000, ChatGPT: 1_000_000_000, Gemini: 1000 },
+  });
+  assert.equal(converted.users.find((row) => row.name === "Meta AI").users, 1200);
+  assert.equal(converted.users.find((row) => row.name === "ChatGPT").users, 1100);
+  assert.equal(converted.users.find((row) => row.name === "Gemini").users, 1000);
+  assert.equal(converted.panelFlags.length, 3);
+});
+
 test("an exact revenue tie is flagged and is not written yet", () => {
   const ties = identicalCompanyGroups({ Anthropic: 70, OpenAI: 70, xAI: 0.5 });
   assert.equal(identicalRevenueNote(ties), "identical revenue rejected: Anthropic and OpenAI both 70; previous values kept");

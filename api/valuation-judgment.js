@@ -8,9 +8,9 @@ export const MODEL = "jev-latest";
 export const NONE = "none";
 export const MIN_BILLIONS = 1;
 export const MAX_CANDIDATES = 12;
-/* A completed price does not fall by 3× overnight. Round size and run rate
+/* A completed price does not fall by half overnight. Round size and run rate
    sit in the same sentence as the mark and are smaller than it. */
-export const ABSURD_DROP = 3;
+export const ABSURD_DROP = 2;
 
 export const LATEST_PRICE_QUESTION =
   "Which candidate is the latest completed price for the company in `company`? A completed price is a completed funding round's post-money valuation of that company, or the market capitalization of that company on an exchange where that company itself is listed.";
@@ -158,7 +158,7 @@ export function decide(candidates, answers) {
 export function valuationFlagReason(reason) {
   if (reason === "round-size") return "The figure is the size of a round next to a higher valuation.";
   if (reason === "revenue") return "The figure is revenue or a run rate, not a valuation.";
-  if (reason === "absurd-drop") return "The figure fell to under one third of the stored mark.";
+  if (reason === "absurd-drop") return "The figure fell to half or less of the stored mark.";
   if (reason === "changed") return "The figure moved.";
   return "The figure needs a second source.";
 }
@@ -214,8 +214,9 @@ export function misplacedAmount(candidate) {
 }
 
 /* A pick that matches the stored mark is published. A pick that moves, that
-   falls to under one third, or that is a round size or a run rate is flagged
-   for a second source. Nothing here discards the candidate. */
+   falls to half or less, or that is a round size or a run rate is flagged
+   for a second source. Nothing here discards the candidate. An absurd drop
+   is held later, in resolveFlag, even when a second source agrees. */
 export function gateWrittenValuation(decision, candidate, prior) {
   if (!decision || (decision.action !== "picked" && decision.action !== "wrote")) return decision;
   const next = decision.billions;
@@ -333,7 +334,10 @@ function actionSentence(result) {
   if (result.reason === "none") {
     return `Kept ${money(result.prior)}. Choice selected none, so code did not copy an amount.`;
   }
-  if (result.reason === "round-size" || result.reason === "revenue" || result.reason === "absurd-drop" || result.reason === "changed") {
+  if (result.reason === "absurd-drop") {
+    return `Flagged ${money(result.billions)}. Choice selected ${result.picked}. ${valuationFlagReason(result.reason)} The previous mark stays; a second source does not publish this drop.`;
+  }
+  if (result.reason === "round-size" || result.reason === "revenue" || result.reason === "changed") {
     return `Flagged ${money(result.billions)}. Choice selected ${result.picked}. ${valuationFlagReason(result.reason)} A second source checks it before it is published.`;
   }
   return `Wrote ${money(result.billions)}. Choice selected ${result.picked}, so code copied the amount the regex had parsed.`;
@@ -377,7 +381,7 @@ export function renderJevActions(report = {}) {
   lines.push("");
   lines.push("## What code does after Jev");
   lines.push("");
-  lines.push("Code flags the chosen amount when its snippet shows a round size beside a higher valuation, when the amount is revenue or a run rate, or when it falls to less than one third of the prior mark. A second source and a later Choice then decide whether to publish it. A bare dollar figure with the unit cut off is used only to notice the higher valuation, and is never written.");
+  lines.push("Code flags the chosen amount when its snippet shows a round size beside a higher valuation, when the amount is revenue or a run rate, or when it falls to half or less of the prior mark. A second source and a later Choice decide whether to publish a move, a round size, or a run rate. A drop to half or less of the prior mark is not published from that check, and the previous mark stays. A bare dollar figure with the unit cut off is used only to notice the higher valuation, and is never written.");
   lines.push("");
   lines.push("## Latest run");
   lines.push("");
