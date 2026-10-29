@@ -605,15 +605,16 @@
         "chatgpt": 4,
         "claude": 6,
         "gemini": 9,
-        "grok": 35,
-        "copilot": 57
+        "grok": 32,
+        "copilot": 58,
+        "metaai": 97
       },
       "android": {
         "muse": 1,
         "chatgpt": 2,
         "claude": 27,
-        "grok": 72,
-        "gemini": 77
+        "grok": 75,
+        "gemini": 81
       }
     }
   ]
