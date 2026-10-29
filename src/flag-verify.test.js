@@ -156,6 +156,117 @@ test("a revenue tie is resolved by the mocked passage", async () => {
   assert.match(data.checks.rev.OpenAI.reason, /25 billion USD/);
 });
 
+test("an absurd drop stays at the prior mark when a second source agrees, is silent, or is skipped", async () => {
+  const sample = flag({
+    field: "val",
+    panel: "valuations",
+    name: "OpenAI",
+    prior: 852,
+    candidate: 300,
+    reason: "The figure fell to half or less of the stored mark.",
+    gate: "absurd-drop",
+    quantity: "completed valuation or market capitalization in billions of USD",
+    unit: "billion USD",
+    firstSource: { url: "https://techfundingnews.com/openai-300", text: "OpenAI at $300 billion." },
+  });
+  const supported = resolveFlag(sample, {
+    outcome: RELATION_SUPPORTS,
+    secondUrl: "https://www.cnbc.com/2025/03/31/openai-funding",
+    secondFigure: 300,
+  });
+  assert.equal(supported.publish, 852);
+  assert.equal(supported.check.status, "unconfirmed");
+  assert.equal(supported.check.value, 852);
+  assert.equal(supported.check.candidate, 300);
+  assert.match(supported.check.reason, /852 billion USD/);
+  assert.match(supported.check.reason, /300 billion USD/);
+  assert.deepEqual(supported.check.sources, [
+    "https://techfundingnews.com/openai-300",
+    "https://www.cnbc.com/2025/03/31/openai-funding",
+  ]);
+
+  const silent = resolveFlag(sample, {
+    outcome: RELATION_NOTHING,
+    secondUrl: "https://axios.com/openai",
+    secondFigure: null,
+  });
+  assert.equal(silent.publish, 852);
+  assert.equal(silent.check.status, "unconfirmed");
+  assert.equal(silent.check.value, 852);
+  assert.equal(silent.check.candidate, 300);
+  assert.match(silent.check.reason, /does not address/);
+
+  const skipped = resolveFlag(sample, { outcome: "skipped", skipReason: "spend cap" });
+  assert.equal(skipped.publish, 852);
+  assert.equal(skipped.check.status, "unconfirmed");
+  assert.match(skipped.check.reason, /852 billion USD/);
+  assert.match(skipped.check.reason, /300 billion USD/);
+  assert.match(skipped.check.reason, /spend cap/);
+  assert.deepEqual(skipped.check.sources, ["https://techfundingnews.com/openai-300"]);
+
+  const fromLookup = await verifyFlags([sample], {
+    canStart: () => ({ ok: false, reason: "spend cap" }),
+    lookup: async () => { throw new Error("should not run"); },
+    judge: async () => { throw new Error("should not run"); },
+  });
+  assert.equal(fromLookup[0].publish, 852);
+  assert.equal(fromLookup[0].check.status, "unconfirmed");
+
+  const codeOnly = resolveFlag({ ...sample, reason: "absurd-drop", gate: undefined }, {
+    outcome: RELATION_SUPPORTS,
+    secondUrl: "https://www.cnbc.com/2025/03/31/openai-funding",
+    secondFigure: 300,
+  });
+  assert.equal(codeOnly.publish, 852);
+  assert.equal(codeOnly.check.status, "unconfirmed");
+});
+
+test("a valuation move from 852 to 700 still publishes when the second source agrees", () => {
+  const sample = flag({
+    field: "val",
+    panel: "valuations",
+    name: "OpenAI",
+    prior: 852,
+    candidate: 700,
+    reason: "The figure moved.",
+    gate: "changed",
+    unit: "billion USD",
+  });
+  const supported = resolveFlag(sample, {
+    outcome: RELATION_SUPPORTS,
+    secondUrl: "https://axios.com/openai",
+    secondFigure: 700,
+  });
+  assert.equal(supported.publish, 700);
+  assert.equal(supported.check.status, "confirmed");
+  assert.equal(supported.check.value, 700);
+});
+
+test("an absurd-drop valuation flag keeps the machine reason for the later hold", () => {
+  const applied = JOBS.valuations.apply(BASELINE, {
+    flagged: [{
+      company: "OpenAI",
+      billions: 300,
+      reason: "absurd-drop",
+      reasonText: "The figure fell to half or less of the stored mark.",
+      source: "https://example.test/openai",
+      snippet: "OpenAI at $300 billion.",
+    }],
+  });
+  assert.equal(applied.valuations.find((row) => row.name === "OpenAI").value, 852);
+  const openai = applied.panelFlags.find((row) => row.name === "OpenAI");
+  assert.equal(openai.gate, "absurd-drop");
+  assert.equal(openai.prior, 852);
+  assert.equal(openai.candidate, 300);
+  const held = resolveFlag(openai, {
+    outcome: RELATION_SUPPORTS,
+    secondUrl: "https://www.cnbc.com/2025/03/31/openai-funding",
+    secondFigure: 300,
+  });
+  assert.equal(held.publish, 852);
+  assert.equal(held.check.status, "unconfirmed");
+});
+
 test("one-third drop and round size stay candidates for a second source", () => {
   const dropped = gateWrittenValuation(
     { action: "picked", reason: "choice", picked: "c1", noul: 0.46, billions: 65 },

@@ -111,8 +111,11 @@ export const formatUserMillions = (value) => {
 };
 
 /* An exact tie across companies is flagged, not dropped. Callers still
-   publish a company that is not in one of these groups. */
-export const identicalCompanyGroups = (incoming) => {
+   publish a company that is not in one of these groups. Revenue uses a
+   pair. User counts use three, so a long-standing pair can still publish. */
+export const IDENTICAL_USERS_MIN = 3;
+
+export const identicalCompanyGroups = (incoming, min = 2) => {
   const groups = new Map();
   for (const [name, raw] of Object.entries(incoming || {})) {
     const v = Number(raw);
@@ -124,7 +127,7 @@ export const identicalCompanyGroups = (incoming) => {
   }
   const ties = [];
   for (const [key, names] of groups) {
-    if (names.length < 2) continue;
+    if (names.length < min) continue;
     ties.push({ value: Number(key), names: [...names] });
   }
   return ties;
@@ -192,7 +195,7 @@ export const checksStamp = (group) => {
   };
 };
 
-export const identicalRevenueNote = (ties) => {
+const identicalCompanyPhrase = (ties) => {
   if (!ties || !ties.length) return null;
   const parts = ties.map((tie) => {
     const names = tie.names;
@@ -202,7 +205,17 @@ export const identicalRevenueNote = (ties) => {
     const verb = names.length === 2 ? "both" : "all";
     return `${listed} ${verb} ${tie.value}`;
   });
-  return `identical revenue rejected: ${parts.join("; ")}; previous values kept`;
+  return parts.join("; ");
+};
+
+export const identicalRevenueNote = (ties) => {
+  const phrase = identicalCompanyPhrase(ties);
+  return phrase ? `identical revenue rejected: ${phrase}; previous values kept` : null;
+};
+
+export const identicalUsersNote = (ties) => {
+  const phrase = identicalCompanyPhrase(ties);
+  return phrase ? `identical users rejected: ${phrase}; previous values kept` : null;
 };
 
 /* The version field is a token such as v4.3.2. Anything else is absent, and
@@ -361,6 +374,7 @@ export const JOBS = {
             prior: x.value,
             candidate: Number(flagged.billions),
             reason: flagged.reasonText || flagged.reason || "The figure needs a second source.",
+            gate: flagged.reason || "",
             quantity: "completed valuation or market capitalization in billions of USD",
             unit: "billion USD",
             firstSource: flagged.source ? { url: flagged.source, text: flagged.snippet || "" } : null,
@@ -444,10 +458,35 @@ export const JOBS = {
       if (!j.users) return d;
       const panelFlags = [];
       let next = d;
-      const users = d.users.map((u) => {
-        if (!Object.prototype.hasOwnProperty.call(j.users, u.name)) return u;
+      const converted = {};
+      for (const u of d.users) {
+        if (!Object.prototype.hasOwnProperty.call(j.users, u.name)) continue;
         const n = convertUserMillions(j.users[u.name]);
-        if (n == null) return u;
+        if (n == null) continue;
+        converted[u.name] = n;
+      }
+      /* Three or more assistants at the same converted count is the
+         "more than 1 billion" rounding failure. A pair still publishes. */
+      const ties = identicalCompanyGroups(converted, IDENTICAL_USERS_MIN);
+      const tied = new Set(ties.flatMap((tie) => tie.names));
+      const note = identicalUsersNote(ties);
+      const users = d.users.map((u) => {
+        if (!Object.prototype.hasOwnProperty.call(converted, u.name)) return u;
+        const n = converted[u.name];
+        if (tied.has(u.name)) {
+          panelFlags.push({
+            field: "users",
+            panel: "users",
+            name: u.name,
+            prior: u.users,
+            candidate: n,
+            reason: note,
+            quantity: "monthly active users in millions",
+            unit: "million",
+            firstSource: null,
+          });
+          return u;
+        }
         if (!userCountInBand(n)) {
           panelFlags.push({
             field: "users",

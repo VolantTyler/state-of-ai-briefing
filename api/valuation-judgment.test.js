@@ -5,8 +5,10 @@ import {
   citationsFromContent,
   decide,
   extractCandidates,
+  ABSURD_DROP,
   gateWrittenValuation,
   judgeValuations,
+  valuationFlagReason,
   misplacedAmount,
   renderJevActions,
 } from "./valuation-judgment.js";
@@ -156,6 +158,28 @@ test("a drop to under a third of the prior mark is flagged", () => {
   assert.equal(misplacedAmount(candidate), null);
 });
 
+test("852 to 300 is an absurd drop and 852 to 700 is only a change", () => {
+  assert.equal(ABSURD_DROP, 2);
+  assert.match(valuationFlagReason("absurd-drop"), /half or less/);
+  const drop = gateWrittenValuation(
+    { action: "picked", reason: "choice", picked: "c1", noul: 0.94, billions: 300 },
+    { id: "c1", span: "$300 billion", billions: 300, snippet: "OpenAI completed a round at a $300 billion valuation." },
+    852,
+  );
+  assert.equal(drop.action, "flagged");
+  assert.equal(drop.reason, "absurd-drop");
+  assert.equal(drop.billions, 300);
+
+  const modest = gateWrittenValuation(
+    { action: "picked", reason: "choice", picked: "c1", noul: 0.8, billions: 700 },
+    { id: "c1", span: "$700 billion", billions: 700, snippet: "OpenAI is valued at $700 billion." },
+    852,
+  );
+  assert.equal(modest.action, "flagged");
+  assert.equal(modest.reason, "changed");
+  assert.equal(modest.billions, 700);
+});
+
 test("Noul 0.46 does not block a Choice pick of the valuation span", async () => {
   const ask = async () => ({
     answers: {
@@ -234,6 +258,8 @@ test("the learning note quotes the questions and the action taken", () => {
   assert.match(note, /latest completed price/);
   assert.match(note, /post-money valuation/);
   assert.match(note, /Wrote \$190B/);
+  assert.match(note, /half or less of the prior mark/);
+  assert.doesNotMatch(note, /one third/);
   assert.match(note, /jev-1.13.0/);
   assert.match(renderJevActions({ ran: false }), /No refresh has written this file yet/);
 });

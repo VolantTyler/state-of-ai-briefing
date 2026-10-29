@@ -3,7 +3,9 @@ import { choice } from "@typesafe-ai/sdk";
 /* A flagged figure is not dropped. A second source is read, then one
    Choice decides whether that source supports the candidate, contradicts
    it, or says nothing about it. Code publishes the candidate, or keeps
-   the previous value, from that label. */
+   the previous value, from that label. An absurd-drop valuation is the
+   exception: supports, says nothing, and a skipped lookup all keep the
+   previous mark. */
 
 export const RELATION_SUPPORTS = "supports";
 export const RELATION_CONTRADICTS = "contradicts";
@@ -80,14 +82,44 @@ export function judgeState(flag, passage) {
 
 const figureText = (n, unit) => `${n} ${unit}`;
 
+/* The machine reason from the valuation gate. The prose reason on the
+   flag is what the check quotes; this is what decides the hold. */
+export function isAbsurdDrop(flag) {
+  return Boolean(flag) && (flag.gate === "absurd-drop" || flag.reason === "absurd-drop");
+}
+
 /* `outcome` is supports, contradicts, says_nothing, or skipped.
    A skip (spend cap, time budget, error, no passage) publishes the
-   candidate and marks it single source. says_nothing does the same. */
+   candidate and marks it single source. says_nothing does the same.
+   An absurd drop does neither: the previous mark stays, unconfirmed,
+   with both figures on the check. */
 export function resolveFlag(flag, outcome = {}) {
   const firstUrl = flag.firstSource && flag.firstSource.url;
   const secondUrl = outcome.secondUrl || "";
   const sources = [firstUrl, secondUrl].filter(Boolean);
-  const trigger = flag.reason ? `${flag.reason} ` : "";
+  const trigger = flag.reason && flag.reason !== "absurd-drop" ? `${flag.reason} ` : "";
+  if (isAbsurdDrop(flag) && outcome.outcome !== RELATION_CONTRADICTS) {
+    const why = outcome.outcome === RELATION_SUPPORTS
+      ? "a second source states the same figure"
+      : outcome.outcome === RELATION_NOTHING
+        ? "the second source does not address this figure"
+        : (outcome.skipReason || "no independent passage");
+    const consulted = outcome.outcome === "skipped" || !secondUrl
+      ? (firstUrl ? [firstUrl] : [])
+      : sources;
+    return {
+      field: flag.field,
+      name: flag.name,
+      publish: flag.prior,
+      check: {
+        status: "unconfirmed",
+        value: flag.prior,
+        candidate: flag.candidate,
+        reason: `${trigger}Kept ${figureText(flag.prior, flag.unit)}. Candidate ${figureText(flag.candidate, flag.unit)} fell to half or less of the stored mark and was not published (${why}).`,
+        sources: consulted,
+      },
+    };
+  }
   if (outcome.outcome === RELATION_CONTRADICTS) {
     const other = outcome.secondFigure == null
       ? "a different figure"
@@ -157,7 +189,8 @@ export async function judgeSecondSource({ flag, passage, ask }) {
 }
 
 /* Lookups run one at a time so a spend cap can stop the next one.
-   Anything that does not return a contradiction publishes the candidate. */
+   Anything that does not return a contradiction publishes the candidate,
+   except an absurd-drop valuation, which keeps the previous mark. */
 export async function verifyFlags(flags, { canStart, lookup, judge }) {
   const resolutions = [];
   for (const flag of flags) {
