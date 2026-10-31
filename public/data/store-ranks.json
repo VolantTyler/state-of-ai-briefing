@@ -646,17 +646,17 @@
         "muse": 2,
         "chatgpt": 4,
         "claude": 6,
-        "gemini": 13,
-        "grok": 44,
-        "copilot": 47,
-        "metaai": 97
+        "gemini": 11,
+        "grok": 39,
+        "copilot": 52,
+        "metaai": 92
       },
       "android": {
         "muse": 1,
         "chatgpt": 2,
         "claude": 25,
-        "gemini": 67,
-        "grok": 68
+        "gemini": 69,
+        "grok": 70
       }
     }
   ]
