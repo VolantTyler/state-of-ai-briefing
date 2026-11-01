@@ -665,12 +665,12 @@
       "androidDepth": 100,
       "ios": {
         "muse": 2,
-        "chatgpt": 4,
-        "gemini": 13,
-        "claude": 16,
-        "grok": 49,
-        "copilot": 75,
-        "metaai": 95
+        "chatgpt": 3,
+        "claude": 15,
+        "gemini": 16,
+        "grok": 45,
+        "copilot": 78,
+        "metaai": 93
       },
       "android": {
         "muse": 1,
