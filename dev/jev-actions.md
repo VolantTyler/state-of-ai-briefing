@@ -38,39 +38,43 @@ Code flags the chosen amount when its snippet shows a round size beside a higher
 
 ## Latest run
 
-Ran 2026-11-01T09:29:54.222Z.
+Ran 2026-11-01T16:50:55.168Z.
 
 Cited passages: 9.
 
 ### Anthropic
 
-Flagged $13B. Choice selected c1. The figure fell to half or less of the stored mark. The previous mark stays; a second source does not publish this drop.
+Wrote $965B. Choice selected c2, so code copied the amount the regex had parsed.
 
-Model jev-1.14.0. 674 input tokens, 52 output tokens.
+Model jev-1.14.0. 1474 input tokens, 130 output tokens.
 
 Candidates code found:
 
-- `c1` $13B → 13 billion USD · Noul 0.05 · https://techfundingnews.com/openai-anthropic-xai-ai-funding-trends-2025/
-  ### Anthropic Anthropic Founder/s: Daniela Amodei, Dario Amodei Founded year: 2021 Recent funding: $13B San Francisco-based OpenAI rival Anthropic h...
+- `c1` $65 billion → 65 billion USD · Noul 0.08 · https://www.axios.com/2026/05/28/anthropic-ai-fundraising-openai
+  Anthropic has raised $65 billion, valuing the AI lab at $965 billion.
+- `c2` $965 billion → 965 billion USD · Noul 0.79 · https://www.axios.com/2026/05/28/anthropic-ai-fundraising-openai
+  Anthropic has raised $65 billion, valuing the AI lab at $965 billion.
+- `c3` $852 billion → 852 billion USD · Noul 0.04 · https://www.cnbc.com/2026/05/28/anthropic-open-ai-startup-value.html
+  Anthropic&#x27;s biggest competitor OpenAI was valued at $852 billion in late March after closing a record-breaking $122 billion funding round.
+- `c4` $122 billion → 122 billion USD · Noul 0.03 · https://www.cnbc.com/2026/05/28/anthropic-open-ai-startup-value.html
+  Anthropic&#x27;s biggest competitor OpenAI was valued at $852 billion in late March after closing a record-breaking $122 billion funding round.
 
-Choice: c1 (confidence 0.10). Probabilities: c1 0.55, none 0.45.
+Choice: c2 (confidence 0.75). Probabilities: c2 0.80, none 0.18, c1 0.02, c3 0.00, c4 0.00.
 
 ### OpenAI
 
-Flagged $300B. Choice selected c3. The figure fell to half or less of the stored mark. The previous mark stays; a second source does not publish this drop.
+Wrote $852B. Choice selected c1, so code copied the amount the regex had parsed.
 
-Model jev-1.14.0. 1231 input tokens, 104 output tokens.
+Model jev-1.14.0. 951 input tokens, 78 output tokens.
 
 Candidates code found:
 
-- `c1` $13B → 13 billion USD · Noul 0.02 · https://techfundingnews.com/openai-anthropic-xai-ai-funding-trends-2025/
-  ### Anthropic Anthropic Founder/s: Daniela Amodei, Dario Amodei Founded year: 2021 Recent funding: $13B San Francisco-based OpenAI rival Anthropic h...
-- `c2` $40 billion → 40 billion USD · Noul 0.09 · https://techfundingnews.com/openai-anthropic-xai-ai-funding-trends-2025/
-  ### OpenAI OpenAI has raised $40 billion in a new funding round that values the company at $300 billion post-money.
-- `c3` $300 billion → 300 billion USD · Noul 0.94 · https://techfundingnews.com/openai-anthropic-xai-ai-funding-trends-2025/
-  ### OpenAI OpenAI has raised $40 billion in a new funding round that values the company at $300 billion post-money.
+- `c1` $852 billion → 852 billion USD · Noul 0.91 · https://www.cnbc.com/2026/05/28/anthropic-open-ai-startup-value.html
+  Anthropic&#x27;s biggest competitor OpenAI was valued at $852 billion in late March after closing a record-breaking $122 billion funding round.
+- `c2` $122 billion → 122 billion USD · Noul 0.04 · https://www.cnbc.com/2026/05/28/anthropic-open-ai-startup-value.html
+  Anthropic&#x27;s biggest competitor OpenAI was valued at $852 billion in late March after closing a record-breaking $122 billion funding round.
 
-Choice: c3 (confidence 0.96). Probabilities: c3 0.97, c2 0.02, none 0.01, c1 0.00.
+Choice: c1 (confidence 0.89). Probabilities: c1 0.93, none 0.04, c2 0.03.
 
 ### xAI
 
@@ -78,7 +82,18 @@ Kept $230B. No cited amount named this company, so Jev was not asked.
 
 ### Databricks
 
-Kept $190B. No cited amount named this company, so Jev was not asked.
+Wrote $190B. Choice selected c2, so code copied the amount the regex had parsed.
+
+Model jev-1.14.0. 893 input tokens, 78 output tokens.
+
+Candidates code found:
+
+- `c1` $5 billion → 5 billion USD · Noul 0.18 · https://www.cnbc.com/2026/08/13/databricks-funding-round-190-billion-valuation.html
+  Databricks on Thursday wrapped a $5 billion funding round at a $190 billion valuation.
+- `c2` $190 billion → 190 billion USD · Noul 0.93 · https://www.cnbc.com/2026/08/13/databricks-funding-round-190-billion-valuation.html
+  Databricks on Thursday wrapped a $5 billion funding round at a $190 billion valuation.
+
+Choice: c2 (confidence 0.98). Probabilities: c2 0.99, none 0.01, c1 0.00.
 
 ### DeepSeek
 
@@ -86,59 +101,61 @@ Kept $74B. No cited amount named this company, so Jev was not asked.
 
 ### Anduril
 
-Flagged $30.5B. Choice selected c2. The figure fell to half or less of the stored mark. The previous mark stays; a second source does not publish this drop.
+Wrote $61B. Choice selected c1, so code copied the amount the regex had parsed.
 
-Model jev-1.14.0. 946 input tokens, 78 output tokens.
+Model jev-1.14.0. 970 input tokens, 78 output tokens.
 
 Candidates code found:
 
-- `c1` $2.5 billion → 2.5 billion USD · Noul 0.05 · https://www.cnbc.com/2025/06/05/anduril-valuation-founders-fund.html
-  Anduril Chairman Trae Stephens told Bloomberg on Thursday that the defense tech company has just raised $2.5 billion at a $30.5 billion valuation.
-- `c2` $30.5 billion → 30.5 billion USD · Noul 0.91 · https://www.cnbc.com/2025/06/05/anduril-valuation-founders-fund.html
-  Anduril Chairman Trae Stephens told Bloomberg on Thursday that the defense tech company has just raised $2.5 billion at a $30.5 billion valuation.
+- `c1` $61 billion → 61 billion USD · Noul 0.93 · https://www.bloomberg.com/news/articles/2026-05-13/anduril-valued-at-61-billion-in-round-led-by-thrive-andreessen
+  Anduril Industries Inc. doubled its valuation to $61 billion in a fresh $5 billion funding round led by Thrive Capital and Andreessen Horowitz, a sign...
+- `c2` $5 billion → 5 billion USD · Noul 0.04 · https://www.bloomberg.com/news/articles/2026-05-13/anduril-valued-at-61-billion-in-round-led-by-thrive-andreessen
+  Anduril Industries Inc. doubled its valuation to $61 billion in a fresh $5 billion funding round led by Thrive Capital and Andreessen Horowitz, a sign...
 
-Choice: c2 (confidence 0.97). Probabilities: c2 0.98, none 0.02, c1 0.00.
+Choice: c1 (confidence 0.98). Probabilities: c1 0.99, none 0.01, c2 0.00.
 
 ### Z.ai (Zhipu)
 
-Wrote $55.9B. Choice selected c2, so code copied the amount the regex had parsed.
+Flagged $63B. Choice selected c1. The figure moved. A second source checks it before it is published.
 
-Model jev-1.14.0. 1026 input tokens, 78 output tokens.
+Model jev-1.14.0. 688 input tokens, 52 output tokens.
 
 Candidates code found:
 
-- `c1` $434.7 billion → 434.7 billion USD · Noul 0.63 · https://techcrunch.com/2026/05/07/chinas-moonshot-ai-raises-2b-at-20b-valuation-as-demand-for-open-source-ai-skyrockets/
-  Zhipu AI, which trades in Hong Kong as Knowledge Atlas Technology, ended Thursday with a market cap of HK$434.7 billion (roughly $55.9 billion), while...
-- `c2` $55.9 billion → 55.9 billion USD · Noul 0.94 · https://techcrunch.com/2026/05/07/chinas-moonshot-ai-raises-2b-at-20b-valuation-as-demand-for-open-source-ai-skyrockets/
-  Zhipu AI, which trades in Hong Kong as Knowledge Atlas Technology, ended Thursday with a market cap of HK$434.7 billion (roughly $55.9 billion), while...
+- `c1` $63 billion → 63 billion USD · Noul 0.87 · https://andrew.ooo/answers/deepseek-vs-moonshot-vs-z-ai-vs-minimax-chinese-ai-ipo-race-september-2026/
+  Their first earnings reports set the reference points: Z.ai: ~$136 million H1 2026 revenue; market cap just over $63 billion; shares up more than 7x y...
 
-Choice: c2 (confidence 0.92). Probabilities: c2 0.95, c1 0.04, none 0.01.
+Choice: c1 (confidence 0.86). Probabilities: c1 0.93, none 0.07.
 
 ### Moonshot AI
 
 Wrote $50B. Choice selected c1, so code copied the amount the regex had parsed.
 
-Model jev-1.14.0. 977 input tokens, 78 output tokens.
+Model jev-1.14.0. 1665 input tokens, 130 output tokens.
 
 Candidates code found:
 
-- `c1` $50 billion → 50 billion USD · Noul 0.59 · https://www.trendingtopics.eu/deepseek-moonshot-ai-ipo/
-  ## Moonshot AI: Hong Kong in the First Quarter of 2027 Moonshot AI was valued at nearly $50 billion (about 42.7 billion euros) in its latest funding r...
-- `c2` 42.7 billion → 42.7 billion USD · Noul 0.49 · https://www.trendingtopics.eu/deepseek-moonshot-ai-ipo/
-  ## Moonshot AI: Hong Kong in the First Quarter of 2027 Moonshot AI was valued at nearly $50 billion (about 42.7 billion euros) in its latest funding r...
+- `c1` $50 billion → 50 billion USD · Noul 0.96 · https://finance.yahoo.com/technology/ai/articles/moonshot-ai-eyes-hong-kong-085637302.html
+  Beijing-based Moonshot AI has completed its last private funding round, valuing it at about $50 billion (€44.6bn), up from $31.5 billion (€28.1bn) in ...
+- `c2` 44.6bn → 44.6 billion USD · Noul 0.74 · https://finance.yahoo.com/technology/ai/articles/moonshot-ai-eyes-hong-kong-085637302.html
+  Beijing-based Moonshot AI has completed its last private funding round, valuing it at about $50 billion (€44.6bn), up from $31.5 billion (€28.1bn) in ...
+- `c3` $31.5 billion → 31.5 billion USD · Noul 0.43 · https://finance.yahoo.com/technology/ai/articles/moonshot-ai-eyes-hong-kong-085637302.html
+  Beijing-based Moonshot AI has completed its last private funding round, valuing it at about $50 billion (€44.6bn), up from $31.5 billion (€28.1bn) in ...
+- `c4` 28.1bn → 28.1 billion USD · Noul 0.52 · https://finance.yahoo.com/technology/ai/articles/moonshot-ai-eyes-hong-kong-085637302.html
+  Beijing-based Moonshot AI has completed its last private funding round, valuing it at about $50 billion (€44.6bn), up from $31.5 billion (€28.1bn) in ...
 
-Choice: c1 (confidence 0.68). Probabilities: c1 0.79, none 0.17, c2 0.04.
+Choice: c1 (confidence 0.98). Probabilities: c1 0.98, c2 0.01, c3 0.01, none 0.00, c4 0.00.
 
 ### MiniMax
 
-Flagged $33B. Choice selected c1. The figure moved. A second source checks it before it is published.
+Flagged $16B. Choice selected c1. The figure fell to half or less of the stored mark. The previous mark stays; a second source does not publish this drop.
 
-Model jev-1.14.0. 607 input tokens, 52 output tokens.
+Model jev-1.14.0. 697 input tokens, 52 output tokens.
 
 Candidates code found:
 
-- `c1` $33 billion → 33 billion USD · Noul 0.51 · https://www.recodechinaai.com/p/chinese-ai-companies-just-had-their
-  MiniMax doubled on its debut day and has since climbed to over $33 billion.
+- `c1` $16 billion → 16 billion USD · Noul 0.69 · https://andrew.ooo/answers/deepseek-vs-moonshot-vs-z-ai-vs-minimax-chinese-ai-ipo-race-september-2026/
+  MiniMax: ~$117 million H1 2026 revenue; market cap about $16 billion; up ~5% in 2026 and roughly three-quarters below its March 2026 high.
 
-Choice: c1 (confidence 0.22). Probabilities: c1 0.61, none 0.39.
+Choice: c1 (confidence 0.44). Probabilities: c1 0.72, none 0.28.
 
