@@ -1,7 +1,7 @@
 {
-  "runAt": "2026-11-02T18:24:02.661Z",
+  "runAt": "2026-11-03T09:29:10.520Z",
   "fatal": false,
-  "wallClockMs": 18951,
+  "wallClockMs": 35172,
   "budget": {
     "maxDurationMs": 1500000,
     "tailReserveMs": 120000,
@@ -47,7 +47,7 @@
   },
   "spendCap": {
     "maxUsd": 1,
-    "estimatedUsd": 0.410956,
+    "estimatedUsd": 0.57266,
     "skipped": []
   },
   "calls": [
@@ -56,7 +56,7 @@
       "attempt": 1,
       "continuation": 0,
       "model": "claude-haiku-4-5-20251001",
-      "durationMs": 257,
+      "durationMs": 235,
       "stopReason": null,
       "httpStatus": 400,
       "inputTokens": null,
@@ -87,7 +87,7 @@
       "billed": false,
       "likelyBilled": false,
       "aborted": false,
-      "error": "{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.\"},\"request_id\":\"req_011CgeZxWSJWwhHDwdAnAUM3\"}"
+      "error": "{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.\"},\"request_id\":\"req_011CgfkyoDfDbZmGEHB9BQKx\"}"
     },
     {
       "jobId": "users",
@@ -95,11 +95,11 @@
       "continuation": "openrouter",
       "provider": "openrouter",
       "model": "anthropic/claude-sonnet-5.5",
-      "durationMs": 6406,
+      "durationMs": 5752,
       "stopReason": "end_turn",
       "httpStatus": 200,
-      "inputTokens": 44458,
-      "outputTokens": 355,
+      "inputTokens": 26579,
+      "outputTokens": 283,
       "cacheCreationInputTokens": null,
       "cacheReadInputTokens": null,
       "cacheCreation": null,
@@ -111,10 +111,10 @@
       "serverToolUse": {},
       "serviceTier": null,
       "usage": {
-        "prompt_tokens": 44458,
-        "completion_tokens": 355,
-        "total_tokens": 44813,
-        "cost": 0.112466,
+        "prompt_tokens": 26579,
+        "completion_tokens": 283,
+        "total_tokens": 26862,
+        "cost": 0.065988,
         "is_byok": false,
         "prompt_tokens_details": {
           "cached_tokens": 0,
@@ -123,20 +123,20 @@
           "video_tokens": 0
         },
         "cost_details": {
-          "upstream_inference_cost": 0.112466,
-          "upstream_inference_prompt_cost": 0.088916,
-          "upstream_inference_completions_cost": 0.00355
+          "upstream_inference_cost": 0.065988,
+          "upstream_inference_prompt_cost": 0.053158,
+          "upstream_inference_completions_cost": 0.00283
         },
         "completion_tokens_details": {
-          "reasoning_tokens": 162,
+          "reasoning_tokens": 144,
           "image_tokens": 0,
           "audio_tokens": 0
         },
         "server_tool_use_details": {
-          "web_search_requests": 2
+          "web_search_requests": 1
         }
       },
-      "estimatedUsd": 0.112466,
+      "estimatedUsd": 0.065988,
       "estimateComplete": false,
       "unpriced": [
         "provider:openrouter",
@@ -151,11 +151,11 @@
       "error": null
     },
     {
-      "jobId": "capital",
+      "jobId": "share",
       "attempt": 1,
       "continuation": 0,
       "model": "claude-haiku-4-5-20251001",
-      "durationMs": 91,
+      "durationMs": 233,
       "stopReason": null,
       "httpStatus": 400,
       "inputTokens": null,
@@ -186,19 +186,19 @@
       "billed": false,
       "likelyBilled": false,
       "aborted": false,
-      "error": "{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.\"},\"request_id\":\"req_011CgeZxzdwN7X3qoUDMq5Nb\"}"
+      "error": "{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.\"},\"request_id\":\"req_011CgfkzF8PSHqoJ8NdWuGHV\"}"
     },
     {
-      "jobId": "capital",
+      "jobId": "share",
       "attempt": 1,
       "continuation": "openrouter",
       "provider": "openrouter",
       "model": "anthropic/claude-sonnet-5.5",
-      "durationMs": 5551,
+      "durationMs": 3160,
       "stopReason": "end_turn",
       "httpStatus": 200,
-      "inputTokens": 62149,
-      "outputTokens": 432,
+      "inputTokens": 20785,
+      "outputTokens": 157,
       "cacheCreationInputTokens": null,
       "cacheReadInputTokens": null,
       "cacheCreation": null,
@@ -210,10 +210,10 @@
       "serverToolUse": {},
       "serviceTier": null,
       "usage": {
-        "prompt_tokens": 62149,
-        "completion_tokens": 432,
-        "total_tokens": 62581,
-        "cost": 0.168618,
+        "prompt_tokens": 20785,
+        "completion_tokens": 157,
+        "total_tokens": 20942,
+        "cost": 0.05314,
         "is_byok": false,
         "prompt_tokens_details": {
           "cached_tokens": 0,
@@ -222,12 +222,111 @@
           "video_tokens": 0
         },
         "cost_details": {
-          "upstream_inference_cost": 0.168618,
-          "upstream_inference_prompt_cost": 0.124298,
-          "upstream_inference_completions_cost": 0.00432
+          "upstream_inference_cost": 0.05314,
+          "upstream_inference_prompt_cost": 0.04157,
+          "upstream_inference_completions_cost": 0.00157
         },
         "completion_tokens_details": {
-          "reasoning_tokens": 102,
+          "reasoning_tokens": 0,
+          "image_tokens": 0,
+          "audio_tokens": 0
+        },
+        "server_tool_use_details": {
+          "web_search_requests": 1
+        }
+      },
+      "estimatedUsd": 0.05314,
+      "estimateComplete": false,
+      "unpriced": [
+        "provider:openrouter",
+        "openrouter-reported-cost"
+      ],
+      "notes": [
+        "OpenRouter usage.cost when the response has it. Not the Claude API list-price table."
+      ],
+      "billed": true,
+      "likelyBilled": false,
+      "aborted": false,
+      "error": null
+    },
+    {
+      "jobId": "capital",
+      "attempt": 1,
+      "continuation": 0,
+      "model": "claude-haiku-4-5-20251001",
+      "durationMs": 94,
+      "stopReason": null,
+      "httpStatus": 400,
+      "inputTokens": null,
+      "outputTokens": null,
+      "cacheCreationInputTokens": null,
+      "cacheReadInputTokens": null,
+      "cacheCreation": null,
+      "cacheWrite": {
+        "ephemeral5m": null,
+        "ephemeral1h": null,
+        "assumed5m": false
+      },
+      "serverToolUse": {},
+      "serviceTier": null,
+      "usage": null,
+      "estimatedUsd": 0,
+      "estimateComplete": false,
+      "unpriced": [
+        "usage-not-reported"
+      ],
+      "notes": [],
+      "webSearchUsd": 0,
+      "inputUsd": 0,
+      "outputUsd": 0,
+      "cacheReadUsd": 0,
+      "cacheWrite5mUsd": 0,
+      "cacheWrite1hUsd": 0,
+      "billed": false,
+      "likelyBilled": false,
+      "aborted": false,
+      "error": "{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.\"},\"request_id\":\"req_011CgfkzV447SXAG5kVrpfsk\"}"
+    },
+    {
+      "jobId": "capital",
+      "attempt": 1,
+      "continuation": "openrouter",
+      "provider": "openrouter",
+      "model": "anthropic/claude-sonnet-5.5",
+      "durationMs": 5635,
+      "stopReason": "end_turn",
+      "httpStatus": 200,
+      "inputTokens": 60660,
+      "outputTokens": 441,
+      "cacheCreationInputTokens": null,
+      "cacheReadInputTokens": null,
+      "cacheCreation": null,
+      "cacheWrite": {
+        "ephemeral5m": null,
+        "ephemeral1h": null,
+        "assumed5m": false
+      },
+      "serverToolUse": {},
+      "serviceTier": null,
+      "usage": {
+        "prompt_tokens": 60660,
+        "completion_tokens": 441,
+        "total_tokens": 61101,
+        "cost": 0.16573,
+        "is_byok": false,
+        "prompt_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "audio_tokens": 0,
+          "video_tokens": 0
+        },
+        "cost_details": {
+          "upstream_inference_cost": 0.16573,
+          "upstream_inference_prompt_cost": 0.12132,
+          "upstream_inference_completions_cost": 0.00441
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 116,
           "image_tokens": 0,
           "audio_tokens": 0
         },
@@ -235,7 +334,7 @@
           "web_search_requests": 4
         }
       },
-      "estimatedUsd": 0.168618,
+      "estimatedUsd": 0.16573,
       "estimateComplete": false,
       "unpriced": [
         "provider:openrouter",
@@ -254,7 +353,7 @@
       "attempt": 1,
       "continuation": 0,
       "model": "claude-haiku-4-5-20251001",
-      "durationMs": 103,
+      "durationMs": 121,
       "stopReason": null,
       "httpStatus": 400,
       "inputTokens": null,
@@ -285,7 +384,7 @@
       "billed": false,
       "likelyBilled": false,
       "aborted": false,
-      "error": "{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.\"},\"request_id\":\"req_011CgeZyQnW1xb449pt4HdRd\"}"
+      "error": "{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.\"},\"request_id\":\"req_011CgfkzugsXkyXDWvXMQ8qp\"}"
     },
     {
       "jobId": "energy",
@@ -293,11 +392,11 @@
       "continuation": "openrouter",
       "provider": "openrouter",
       "model": "anthropic/claude-sonnet-5.5",
-      "durationMs": 5971,
+      "durationMs": 6852,
       "stopReason": "end_turn",
       "httpStatus": 200,
-      "inputTokens": 53571,
-      "outputTokens": 273,
+      "inputTokens": 52638,
+      "outputTokens": 294,
       "cacheCreationInputTokens": null,
       "cacheReadInputTokens": null,
       "cacheCreation": null,
@@ -309,10 +408,10 @@
       "serverToolUse": {},
       "serviceTier": null,
       "usage": {
-        "prompt_tokens": 53571,
-        "completion_tokens": 273,
-        "total_tokens": 53844,
-        "cost": 0.129872,
+        "prompt_tokens": 52638,
+        "completion_tokens": 294,
+        "total_tokens": 52932,
+        "cost": 0.128216,
         "is_byok": false,
         "prompt_tokens_details": {
           "cached_tokens": 0,
@@ -321,12 +420,12 @@
           "video_tokens": 0
         },
         "cost_details": {
-          "upstream_inference_cost": 0.129872,
-          "upstream_inference_prompt_cost": 0.107142,
-          "upstream_inference_completions_cost": 0.00273
+          "upstream_inference_cost": 0.128216,
+          "upstream_inference_prompt_cost": 0.105276,
+          "upstream_inference_completions_cost": 0.00294
         },
         "completion_tokens_details": {
-          "reasoning_tokens": 80,
+          "reasoning_tokens": 102,
           "image_tokens": 0,
           "audio_tokens": 0
         },
@@ -334,7 +433,7 @@
           "web_search_requests": 2
         }
       },
-      "estimatedUsd": 0.129872,
+      "estimatedUsd": 0.128216,
       "estimateComplete": false,
       "unpriced": [
         "provider:openrouter",
@@ -347,21 +446,464 @@
       "likelyBilled": false,
       "aborted": false,
       "error": null
+    },
+    {
+      "jobId": "verify",
+      "attempt": 1,
+      "continuation": 0,
+      "model": "claude-haiku-4-5-20251001",
+      "durationMs": 112,
+      "stopReason": null,
+      "httpStatus": 400,
+      "inputTokens": null,
+      "outputTokens": null,
+      "cacheCreationInputTokens": null,
+      "cacheReadInputTokens": null,
+      "cacheCreation": null,
+      "cacheWrite": {
+        "ephemeral5m": null,
+        "ephemeral1h": null,
+        "assumed5m": false
+      },
+      "serverToolUse": {},
+      "serviceTier": null,
+      "usage": null,
+      "estimatedUsd": 0,
+      "estimateComplete": false,
+      "unpriced": [
+        "usage-not-reported"
+      ],
+      "notes": [],
+      "webSearchUsd": 0,
+      "inputUsd": 0,
+      "outputUsd": 0,
+      "cacheReadUsd": 0,
+      "cacheWrite5mUsd": 0,
+      "cacheWrite1hUsd": 0,
+      "billed": false,
+      "likelyBilled": false,
+      "aborted": false,
+      "error": "{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.\"},\"request_id\":\"req_011Cgfm1RV1nTj5mdK87YzdE\"}"
+    },
+    {
+      "jobId": "verify",
+      "attempt": 1,
+      "continuation": "openrouter",
+      "provider": "openrouter",
+      "model": "anthropic/claude-sonnet-5.5",
+      "durationMs": 4204,
+      "stopReason": "end_turn",
+      "httpStatus": 200,
+      "inputTokens": 18913,
+      "outputTokens": 188,
+      "cacheCreationInputTokens": null,
+      "cacheReadInputTokens": null,
+      "cacheCreation": null,
+      "cacheWrite": {
+        "ephemeral5m": null,
+        "ephemeral1h": null,
+        "assumed5m": false
+      },
+      "serverToolUse": {},
+      "serviceTier": null,
+      "usage": {
+        "prompt_tokens": 18913,
+        "completion_tokens": 188,
+        "total_tokens": 19101,
+        "cost": 0.049706,
+        "is_byok": false,
+        "prompt_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "audio_tokens": 0,
+          "video_tokens": 0
+        },
+        "cost_details": {
+          "upstream_inference_cost": 0.049706,
+          "upstream_inference_prompt_cost": 0.037826,
+          "upstream_inference_completions_cost": 0.00188
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0,
+          "image_tokens": 0,
+          "audio_tokens": 0
+        },
+        "server_tool_use_details": {
+          "web_search_requests": 1
+        }
+      },
+      "estimatedUsd": 0.049706,
+      "estimateComplete": false,
+      "unpriced": [
+        "provider:openrouter",
+        "openrouter-reported-cost"
+      ],
+      "notes": [
+        "OpenRouter usage.cost when the response has it. Not the Claude API list-price table."
+      ],
+      "billed": true,
+      "likelyBilled": false,
+      "aborted": false,
+      "error": null
+    },
+    {
+      "provider": "typesafe",
+      "jobId": "verify",
+      "attempt": 1,
+      "continuation": "judge",
+      "model": "jev-1.14.0",
+      "durationMs": null,
+      "stopReason": null,
+      "httpStatus": 200,
+      "inputTokens": 527,
+      "outputTokens": 44,
+      "cacheCreationInputTokens": 0,
+      "cacheReadInputTokens": 0,
+      "cacheCreation": null,
+      "cacheWrite": {
+        "ephemeral5m": 0,
+        "ephemeral1h": 0,
+        "assumed5m": false
+      },
+      "serverToolUse": {},
+      "serviceTier": null,
+      "usage": {
+        "input_tokens": 527,
+        "output_tokens": 44
+      },
+      "estimatedUsd": null,
+      "estimateComplete": true,
+      "unpriced": [],
+      "notes": [
+        "Typesafe input tokens are logged and are not part of the Anthropic estimate."
+      ],
+      "webSearchUsd": 0,
+      "inputUsd": null,
+      "outputUsd": null,
+      "cacheReadUsd": null,
+      "cacheWrite5mUsd": null,
+      "cacheWrite1hUsd": null,
+      "billed": false,
+      "aborted": false,
+      "error": null
+    },
+    {
+      "jobId": "verify",
+      "attempt": 2,
+      "continuation": 0,
+      "model": "claude-haiku-4-5-20251001",
+      "durationMs": 122,
+      "stopReason": null,
+      "httpStatus": 400,
+      "inputTokens": null,
+      "outputTokens": null,
+      "cacheCreationInputTokens": null,
+      "cacheReadInputTokens": null,
+      "cacheCreation": null,
+      "cacheWrite": {
+        "ephemeral5m": null,
+        "ephemeral1h": null,
+        "assumed5m": false
+      },
+      "serverToolUse": {},
+      "serviceTier": null,
+      "usage": null,
+      "estimatedUsd": 0,
+      "estimateComplete": false,
+      "unpriced": [
+        "usage-not-reported"
+      ],
+      "notes": [],
+      "webSearchUsd": 0,
+      "inputUsd": 0,
+      "outputUsd": 0,
+      "cacheReadUsd": 0,
+      "cacheWrite5mUsd": 0,
+      "cacheWrite1hUsd": 0,
+      "billed": false,
+      "likelyBilled": false,
+      "aborted": false,
+      "error": "{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.\"},\"request_id\":\"req_011Cgfm1kTXFB4AH8QJkaxDw\"}"
+    },
+    {
+      "jobId": "verify",
+      "attempt": 2,
+      "continuation": "openrouter",
+      "provider": "openrouter",
+      "model": "anthropic/claude-sonnet-5.5",
+      "durationMs": 2963,
+      "stopReason": "end_turn",
+      "httpStatus": 200,
+      "inputTokens": 22282,
+      "outputTokens": 185,
+      "cacheCreationInputTokens": null,
+      "cacheReadInputTokens": null,
+      "cacheCreation": null,
+      "cacheWrite": {
+        "ephemeral5m": null,
+        "ephemeral1h": null,
+        "assumed5m": false
+      },
+      "serverToolUse": {},
+      "serviceTier": null,
+      "usage": {
+        "prompt_tokens": 22282,
+        "completion_tokens": 185,
+        "total_tokens": 22467,
+        "cost": 0.056414,
+        "is_byok": false,
+        "prompt_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "audio_tokens": 0,
+          "video_tokens": 0
+        },
+        "cost_details": {
+          "upstream_inference_cost": 0.056414,
+          "upstream_inference_prompt_cost": 0.044564,
+          "upstream_inference_completions_cost": 0.00185
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0,
+          "image_tokens": 0,
+          "audio_tokens": 0
+        },
+        "server_tool_use_details": {
+          "web_search_requests": 1
+        }
+      },
+      "estimatedUsd": 0.056414,
+      "estimateComplete": false,
+      "unpriced": [
+        "provider:openrouter",
+        "openrouter-reported-cost"
+      ],
+      "notes": [
+        "OpenRouter usage.cost when the response has it. Not the Claude API list-price table."
+      ],
+      "billed": true,
+      "likelyBilled": false,
+      "aborted": false,
+      "error": null
+    },
+    {
+      "provider": "typesafe",
+      "jobId": "verify",
+      "attempt": 2,
+      "continuation": "judge",
+      "model": "jev-1.14.0",
+      "durationMs": null,
+      "stopReason": null,
+      "httpStatus": 200,
+      "inputTokens": 519,
+      "outputTokens": 44,
+      "cacheCreationInputTokens": 0,
+      "cacheReadInputTokens": 0,
+      "cacheCreation": null,
+      "cacheWrite": {
+        "ephemeral5m": 0,
+        "ephemeral1h": 0,
+        "assumed5m": false
+      },
+      "serverToolUse": {},
+      "serviceTier": null,
+      "usage": {
+        "input_tokens": 519,
+        "output_tokens": 44
+      },
+      "estimatedUsd": null,
+      "estimateComplete": true,
+      "unpriced": [],
+      "notes": [
+        "Typesafe input tokens are logged and are not part of the Anthropic estimate."
+      ],
+      "webSearchUsd": 0,
+      "inputUsd": null,
+      "outputUsd": null,
+      "cacheReadUsd": null,
+      "cacheWrite5mUsd": null,
+      "cacheWrite1hUsd": null,
+      "billed": false,
+      "aborted": false,
+      "error": null
+    },
+    {
+      "jobId": "verify",
+      "attempt": 3,
+      "continuation": 0,
+      "model": "claude-haiku-4-5-20251001",
+      "durationMs": 114,
+      "stopReason": null,
+      "httpStatus": 400,
+      "inputTokens": null,
+      "outputTokens": null,
+      "cacheCreationInputTokens": null,
+      "cacheReadInputTokens": null,
+      "cacheCreation": null,
+      "cacheWrite": {
+        "ephemeral5m": null,
+        "ephemeral1h": null,
+        "assumed5m": false
+      },
+      "serverToolUse": {},
+      "serviceTier": null,
+      "usage": null,
+      "estimatedUsd": 0,
+      "estimateComplete": false,
+      "unpriced": [
+        "usage-not-reported"
+      ],
+      "notes": [],
+      "webSearchUsd": 0,
+      "inputUsd": 0,
+      "outputUsd": 0,
+      "cacheReadUsd": 0,
+      "cacheWrite5mUsd": 0,
+      "cacheWrite1hUsd": 0,
+      "billed": false,
+      "likelyBilled": false,
+      "aborted": false,
+      "error": "{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.\"},\"request_id\":\"req_011Cgfm1z2MTRLBS5TKQWYVS\"}"
+    },
+    {
+      "jobId": "verify",
+      "attempt": 3,
+      "continuation": "openrouter",
+      "provider": "openrouter",
+      "model": "anthropic/claude-sonnet-5.5",
+      "durationMs": 4345,
+      "stopReason": "end_turn",
+      "httpStatus": 200,
+      "inputTokens": 20978,
+      "outputTokens": 151,
+      "cacheCreationInputTokens": null,
+      "cacheReadInputTokens": null,
+      "cacheCreation": null,
+      "cacheWrite": {
+        "ephemeral5m": null,
+        "ephemeral1h": null,
+        "assumed5m": false
+      },
+      "serverToolUse": {},
+      "serviceTier": null,
+      "usage": {
+        "prompt_tokens": 20978,
+        "completion_tokens": 151,
+        "total_tokens": 21129,
+        "cost": 0.053466,
+        "is_byok": false,
+        "prompt_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "audio_tokens": 0,
+          "video_tokens": 0
+        },
+        "cost_details": {
+          "upstream_inference_cost": 0.053466,
+          "upstream_inference_prompt_cost": 0.041956,
+          "upstream_inference_completions_cost": 0.00151
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0,
+          "image_tokens": 0,
+          "audio_tokens": 0
+        },
+        "server_tool_use_details": {
+          "web_search_requests": 1
+        }
+      },
+      "estimatedUsd": 0.053466,
+      "estimateComplete": false,
+      "unpriced": [
+        "provider:openrouter",
+        "openrouter-reported-cost"
+      ],
+      "notes": [
+        "OpenRouter usage.cost when the response has it. Not the Claude API list-price table."
+      ],
+      "billed": true,
+      "likelyBilled": false,
+      "aborted": false,
+      "error": null
+    },
+    {
+      "provider": "typesafe",
+      "jobId": "verify",
+      "attempt": 3,
+      "continuation": "judge",
+      "model": "jev-1.14.0",
+      "durationMs": null,
+      "stopReason": null,
+      "httpStatus": 200,
+      "inputTokens": 502,
+      "outputTokens": 44,
+      "cacheCreationInputTokens": 0,
+      "cacheReadInputTokens": 0,
+      "cacheCreation": null,
+      "cacheWrite": {
+        "ephemeral5m": 0,
+        "ephemeral1h": 0,
+        "assumed5m": false
+      },
+      "serverToolUse": {},
+      "serviceTier": null,
+      "usage": {
+        "input_tokens": 502,
+        "output_tokens": 44
+      },
+      "estimatedUsd": null,
+      "estimateComplete": true,
+      "unpriced": [],
+      "notes": [
+        "Typesafe input tokens are logged and are not part of the Anthropic estimate."
+      ],
+      "webSearchUsd": 0,
+      "inputUsd": null,
+      "outputUsd": null,
+      "cacheReadUsd": null,
+      "cacheWrite5mUsd": null,
+      "cacheWrite1hUsd": null,
+      "billed": false,
+      "aborted": false,
+      "error": null
     }
   ],
   "jobs": {
     "users": {
       "attempts": 2,
-      "inputTokens": 44458,
-      "outputTokens": 355,
+      "inputTokens": 26579,
+      "outputTokens": 283,
       "cacheCreationInputTokens": 0,
       "cacheReadInputTokens": 0,
       "serverToolUse": {},
-      "durationMs": 6663,
+      "durationMs": 5987,
       "stopReasons": [
         "end_turn"
       ],
-      "estimatedUsd": 0.112466,
+      "estimatedUsd": 0.065988,
+      "estimateComplete": false,
+      "unpriced": [
+        "usage-not-reported",
+        "provider:openrouter",
+        "openrouter-reported-cost"
+      ],
+      "timedOut": false,
+      "billedAttempts": 1,
+      "unbilledAttempts": 1,
+      "likelyBilledAttempts": 0
+    },
+    "share": {
+      "attempts": 2,
+      "inputTokens": 20785,
+      "outputTokens": 157,
+      "cacheCreationInputTokens": 0,
+      "cacheReadInputTokens": 0,
+      "serverToolUse": {},
+      "durationMs": 3393,
+      "stopReasons": [
+        "end_turn"
+      ],
+      "estimatedUsd": 0.05314,
       "estimateComplete": false,
       "unpriced": [
         "usage-not-reported",
@@ -375,16 +917,16 @@
     },
     "capital": {
       "attempts": 2,
-      "inputTokens": 62149,
-      "outputTokens": 432,
+      "inputTokens": 60660,
+      "outputTokens": 441,
       "cacheCreationInputTokens": 0,
       "cacheReadInputTokens": 0,
       "serverToolUse": {},
-      "durationMs": 5642,
+      "durationMs": 5729,
       "stopReasons": [
         "end_turn"
       ],
-      "estimatedUsd": 0.168618,
+      "estimatedUsd": 0.16573,
       "estimateComplete": false,
       "unpriced": [
         "usage-not-reported",
@@ -398,16 +940,16 @@
     },
     "energy": {
       "attempts": 2,
-      "inputTokens": 53571,
-      "outputTokens": 273,
+      "inputTokens": 52638,
+      "outputTokens": 294,
       "cacheCreationInputTokens": 0,
       "cacheReadInputTokens": 0,
       "serverToolUse": {},
-      "durationMs": 6074,
+      "durationMs": 6973,
       "stopReasons": [
         "end_turn"
       ],
-      "estimatedUsd": 0.129872,
+      "estimatedUsd": 0.128216,
       "estimateComplete": false,
       "unpriced": [
         "usage-not-reported",
@@ -418,18 +960,41 @@
       "billedAttempts": 1,
       "unbilledAttempts": 1,
       "likelyBilledAttempts": 0
+    },
+    "verify": {
+      "attempts": 6,
+      "inputTokens": 62173,
+      "outputTokens": 524,
+      "cacheCreationInputTokens": 0,
+      "cacheReadInputTokens": 0,
+      "serverToolUse": {},
+      "durationMs": 11860,
+      "stopReasons": [
+        "end_turn"
+      ],
+      "estimatedUsd": 0.159586,
+      "estimateComplete": false,
+      "unpriced": [
+        "usage-not-reported",
+        "provider:openrouter",
+        "openrouter-reported-cost"
+      ],
+      "timedOut": false,
+      "billedAttempts": 3,
+      "unbilledAttempts": 3,
+      "likelyBilledAttempts": 0
     }
   },
   "totals": {
-    "calls": 6,
-    "inputTokens": 160178,
-    "outputTokens": 1060,
+    "calls": 14,
+    "inputTokens": 222835,
+    "outputTokens": 1699,
     "cacheCreationInputTokens": 0,
     "cacheReadInputTokens": 0,
     "serverToolUse": {},
-    "summedCallDurationMs": 18379,
-    "wallClockMs": 18951,
-    "estimatedUsd": 0.410956,
+    "summedCallDurationMs": 33942,
+    "wallClockMs": 35172,
+    "estimatedUsd": 0.57266,
     "estimateComplete": false,
     "unpriced": [
       "usage-not-reported",
@@ -437,8 +1002,8 @@
       "openrouter-reported-cost"
     ],
     "tokensIncomplete": true,
-    "billedAttempts": 3,
-    "unbilledAttempts": 3,
+    "billedAttempts": 7,
+    "unbilledAttempts": 7,
     "likelyBilledAttempts": 0
   }
 }
