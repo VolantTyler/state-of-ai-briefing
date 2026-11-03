@@ -707,15 +707,15 @@
       "ios": {
         "muse": 2,
         "chatgpt": 4,
-        "claude": 9,
+        "claude": 8,
         "gemini": 10,
-        "grok": 44,
-        "copilot": 65
+        "grok": 36,
+        "copilot": 61
       },
       "android": {
         "muse": 1,
         "chatgpt": 2,
-        "claude": 39,
+        "claude": 32,
         "grok": 64,
         "gemini": 71
       }
