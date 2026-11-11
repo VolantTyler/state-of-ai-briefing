@@ -53,7 +53,7 @@
   },
   "val": {
     "Anthropic": 965,
-    "OpenAI": 852,
+    "OpenAI": 1250,
     "xAI": 250,
     "Databricks": 190,
     "DeepSeek": 74,
@@ -95,7 +95,7 @@
     "Meta": 140
   },
   "rev": {
-    "Anthropic": 80,
+    "Anthropic": 81,
     "OpenAI": 50,
     "xAI": 0.5
   },
