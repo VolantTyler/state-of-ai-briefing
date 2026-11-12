@@ -235,7 +235,7 @@ export const aaIndexVersion = (d) => {
 export const BASELINE = {
   valuations: [
     { name: "Anthropic", value: 965, note: "Series H, May ’26" },
-    { name: "OpenAI", value: 852, note: "Mar ’26 round" },
+    { name: "OpenAI", value: 852, note: "Nov ’26 round, $11B first close" },
     { name: "xAI", value: 250, note: "last standalone mark; now inside public SpaceX ($1.87T)" },
     { name: "Databricks", value: 190, note: "$5B round, Aug ’26" },
     { name: "DeepSeek", value: 74, note: "resumed $8B round, Aug ’26", cn: true },
