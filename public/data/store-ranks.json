@@ -915,6 +915,25 @@
         "gemini": 84,
         "grok": 86
       }
+    },
+    {
+      "date": "2026-11-14",
+      "iosDepth": 100,
+      "androidDepth": 100,
+      "ios": {
+        "muse": 2,
+        "chatgpt": 3,
+        "claude": 5,
+        "gemini": 7,
+        "grok": 43
+      },
+      "android": {
+        "muse": 1,
+        "chatgpt": 2,
+        "claude": 11,
+        "gemini": 81,
+        "grok": 87
+      }
     }
   ]
 }
