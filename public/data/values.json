@@ -1,6 +1,6 @@
 {
-  "updatedAt": "2026-11-13T16:27:27.305Z",
-  "lastRunAt": "2026-11-13T16:27:07.967Z",
+  "updatedAt": "2026-11-14T15:07:19.808Z",
+  "lastRunAt": "2026-11-14T15:06:47.453Z",
   "meta": {
     "valuations": {
       "at": "2026-11-08T16:43:34.986Z",
@@ -9,21 +9,21 @@
       "failed": false
     },
     "markets": {
-      "at": "2026-11-13T16:27:24.797Z",
-      "checkedAt": "2026-11-13T16:27:24.797Z",
-      "changedAt": "2026-11-13T16:27:24.797Z",
+      "at": "2026-11-14T15:07:18.456Z",
+      "checkedAt": "2026-11-14T15:07:18.456Z",
+      "changedAt": "2026-11-14T15:07:18.456Z",
       "failed": false
     },
     "models": {
-      "at": "2026-11-13T16:27:24.797Z",
-      "checkedAt": "2026-11-13T16:27:24.797Z",
-      "changedAt": "2026-11-13T16:27:24.797Z",
+      "at": "2026-11-14T15:07:18.456Z",
+      "checkedAt": "2026-11-14T15:07:18.456Z",
+      "changedAt": "2026-11-14T15:07:18.456Z",
       "failed": false
     },
     "users": {
-      "at": "2026-11-13T16:27:24.798Z",
-      "checkedAt": "2026-11-13T16:27:24.798Z",
-      "changedAt": "2026-11-13T16:27:24.798Z",
+      "at": "2026-11-14T15:07:18.456Z",
+      "checkedAt": "2026-11-14T15:07:18.456Z",
+      "changedAt": "2026-11-14T15:07:18.456Z",
       "failed": false
     },
     "share": {
@@ -33,21 +33,21 @@
       "failed": false
     },
     "capital": {
-      "at": "2026-11-13T16:27:24.798Z",
-      "checkedAt": "2026-11-13T16:27:24.798Z",
-      "changedAt": "2026-11-13T16:27:24.798Z",
+      "at": "2026-11-14T15:07:18.456Z",
+      "checkedAt": "2026-11-14T15:07:18.456Z",
+      "changedAt": "2026-11-14T15:07:18.456Z",
       "failed": false
     },
     "energy": {
-      "at": "2026-11-13T16:27:24.798Z",
-      "checkedAt": "2026-11-13T16:27:24.798Z",
+      "at": "2026-11-14T15:07:18.457Z",
+      "checkedAt": "2026-11-14T15:07:18.457Z",
       "changedAt": "2026-11-09T18:50:19.318Z",
       "failed": false
     },
     "storeRanks": {
-      "at": "2026-11-13T16:27:24.798Z",
-      "checkedAt": "2026-11-13T16:27:24.798Z",
-      "changedAt": "2026-11-13T16:27:24.798Z",
+      "at": "2026-11-14T15:07:18.456Z",
+      "checkedAt": "2026-11-14T15:07:18.456Z",
+      "changedAt": "2026-11-14T15:07:18.456Z",
       "failed": false
     }
   },
@@ -63,16 +63,16 @@
     "MiniMax": 33
   },
   "stocks": {
-    "NVDA": 166.19,
-    "MSFT": 523,
-    "GOOG": 295.35,
-    "META": 623.61,
-    "AMZN": 267.44,
-    "AVGO": 364.36,
-    "TSM": 405.49
+    "NVDA": 162.85,
+    "MSFT": 523.88,
+    "GOOG": 292.52,
+    "META": 641.69,
+    "AMZN": 266.66,
+    "AVGO": 347.01,
+    "TSM": 398.73
   },
   "users": {
-    "ChatGPT": 1200,
+    "ChatGPT": 1100,
     "Meta AI": 1000,
     "Gemini": 1000,
     "Copilot": 150,
@@ -89,10 +89,10 @@
     "Others": 4.5
   },
   "capex": {
-    "Alphabet": 205,
+    "Alphabet": 200,
     "Amazon": 220,
     "Microsoft": 170,
-    "Meta": 145
+    "Meta": 140
   },
   "rev": {
     "Anthropic": 81,
@@ -109,7 +109,7 @@
     [
       "Claude Fable 5.2 (Max, Default Fallback)",
       "Anthropic",
-      64.6,
+      65,
       0
     ],
     [
@@ -121,37 +121,19 @@
     [
       "Claude Opus 5.5 (Max, Default Fallback)",
       "Anthropic",
-      59.1,
+      59,
       0
     ],
     [
-      "GPT-6 Astra (Max)",
+      "GPT-6 Astra (max)",
       "OpenAI",
-      56.9,
-      0
-    ],
-    [
-      "GPT-6.1 Sol (Max)",
-      "OpenAI",
-      54.6,
+      57,
       0
     ],
     [
       "Claude Sonnet 5.5 (Max, Default Fallback)",
       "Anthropic",
-      54.5,
-      0
-    ],
-    [
-      "Gemini 4 Hydrogen (Xhigh)",
-      "Google",
-      53.9,
-      0
-    ],
-    [
-      "GPT-6.1 Terra (Max)",
-      "OpenAI",
-      51.3,
+      56,
       0
     ]
   ],
@@ -208,24 +190,23 @@
   "ranks": {
     "ios": {
       "muse": 2,
-      "chatgpt": 4,
-      "claude": 6,
-      "gemini": 8,
-      "grok": 38,
-      "copilot": 100
+      "chatgpt": 3,
+      "claude": 5,
+      "gemini": 7,
+      "grok": 43
     },
     "android": {
       "muse": 1,
       "chatgpt": 2,
-      "claude": 12,
-      "gemini": 84,
-      "grok": 86
+      "claude": 11,
+      "gemini": 81,
+      "grok": 87
     }
   },
   "usage": {
-    "runAt": "2026-11-13T16:27:07.967Z",
+    "runAt": "2026-11-14T15:06:47.453Z",
     "fatal": false,
-    "wallClockMs": 16831,
+    "wallClockMs": 31003,
     "budget": {
       "maxDurationMs": 1500000,
       "tailReserveMs": 120000,
@@ -271,16 +252,16 @@
     },
     "spendCap": {
       "maxUsd": 1,
-      "estimatedUsd": 0.30005,
+      "estimatedUsd": 0.441768,
       "skipped": []
     },
     "calls": [
       {
-        "jobId": "users",
+        "jobId": "models",
         "attempt": 1,
         "continuation": 0,
         "model": "claude-haiku-4-5-20251001",
-        "durationMs": 94,
+        "durationMs": 97,
         "stopReason": null,
         "httpStatus": 401,
         "inputTokens": null,
@@ -311,19 +292,19 @@
         "billed": false,
         "likelyBilled": false,
         "aborted": false,
-        "error": "{\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"},\"request_id\":\"req_011Ch1EwWRtaHyWNZws1HPMP\"}"
+        "error": "{\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"},\"request_id\":\"req_011Ch32d5hDDQVH6KRCS2iig\"}"
       },
       {
-        "jobId": "users",
+        "jobId": "models",
         "attempt": 1,
         "continuation": "openrouter",
         "provider": "openrouter",
         "model": "anthropic/claude-sonnet-5.5",
-        "durationMs": 7623,
+        "durationMs": 15417,
         "stopReason": "end_turn",
         "httpStatus": 200,
-        "inputTokens": 26135,
-        "outputTokens": 495,
+        "inputTokens": 51313,
+        "outputTokens": 1506,
         "cacheCreationInputTokens": null,
         "cacheReadInputTokens": null,
         "cacheCreation": null,
@@ -335,10 +316,10 @@
         "serverToolUse": {},
         "serviceTier": null,
         "usage": {
-          "prompt_tokens": 26135,
-          "completion_tokens": 495,
-          "total_tokens": 26630,
-          "cost": 0.06722,
+          "prompt_tokens": 51313,
+          "completion_tokens": 1506,
+          "total_tokens": 52819,
+          "cost": 0.137686,
           "is_byok": false,
           "prompt_tokens_details": {
             "cached_tokens": 0,
@@ -347,12 +328,111 @@
             "video_tokens": 0
           },
           "cost_details": {
-            "upstream_inference_cost": 0.06722,
-            "upstream_inference_prompt_cost": 0.05227,
-            "upstream_inference_completions_cost": 0.00495
+            "upstream_inference_cost": 0.137686,
+            "upstream_inference_prompt_cost": 0.102626,
+            "upstream_inference_completions_cost": 0.01506
           },
           "completion_tokens_details": {
-            "reasoning_tokens": 359,
+            "reasoning_tokens": 1119,
+            "image_tokens": 0,
+            "audio_tokens": 0
+          },
+          "server_tool_use_details": {
+            "web_search_requests": 2
+          }
+        },
+        "estimatedUsd": 0.137686,
+        "estimateComplete": false,
+        "unpriced": [
+          "provider:openrouter",
+          "openrouter-reported-cost"
+        ],
+        "notes": [
+          "OpenRouter usage.cost when the response has it. Not the Claude API list-price table."
+        ],
+        "billed": true,
+        "likelyBilled": false,
+        "aborted": false,
+        "error": null
+      },
+      {
+        "jobId": "users",
+        "attempt": 1,
+        "continuation": 0,
+        "model": "claude-haiku-4-5-20251001",
+        "durationMs": 77,
+        "stopReason": null,
+        "httpStatus": 401,
+        "inputTokens": null,
+        "outputTokens": null,
+        "cacheCreationInputTokens": null,
+        "cacheReadInputTokens": null,
+        "cacheCreation": null,
+        "cacheWrite": {
+          "ephemeral5m": null,
+          "ephemeral1h": null,
+          "assumed5m": false
+        },
+        "serverToolUse": {},
+        "serviceTier": null,
+        "usage": null,
+        "estimatedUsd": 0,
+        "estimateComplete": false,
+        "unpriced": [
+          "usage-not-reported"
+        ],
+        "notes": [],
+        "webSearchUsd": 0,
+        "inputUsd": 0,
+        "outputUsd": 0,
+        "cacheReadUsd": 0,
+        "cacheWrite5mUsd": 0,
+        "cacheWrite1hUsd": 0,
+        "billed": false,
+        "likelyBilled": false,
+        "aborted": false,
+        "error": "{\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"},\"request_id\":\"req_011Ch32eDypQXvr5KkBFhacj\"}"
+      },
+      {
+        "jobId": "users",
+        "attempt": 1,
+        "continuation": "openrouter",
+        "provider": "openrouter",
+        "model": "anthropic/claude-sonnet-5.5",
+        "durationMs": 5687,
+        "stopReason": "end_turn",
+        "httpStatus": 200,
+        "inputTokens": 26199,
+        "outputTokens": 298,
+        "cacheCreationInputTokens": null,
+        "cacheReadInputTokens": null,
+        "cacheCreation": null,
+        "cacheWrite": {
+          "ephemeral5m": null,
+          "ephemeral1h": null,
+          "assumed5m": false
+        },
+        "serverToolUse": {},
+        "serviceTier": null,
+        "usage": {
+          "prompt_tokens": 26199,
+          "completion_tokens": 298,
+          "total_tokens": 26497,
+          "cost": 0.065378,
+          "is_byok": false,
+          "prompt_tokens_details": {
+            "cached_tokens": 0,
+            "cache_write_tokens": 0,
+            "audio_tokens": 0,
+            "video_tokens": 0
+          },
+          "cost_details": {
+            "upstream_inference_cost": 0.065378,
+            "upstream_inference_prompt_cost": 0.052398,
+            "upstream_inference_completions_cost": 0.00298
+          },
+          "completion_tokens_details": {
+            "reasoning_tokens": 157,
             "image_tokens": 0,
             "audio_tokens": 0
           },
@@ -360,7 +440,7 @@
             "web_search_requests": 1
           }
         },
-        "estimatedUsd": 0.06722,
+        "estimatedUsd": 0.065378,
         "estimateComplete": false,
         "unpriced": [
           "provider:openrouter",
@@ -379,7 +459,7 @@
         "attempt": 1,
         "continuation": 0,
         "model": "claude-haiku-4-5-20251001",
-        "durationMs": 76,
+        "durationMs": 78,
         "stopReason": null,
         "httpStatus": 401,
         "inputTokens": null,
@@ -410,7 +490,7 @@
         "billed": false,
         "likelyBilled": false,
         "aborted": false,
-        "error": "{\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"},\"request_id\":\"req_011Ch1Ex5Pn94Y21zuaQUPz1\"}"
+        "error": "{\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"},\"request_id\":\"req_011Ch32eed9Szrv2bPWJEoGx\"}"
       },
       {
         "jobId": "capital",
@@ -418,11 +498,11 @@
         "continuation": "openrouter",
         "provider": "openrouter",
         "model": "anthropic/claude-sonnet-5.5",
-        "durationMs": 4870,
+        "durationMs": 5582,
         "stopReason": "end_turn",
         "httpStatus": 200,
-        "inputTokens": 67883,
-        "outputTokens": 317,
+        "inputTokens": 70187,
+        "outputTokens": 413,
         "cacheCreationInputTokens": null,
         "cacheReadInputTokens": null,
         "cacheCreation": null,
@@ -434,10 +514,10 @@
         "serverToolUse": {},
         "serviceTier": null,
         "usage": {
-          "prompt_tokens": 67883,
-          "completion_tokens": 317,
-          "total_tokens": 68200,
-          "cost": 0.178936,
+          "prompt_tokens": 70187,
+          "completion_tokens": 413,
+          "total_tokens": 70600,
+          "cost": 0.184504,
           "is_byok": false,
           "prompt_tokens_details": {
             "cached_tokens": 0,
@@ -446,12 +526,12 @@
             "video_tokens": 0
           },
           "cost_details": {
-            "upstream_inference_cost": 0.178936,
-            "upstream_inference_prompt_cost": 0.135766,
-            "upstream_inference_completions_cost": 0.00317
+            "upstream_inference_cost": 0.184504,
+            "upstream_inference_prompt_cost": 0.140374,
+            "upstream_inference_completions_cost": 0.00413
           },
           "completion_tokens_details": {
-            "reasoning_tokens": 0,
+            "reasoning_tokens": 96,
             "image_tokens": 0,
             "audio_tokens": 0
           },
@@ -459,7 +539,7 @@
             "web_search_requests": 4
           }
         },
-        "estimatedUsd": 0.178936,
+        "estimatedUsd": 0.184504,
         "estimateComplete": false,
         "unpriced": [
           "provider:openrouter",
@@ -478,7 +558,7 @@
         "attempt": 1,
         "continuation": 0,
         "model": "claude-haiku-4-5-20251001",
-        "durationMs": 81,
+        "durationMs": 77,
         "stopReason": null,
         "httpStatus": 401,
         "inputTokens": null,
@@ -509,7 +589,7 @@
         "billed": false,
         "likelyBilled": false,
         "aborted": false,
-        "error": "{\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"},\"request_id\":\"req_011Ch1ExSZkaA84f4J6z5dBJ\"}"
+        "error": "{\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"},\"request_id\":\"req_011Ch32f4qBpz3BFFMhG6Z5w\"}"
       },
       {
         "jobId": "energy",
@@ -517,10 +597,10 @@
         "continuation": "openrouter",
         "provider": "openrouter",
         "model": "anthropic/claude-sonnet-5.5",
-        "durationMs": 3303,
+        "durationMs": 3232,
         "stopReason": "end_turn",
         "httpStatus": 200,
-        "inputTokens": 21347,
+        "inputTokens": 21500,
         "outputTokens": 120,
         "cacheCreationInputTokens": null,
         "cacheReadInputTokens": null,
@@ -533,10 +613,10 @@
         "serverToolUse": {},
         "serviceTier": null,
         "usage": {
-          "prompt_tokens": 21347,
+          "prompt_tokens": 21500,
           "completion_tokens": 120,
-          "total_tokens": 21467,
-          "cost": 0.053894,
+          "total_tokens": 21620,
+          "cost": 0.0542,
           "is_byok": false,
           "prompt_tokens_details": {
             "cached_tokens": 0,
@@ -545,8 +625,8 @@
             "video_tokens": 0
           },
           "cost_details": {
-            "upstream_inference_cost": 0.053894,
-            "upstream_inference_prompt_cost": 0.042694,
+            "upstream_inference_cost": 0.0542,
+            "upstream_inference_prompt_cost": 0.043,
             "upstream_inference_completions_cost": 0.0012
           },
           "completion_tokens_details": {
@@ -558,7 +638,7 @@
             "web_search_requests": 1
           }
         },
-        "estimatedUsd": 0.053894,
+        "estimatedUsd": 0.0542,
         "estimateComplete": false,
         "unpriced": [
           "provider:openrouter",
@@ -574,18 +654,41 @@
       }
     ],
     "jobs": {
-      "users": {
+      "models": {
         "attempts": 2,
-        "inputTokens": 26135,
-        "outputTokens": 495,
+        "inputTokens": 51313,
+        "outputTokens": 1506,
         "cacheCreationInputTokens": 0,
         "cacheReadInputTokens": 0,
         "serverToolUse": {},
-        "durationMs": 7717,
+        "durationMs": 15514,
         "stopReasons": [
           "end_turn"
         ],
-        "estimatedUsd": 0.06722,
+        "estimatedUsd": 0.137686,
+        "estimateComplete": false,
+        "unpriced": [
+          "usage-not-reported",
+          "provider:openrouter",
+          "openrouter-reported-cost"
+        ],
+        "timedOut": false,
+        "billedAttempts": 1,
+        "unbilledAttempts": 1,
+        "likelyBilledAttempts": 0
+      },
+      "users": {
+        "attempts": 2,
+        "inputTokens": 26199,
+        "outputTokens": 298,
+        "cacheCreationInputTokens": 0,
+        "cacheReadInputTokens": 0,
+        "serverToolUse": {},
+        "durationMs": 5764,
+        "stopReasons": [
+          "end_turn"
+        ],
+        "estimatedUsd": 0.065378,
         "estimateComplete": false,
         "unpriced": [
           "usage-not-reported",
@@ -599,16 +702,16 @@
       },
       "capital": {
         "attempts": 2,
-        "inputTokens": 67883,
-        "outputTokens": 317,
+        "inputTokens": 70187,
+        "outputTokens": 413,
         "cacheCreationInputTokens": 0,
         "cacheReadInputTokens": 0,
         "serverToolUse": {},
-        "durationMs": 4946,
+        "durationMs": 5660,
         "stopReasons": [
           "end_turn"
         ],
-        "estimatedUsd": 0.178936,
+        "estimatedUsd": 0.184504,
         "estimateComplete": false,
         "unpriced": [
           "usage-not-reported",
@@ -622,16 +725,16 @@
       },
       "energy": {
         "attempts": 2,
-        "inputTokens": 21347,
+        "inputTokens": 21500,
         "outputTokens": 120,
         "cacheCreationInputTokens": 0,
         "cacheReadInputTokens": 0,
         "serverToolUse": {},
-        "durationMs": 3384,
+        "durationMs": 3309,
         "stopReasons": [
           "end_turn"
         ],
-        "estimatedUsd": 0.053894,
+        "estimatedUsd": 0.0542,
         "estimateComplete": false,
         "unpriced": [
           "usage-not-reported",
@@ -645,15 +748,15 @@
       }
     },
     "totals": {
-      "calls": 6,
-      "inputTokens": 115365,
-      "outputTokens": 932,
+      "calls": 8,
+      "inputTokens": 169199,
+      "outputTokens": 2337,
       "cacheCreationInputTokens": 0,
       "cacheReadInputTokens": 0,
       "serverToolUse": {},
-      "summedCallDurationMs": 16047,
-      "wallClockMs": 16831,
-      "estimatedUsd": 0.30005,
+      "summedCallDurationMs": 30247,
+      "wallClockMs": 31003,
+      "estimatedUsd": 0.441768,
       "estimateComplete": false,
       "unpriced": [
         "usage-not-reported",
@@ -661,8 +764,8 @@
         "openrouter-reported-cost"
       ],
       "tokensIncomplete": true,
-      "billedAttempts": 3,
-      "unbilledAttempts": 3,
+      "billedAttempts": 4,
+      "unbilledAttempts": 4,
       "likelyBilledAttempts": 0
     }
   }
