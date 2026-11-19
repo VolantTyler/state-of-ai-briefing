@@ -204,7 +204,7 @@ test("models apply keeps a current index version and rejects fewer than five row
   assert.equal(AA_INDEX_VERSION, "v4.3.2");
   assert.equal(snapshot(BASELINE).scale, AA_INDEX_VERSION);
   assert.equal(aaIndexVersion({}), AA_INDEX_VERSION);
-  assert.equal(EDITION.version, "v2.6");
+  assert.equal(EDITION.version, "v2.7");
   assert.match(TRACKERS[0].detail, /v4\.3\.2/);
   assert.match(TRACKERS[0].detail, /not comparable to v4\.2/);
   assert.equal(SRC.models[0][0], "Artificial Analysis — Intelligence Index v4.3.2");
