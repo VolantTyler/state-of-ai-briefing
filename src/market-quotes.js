@@ -10,7 +10,7 @@
    open). That bar's "close" is the latest print, not a close. It is
    dropped until the published regular session has ended. */
 
-export const QUOTE_TICKERS = ["NVDA", "MSFT", "GOOG", "META", "AMZN", "AVGO", "TSM"];
+export const QUOTE_TICKERS = ["ANT", "NVDA", "MSFT", "GOOG", "META", "AMZN", "AVGO", "TSM"];
 
 export const quoteChartUrl = (ticker) =>
   `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=10d&includePrePost=false`;
@@ -49,7 +49,7 @@ export const parseQuoteChart = (json, nowMs = Date.now()) => {
 
 const UA = "state-of-ai-briefing";
 
-/* All seven tickers, or the whole fetch fails. A partial object would let
+/* All eight tickers, or the whole fetch fails. A partial object would let
    the panel advance `checkedAt` while silently keeping a made-up gap. */
 export const fetchMarketQuotes = async (fetchImpl = fetch, nowMs = Date.now()) => {
   const rows = await Promise.all(QUOTE_TICKERS.map(async (ticker) => {

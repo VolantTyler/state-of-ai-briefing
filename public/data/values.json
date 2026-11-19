@@ -52,7 +52,7 @@
     }
   },
   "val": {
-    "Anthropic": 965,
+    "Anthropic": 1270,
     "OpenAI": 852,
     "xAI": 250,
     "Databricks": 190,
@@ -63,6 +63,7 @@
     "MiniMax": 33
   },
   "stocks": {
+    "ANT": 97.17,
     "NVDA": 150.96,
     "MSFT": 508.29,
     "GOOG": 279.2,

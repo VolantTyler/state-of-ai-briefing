@@ -44,13 +44,13 @@ test("a null or missing close is not filled in", () => {
   assert.throws(() => parseQuoteChart(chart({ currency: "TWD", bars: [{ t: 100, close: 9 }] })), /currency TWD/);
 });
 
-test("fetch reads the seven tickers from the chart URL and returns panel-shaped closes", async () => {
-  assert.deepEqual(QUOTE_TICKERS, ["NVDA", "MSFT", "GOOG", "META", "AMZN", "AVGO", "TSM"]);
+test("fetch reads the eight tickers from the chart URL and returns panel-shaped closes", async () => {
+  assert.deepEqual(QUOTE_TICKERS, ["ANT", "NVDA", "MSFT", "GOOG", "META", "AMZN", "AVGO", "TSM"]);
   assert.match(quoteChartUrl("GOOG"), /\/GOOG\?/);
   assert.match(quoteChartUrl("GOOG"), /interval=1d/);
   assert.match(quoteChartUrl("GOOG"), /includePrePost=false/);
 
-  const prices = { NVDA: 225.07, MSFT: 516.17, GOOG: 341.08, META: 751.66, AMZN: 249.67, AVGO: 352.81, TSM: 450.61 };
+  const prices = { ANT: 97.17, NVDA: 225.07, MSFT: 516.17, GOOG: 341.08, META: 751.66, AMZN: 249.67, AVGO: 352.81, TSM: 450.61 };
   const seen = [];
   const fetchImpl = async (url) => {
     seen.push(url);
@@ -66,9 +66,10 @@ test("fetch reads the seven tickers from the chart URL and returns panel-shaped 
   };
   const got = await fetchMarketQuotes(fetchImpl, 1_500_000);
   assert.deepEqual(got.stocks, prices);
-  assert.equal(seen.length, 7);
+  assert.equal(seen.length, 8);
 
   const next = JOBS.markets.apply(BASELINE, got);
+  assert.equal(next.stocks.find((s) => s.ticker === "ANT").price, 97.17);
   assert.equal(next.stocks.find((s) => s.ticker === "NVDA").price, 225.07);
   assert.equal(next.stocks.find((s) => s.ticker === "GOOG").price, 341.08);
   const kept = JOBS.markets.apply(BASELINE, { stocks: { NVDA: 225.074 } });
