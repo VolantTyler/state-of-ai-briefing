@@ -106,9 +106,8 @@ of that change. Each would be a new section, not an edit to an existing one.
   (priced $83 on 2026-11-18, closed $97.17 on day one, ~$1.27T). It now appears
   in §01 at its market cap and in §02 as an equity, but a dedicated panel is
   still open: offering size and day-one pop, lockup expiry, and OpenAI's own
-  filing (reported confidential as of 2026-09-07). §01 is still titled
-  "Private-market valuations" and `panel-freshness.js` says the same, which is
-  no longer accurate for Anthropic. Anthropic's §02 market cap is a static
+  filing (reported confidential as of 2026-09-07). §01 was renamed
+  "Company valuations" on 2026-11-23. Anthropic's §02 market cap is a static
   string like every other cap in that table, and the valuations job only runs
   Sundays, so the §01 bar will not follow the stock between checks.
 - **Consolidation / M&A.** Nvidia is acquiring Hugging Face for ~$13B

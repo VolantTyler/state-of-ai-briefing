@@ -670,7 +670,7 @@ export default function App() {
 
   const tocItems = useMemo(() => {
     const items = [
-      { n: "01", id: "sec-01", title: "Private-market valuations" },
+      { n: "01", id: "sec-01", title: "Company valuations" },
       { n: "02", id: "sec-02", title: "Public markets" },
       { n: "03", id: "sec-03", title: "Model capability" },
       { n: "04", id: "sec-04", title: "Who's actually using this" },
@@ -744,7 +744,7 @@ export default function App() {
         </p>
 
         {/* §01 Valuations */}
-        <SectionHead id="sec-01" n="01" title="Private-market valuations" sub="The most valuable startups ever built, priced in billions of dollars" />
+        <SectionHead id="sec-01" n="01" title="Company valuations" sub="The most valuable AI companies, private and newly public, in billions of dollars" />
         <Panel id="valuations" label="Latest disclosed round or market cap · $ billions" meta={meta.valuations} checks={data.checks && data.checks.val} sources={SRC.valuations}>
           <div style={{ height: 32 + valuations.length * 34 }}>
             <ResponsiveContainer>
@@ -755,7 +755,7 @@ export default function App() {
                 <Tooltip content={<PaperTooltip unit="B" />} cursor={{ fill: "rgba(25,23,20,0.04)" }} />
                 <Bar dataKey="value" stroke={INK} strokeWidth={1} barSize={20} isAnimationActive={false}>
                   {valuations.map((v) => <Cell key={v.name} fill={brandFill(v.name, v.cn ? C.clay : C.blue)} />)}
-                  <LabelList dataKey="value" position="right" style={{ ...mono, fontSize: 11, fill: INK }} formatter={(v) => `$${v}B`} />
+                  <LabelList dataKey="value" position="right" style={{ ...mono, fontSize: 11, fill: INK }} formatter={(v) => (v >= 1000 ? `$${(v / 1000).toFixed(2)}T` : `$${v}B`)} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
