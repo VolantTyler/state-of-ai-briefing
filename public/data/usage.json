@@ -1,7 +1,7 @@
 {
-  "runAt": "2026-11-22T17:53:08.807Z",
+  "runAt": "2026-11-23T20:16:05.504Z",
   "fatal": false,
-  "wallClockMs": 600,
+  "wallClockMs": 2200,
   "budget": {
     "maxDurationMs": 1500000,
     "tailReserveMs": 120000,
@@ -52,10 +52,10 @@
   },
   "calls": [
     {
-      "jobId": "valuations",
+      "jobId": "models",
       "attempt": 1,
       "continuation": 0,
-      "model": "claude-sonnet-4-6",
+      "model": "claude-haiku-4-5-20251001",
       "durationMs": 102,
       "stopReason": null,
       "httpStatus": 401,
@@ -87,15 +87,237 @@
       "billed": false,
       "likelyBilled": false,
       "aborted": false,
-      "error": "{\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"},\"request_id\":\"req_011ChJPn9Uw3XM5TfVQBMcxY\"}"
+      "error": "{\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"},\"request_id\":\"req_011ChLUVKUKFpUBhXWaTMyfR\"}"
     },
     {
-      "jobId": "valuations",
+      "jobId": "models",
       "attempt": 1,
       "continuation": "openrouter",
       "provider": "openrouter",
       "model": "anthropic/claude-sonnet-5.5",
-      "durationMs": 136,
+      "durationMs": 181,
+      "stopReason": null,
+      "httpStatus": 403,
+      "inputTokens": null,
+      "outputTokens": null,
+      "cacheCreationInputTokens": null,
+      "cacheReadInputTokens": null,
+      "cacheCreation": null,
+      "cacheWrite": {
+        "ephemeral5m": null,
+        "ephemeral1h": null,
+        "assumed5m": false
+      },
+      "serverToolUse": {},
+      "serviceTier": null,
+      "usage": null,
+      "estimatedUsd": null,
+      "estimateComplete": false,
+      "unpriced": [
+        "provider:openrouter",
+        "usage-not-reported"
+      ],
+      "notes": [
+        "OpenRouter usage.cost when the response has it. Not the Claude API list-price table."
+      ],
+      "billed": false,
+      "likelyBilled": false,
+      "aborted": false,
+      "error": "{\"error\":{\"message\":\"Key limit exceeded (monthly limit). Manage it using https://openrouter.ai/workspaces/default/keys/4d0d25300b8dffb3ed416fc37ef2ce3fc0a507ae3d1f4b08e9e2292c037e314e $10.23 of $10.00 used; resets 2026-12-01T00:00:00.000Z.\",\"code\":403,\"metadata\":{\"limit_source\":\"openrouter_key_limit\",\"remedy_hint\":\"Raise or remove this API key's usage limit at https://openrouter.ai/settings/keys, or use a key without a limit.\",\"scope\":\"key_limit\",\"limit_usd\":10,\"spend_usd\":10.234396,\"resets_at\"…"
+    },
+    {
+      "jobId": "users",
+      "attempt": 1,
+      "continuation": 0,
+      "model": "claude-haiku-4-5-20251001",
+      "durationMs": 84,
+      "stopReason": null,
+      "httpStatus": 401,
+      "inputTokens": null,
+      "outputTokens": null,
+      "cacheCreationInputTokens": null,
+      "cacheReadInputTokens": null,
+      "cacheCreation": null,
+      "cacheWrite": {
+        "ephemeral5m": null,
+        "ephemeral1h": null,
+        "assumed5m": false
+      },
+      "serverToolUse": {},
+      "serviceTier": null,
+      "usage": null,
+      "estimatedUsd": 0,
+      "estimateComplete": false,
+      "unpriced": [
+        "usage-not-reported"
+      ],
+      "notes": [],
+      "webSearchUsd": 0,
+      "inputUsd": 0,
+      "outputUsd": 0,
+      "cacheReadUsd": 0,
+      "cacheWrite5mUsd": 0,
+      "cacheWrite1hUsd": 0,
+      "billed": false,
+      "likelyBilled": false,
+      "aborted": false,
+      "error": "{\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"},\"request_id\":\"req_011ChLUVLc2MAUBFozmz1Ev9\"}"
+    },
+    {
+      "jobId": "users",
+      "attempt": 1,
+      "continuation": "openrouter",
+      "provider": "openrouter",
+      "model": "anthropic/claude-sonnet-5.5",
+      "durationMs": 797,
+      "stopReason": null,
+      "httpStatus": 403,
+      "inputTokens": null,
+      "outputTokens": null,
+      "cacheCreationInputTokens": null,
+      "cacheReadInputTokens": null,
+      "cacheCreation": null,
+      "cacheWrite": {
+        "ephemeral5m": null,
+        "ephemeral1h": null,
+        "assumed5m": false
+      },
+      "serverToolUse": {},
+      "serviceTier": null,
+      "usage": null,
+      "estimatedUsd": null,
+      "estimateComplete": false,
+      "unpriced": [
+        "provider:openrouter",
+        "usage-not-reported"
+      ],
+      "notes": [
+        "OpenRouter usage.cost when the response has it. Not the Claude API list-price table."
+      ],
+      "billed": false,
+      "likelyBilled": false,
+      "aborted": false,
+      "error": "{\"error\":{\"message\":\"Key limit exceeded (monthly limit). Manage it using https://openrouter.ai/workspaces/default/keys/4d0d25300b8dffb3ed416fc37ef2ce3fc0a507ae3d1f4b08e9e2292c037e314e $10.23 of $10.00 used; resets 2026-12-01T00:00:00.000Z.\",\"code\":403,\"metadata\":{\"limit_source\":\"openrouter_key_limit\",\"remedy_hint\":\"Raise or remove this API key's usage limit at https://openrouter.ai/settings/keys, or use a key without a limit.\",\"scope\":\"key_limit\",\"limit_usd\":10,\"spend_usd\":10.234396,\"resets_at\"…"
+    },
+    {
+      "jobId": "capital",
+      "attempt": 1,
+      "continuation": 0,
+      "model": "claude-haiku-4-5-20251001",
+      "durationMs": 78,
+      "stopReason": null,
+      "httpStatus": 401,
+      "inputTokens": null,
+      "outputTokens": null,
+      "cacheCreationInputTokens": null,
+      "cacheReadInputTokens": null,
+      "cacheCreation": null,
+      "cacheWrite": {
+        "ephemeral5m": null,
+        "ephemeral1h": null,
+        "assumed5m": false
+      },
+      "serverToolUse": {},
+      "serviceTier": null,
+      "usage": null,
+      "estimatedUsd": 0,
+      "estimateComplete": false,
+      "unpriced": [
+        "usage-not-reported"
+      ],
+      "notes": [],
+      "webSearchUsd": 0,
+      "inputUsd": 0,
+      "outputUsd": 0,
+      "cacheReadUsd": 0,
+      "cacheWrite5mUsd": 0,
+      "cacheWrite1hUsd": 0,
+      "billed": false,
+      "likelyBilled": false,
+      "aborted": false,
+      "error": "{\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"},\"request_id\":\"req_011ChLUVQNVpRQwHJGDfdNqE\"}"
+    },
+    {
+      "jobId": "capital",
+      "attempt": 1,
+      "continuation": "openrouter",
+      "provider": "openrouter",
+      "model": "anthropic/claude-sonnet-5.5",
+      "durationMs": 43,
+      "stopReason": null,
+      "httpStatus": 403,
+      "inputTokens": null,
+      "outputTokens": null,
+      "cacheCreationInputTokens": null,
+      "cacheReadInputTokens": null,
+      "cacheCreation": null,
+      "cacheWrite": {
+        "ephemeral5m": null,
+        "ephemeral1h": null,
+        "assumed5m": false
+      },
+      "serverToolUse": {},
+      "serviceTier": null,
+      "usage": null,
+      "estimatedUsd": null,
+      "estimateComplete": false,
+      "unpriced": [
+        "provider:openrouter",
+        "usage-not-reported"
+      ],
+      "notes": [
+        "OpenRouter usage.cost when the response has it. Not the Claude API list-price table."
+      ],
+      "billed": false,
+      "likelyBilled": false,
+      "aborted": false,
+      "error": "{\"error\":{\"message\":\"Key limit exceeded (monthly limit). Manage it using https://openrouter.ai/workspaces/default/keys/4d0d25300b8dffb3ed416fc37ef2ce3fc0a507ae3d1f4b08e9e2292c037e314e $10.23 of $10.00 used; resets 2026-12-01T00:00:00.000Z.\",\"code\":403,\"metadata\":{\"limit_source\":\"openrouter_key_limit\",\"remedy_hint\":\"Raise or remove this API key's usage limit at https://openrouter.ai/settings/keys, or use a key without a limit.\",\"scope\":\"key_limit\",\"limit_usd\":10,\"spend_usd\":10.234396,\"resets_at\"…"
+    },
+    {
+      "jobId": "energy",
+      "attempt": 1,
+      "continuation": 0,
+      "model": "claude-haiku-4-5-20251001",
+      "durationMs": 78,
+      "stopReason": null,
+      "httpStatus": 401,
+      "inputTokens": null,
+      "outputTokens": null,
+      "cacheCreationInputTokens": null,
+      "cacheReadInputTokens": null,
+      "cacheCreation": null,
+      "cacheWrite": {
+        "ephemeral5m": null,
+        "ephemeral1h": null,
+        "assumed5m": false
+      },
+      "serverToolUse": {},
+      "serviceTier": null,
+      "usage": null,
+      "estimatedUsd": 0,
+      "estimateComplete": false,
+      "unpriced": [
+        "usage-not-reported"
+      ],
+      "notes": [],
+      "webSearchUsd": 0,
+      "inputUsd": 0,
+      "outputUsd": 0,
+      "cacheReadUsd": 0,
+      "cacheWrite5mUsd": 0,
+      "cacheWrite1hUsd": 0,
+      "billed": false,
+      "likelyBilled": false,
+      "aborted": false,
+      "error": "{\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"},\"request_id\":\"req_011ChLUVQtVXCRV4ts6HWgDD\"}"
+    },
+    {
+      "jobId": "energy",
+      "attempt": 1,
+      "continuation": "openrouter",
+      "provider": "openrouter",
+      "model": "anthropic/claude-sonnet-5.5",
+      "durationMs": 42,
       "stopReason": null,
       "httpStatus": 403,
       "inputTokens": null,
@@ -127,14 +349,74 @@
     }
   ],
   "jobs": {
-    "valuations": {
+    "models": {
       "attempts": 2,
       "inputTokens": 0,
       "outputTokens": 0,
       "cacheCreationInputTokens": 0,
       "cacheReadInputTokens": 0,
       "serverToolUse": {},
-      "durationMs": 238,
+      "durationMs": 283,
+      "stopReasons": [],
+      "estimatedUsd": 0,
+      "estimateComplete": false,
+      "unpriced": [
+        "usage-not-reported",
+        "provider:openrouter"
+      ],
+      "timedOut": false,
+      "billedAttempts": 0,
+      "unbilledAttempts": 2,
+      "likelyBilledAttempts": 0
+    },
+    "users": {
+      "attempts": 2,
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "cacheCreationInputTokens": 0,
+      "cacheReadInputTokens": 0,
+      "serverToolUse": {},
+      "durationMs": 881,
+      "stopReasons": [],
+      "estimatedUsd": 0,
+      "estimateComplete": false,
+      "unpriced": [
+        "usage-not-reported",
+        "provider:openrouter"
+      ],
+      "timedOut": false,
+      "billedAttempts": 0,
+      "unbilledAttempts": 2,
+      "likelyBilledAttempts": 0
+    },
+    "capital": {
+      "attempts": 2,
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "cacheCreationInputTokens": 0,
+      "cacheReadInputTokens": 0,
+      "serverToolUse": {},
+      "durationMs": 121,
+      "stopReasons": [],
+      "estimatedUsd": 0,
+      "estimateComplete": false,
+      "unpriced": [
+        "usage-not-reported",
+        "provider:openrouter"
+      ],
+      "timedOut": false,
+      "billedAttempts": 0,
+      "unbilledAttempts": 2,
+      "likelyBilledAttempts": 0
+    },
+    "energy": {
+      "attempts": 2,
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "cacheCreationInputTokens": 0,
+      "cacheReadInputTokens": 0,
+      "serverToolUse": {},
+      "durationMs": 120,
       "stopReasons": [],
       "estimatedUsd": 0,
       "estimateComplete": false,
@@ -149,14 +431,14 @@
     }
   },
   "totals": {
-    "calls": 2,
+    "calls": 8,
     "inputTokens": 0,
     "outputTokens": 0,
     "cacheCreationInputTokens": 0,
     "cacheReadInputTokens": 0,
     "serverToolUse": {},
-    "summedCallDurationMs": 238,
-    "wallClockMs": 600,
+    "summedCallDurationMs": 1405,
+    "wallClockMs": 2200,
     "estimatedUsd": 0,
     "estimateComplete": false,
     "unpriced": [
@@ -165,7 +447,7 @@
     ],
     "tokensIncomplete": true,
     "billedAttempts": 0,
-    "unbilledAttempts": 2,
+    "unbilledAttempts": 8,
     "likelyBilledAttempts": 0
   }
 }
