@@ -670,7 +670,7 @@ export default function App() {
 
   const tocItems = useMemo(() => {
     const items = [
-      { n: "01", id: "sec-01", title: "Private-market valuations" },
+      { n: "01", id: "sec-01", title: "Company valuations" },
       { n: "02", id: "sec-02", title: "Public markets" },
       { n: "03", id: "sec-03", title: "Model capability" },
       { n: "04", id: "sec-04", title: "Who's actually using this" },
@@ -739,13 +739,13 @@ export default function App() {
         <TOC items={tocItems} open={tocOpen} onToggle={() => setTocOpen((o) => !o)} />
 
         <p style={{ ...mono, fontSize: 10.5, color: FAINT, lineHeight: 1.7, marginTop: 14 }}>
-          Methodological caveat: figures mix disclosure types — private valuations are last-round marks, user counts mix
+          Methodological caveat: figures mix disclosure types — private valuations are last-round marks, public ones are market caps, user counts mix
           weekly/monthly/embedded bases, energy figures are analyst forecasts. Treat magnitudes and trends as the signal.
         </p>
 
         {/* §01 Valuations */}
-        <SectionHead id="sec-01" n="01" title="Private-market valuations" sub="The most valuable startups ever built, priced in billions of dollars" />
-        <Panel id="valuations" label="Latest disclosed round · $ billions" meta={meta.valuations} checks={data.checks && data.checks.val} sources={SRC.valuations}>
+        <SectionHead id="sec-01" n="01" title="Company valuations" sub="The most valuable AI companies, private and newly public, in billions of dollars" />
+        <Panel id="valuations" label="Latest disclosed round or market cap · $ billions" meta={meta.valuations} checks={data.checks && data.checks.val} sources={SRC.valuations}>
           <div style={{ height: 32 + valuations.length * 34 }}>
             <ResponsiveContainer>
               <BarChart data={valuations} layout="vertical" margin={{ left: 8, right: 64, top: 8 }}>
@@ -755,20 +755,23 @@ export default function App() {
                 <Tooltip content={<PaperTooltip unit="B" />} cursor={{ fill: "rgba(25,23,20,0.04)" }} />
                 <Bar dataKey="value" stroke={INK} strokeWidth={1} barSize={20} isAnimationActive={false}>
                   {valuations.map((v) => <Cell key={v.name} fill={brandFill(v.name, v.cn ? C.clay : C.blue)} />)}
-                  <LabelList dataKey="value" position="right" style={{ ...mono, fontSize: 11, fill: INK }} formatter={(v) => `$${v}B`} />
+                  <LabelList dataKey="value" position="right" style={{ ...mono, fontSize: 11, fill: INK }} formatter={(v) => (v >= 1000 ? `$${(v / 1000).toFixed(2)}T` : `$${v}B`)} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
           <ValueNotes group={data.checks && data.checks.val} />
           <Commentary>
-            Anthropic's $65B Series H still makes it the most valuable private AI lab at $965B, ahead of OpenAI's $852B;
+            Anthropic is no longer a private-market name. It priced its IPO at $83 a share on 2026-11-18, above the
+            $70–78 range, and began trading on Nasdaq as ANT on 2026-11-19, closing its first session at $97.17 — a
+            market capitalization of about $1.27T. Its bar now shows that traded value rather than a funding-round
+            mark; the last private round was the $965B Series H in May. OpenAI's $852B remains a last-round mark.
             Databricks jumped from $134B to $190B on a fresh $5B round in August, and Anduril is reportedly negotiating
             a leap to $100B from its confirmed $61B mark. xAI's $250B figure is now stale in a different way — it
             merged into SpaceX in February, which itself went public in June and now trades around a $1.87T market cap,
             so a standalone xAI number no longer really exists.
             {showCN && " The Chinese tier moved unevenly: DeepSeek rose to ~$74B on a resumed raise, while Zhipu and MiniMax's HK-listed market caps have actually fallen well below their prior private marks — a reminder that public listings can reprice these companies down as easily as up."}
-            {" "}Both Anthropic and OpenAI have filed confidential S-1s; these are last-round marks, not offering prices.
+            {" "}Except for the listed companies, these are last-round marks, not offering prices.
           </Commentary>
         </Panel>
         <Panel id="race" label="The race to a trillion · valuation by round, $ billions" meta={meta.valuations}>
@@ -787,10 +790,9 @@ export default function App() {
           </div>
           <Commentary>
             Historical record — the final point tracks whatever the valuations panel last pulled. Anthropic repriced
-            from $380B to $965B in about three months, chasing a run-rate that has now gone from ~$1B to $65B in
-            under two years. Because that revenue base is larger, its implied multiple (~15×) is <em>lower</em> than
-            OpenAI's (~21×) — the gap between the two labs' multiples widened this refresh as Anthropic's revenue
-            growth outran its valuation growth.
+            from $380B to $965B in about three months, then to about $1.27T at the close of its first day of public
+            trading on 2026-11-19. That last point is a market capitalization, not a funding round, so unlike the
+            earlier points it moves with the stock between the weekly valuation checks.
           </Commentary>
         </Panel>
         <BackToTop />
@@ -818,7 +820,9 @@ export default function App() {
             Combined 2026 capex guidance across the big four hyperscalers now sits at roughly $720–745B, up 77% year
             over year, with the mix shifting: Amazon and Alphabet raised their budgets while Microsoft trimmed its
             guidance after extending the useful life of its data-center assets from 15 to 25 years — an accounting
-            change, not a spending pullback. Nvidia reported Q2 FY27 on 2026-09-07, against consensus near $92B in
+            change, not a spending pullback. Anthropic (ANT) joined the table on its 2026-11-19 debut: priced at $83,
+            it opened at $111.50 and closed at $97.17. Its market cap here is that first-day figure; like the other
+            caps in this table it is not refreshed nightly. Nvidia reported Q2 FY27 on 2026-09-07, against consensus near $92B in
             revenue, with options markets having priced an 8–12% swing into the print; the result itself is not yet
             reflected here.
           </Commentary>
@@ -1022,7 +1026,7 @@ export default function App() {
             Four companies plan roughly three-quarters of a trillion dollars of capex in 2026, most of it AI data
             centers. Against that, Anthropic's reported run rate was about $65B at the end of July 2026, and OpenAI's
             was reported nearing $70B on 29 Sep 2026. xAI stays at its standalone $0.5B figure. The same live caveat
-            as last edition: the SEC may force cloud-credit revenue onto a net basis pre-IPO, which would shrink the headline.
+            as last edition: the SEC may force cloud-credit revenue onto a net basis as the labs list, which would shrink the headline.
           </Commentary>
         </Panel>
         <BackToTop />

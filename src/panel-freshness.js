@@ -27,7 +27,7 @@ const ago = (iso, now = Date.now()) => {
    minutes late, so a panel checked inside the last two days is on schedule
    — one late run is not a fault. Past that, something is actually wrong.
    Web-share is checked weekly, so its line is that week plus the same
-   two-day grace. Private-market valuations run on Sunday only, so a
+   two-day grace. Company valuations run on Sunday only, so a
    midweek card is still on schedule until the check is more than 8 days old. */
 const DAY_MS = 24 * 60 * 60 * 1000;
 const STALE_MS = 2 * DAY_MS;
@@ -64,13 +64,13 @@ export const valuationsFreshness = (checkedAt, now = Date.now()) => {
     return {
       text: when ? `Updated weekly · last updated ${when} · overdue` : "Updated weekly · overdue",
       tone: "warn",
-      title: "Private-market valuations are checked on Sunday. The last successful check is more than 8 days old.",
+      title: "Company valuations are checked on Sunday. The last successful check is more than 8 days old.",
     };
   }
   return {
     text: `Updated weekly · last updated ${when}`,
     tone: "faint",
-    title: "Private-market valuations are checked weekly, on Sunday.",
+    title: "Company valuations are checked weekly, on Sunday.",
   };
 };
 

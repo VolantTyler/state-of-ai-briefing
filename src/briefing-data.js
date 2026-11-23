@@ -1,9 +1,10 @@
 import { STORE_RANK_SOURCES } from "./store-ranks.js";
 
 export const EDITION = {
-  version: "v2.6",
-  date: "2026-10-06",
+  version: "v2.7",
+  date: "2026-11-19",
   changelog: [
+    ["v2.7", "2026-11-19", "Anthropic goes public. It priced its IPO at $83 on 2026-11-18, above the $70–78 range, and began trading on Nasdaq as ANT on 2026-11-19, closing its first session at $97.17 — a market cap of about $1.27T. §01 now shows that market cap for Anthropic instead of the $965B Series H mark, and the race chart gains a Nov ’26 point. ANT joins the §02 equities table and the nightly quote fetch."],
     ["v2.6", "2026-10-06", "Intelligence Index locked to v4.3.2. Gemini 4 Argon is eligible for the models panel when it ranks in the top families. Scores on v4.3.2 are not comparable to v4.2."],
     ["v2.5", "2026-09-26", "App-store rankings: weekly US top-free rank for first-party AI apps on the iOS App Store and Google Play. Each point is the latest daily chart in that week. History starts when the nightly job began storing charts — earlier weeks were not reconstructed."],
     ["v2.4", "2026-09-07", "Model capability rebuilt around the September releases: Claude Fable 5.1 (Sep 1), GPT-6 Astra (Sep 3), Meta's Muse Spark 1.3 (Sep 3) and Gemini 3.8 Flash (Sep 2). The Artificial Analysis Intelligence Index moved to v4.2 — a re-anchored scale with two new evals and 40% private held-out data — so every score in §03 is restated on v4.2 and is NOT comparable to the v4.1.1 numbers in earlier editions. Meta joins the brand palette as it enters the frontier. Grok 4.7 is announced but unreleased and is deliberately absent."],
@@ -234,7 +235,7 @@ export const aaIndexVersion = (d) => {
 /* ——— Baseline dataset, researched 2026-08-21/22, refreshed 2026-08-26 ——— */
 export const BASELINE = {
   valuations: [
-    { name: "Anthropic", value: 965, note: "Series H, May ’26" },
+    { name: "Anthropic", value: 1270, note: "Nasdaq: ANT · mkt cap at Nov 19 ’26 close; IPO priced Nov 18 ’26" },
     { name: "OpenAI", value: 852, note: "Nov ’26 round, $11B first close" },
     { name: "xAI", value: 250, note: "last standalone mark; now inside public SpaceX ($1.87T)" },
     { name: "Databricks", value: 190, note: "$5B round, Aug ’26" },
@@ -252,8 +253,10 @@ export const BASELINE = {
     { t: "Feb ’26", OpenAI: null, Anthropic: 380 },
     { t: "Mar ’26", OpenAI: 852, Anthropic: null },
     { t: "May ’26", OpenAI: 852, Anthropic: 965 },
+    { t: "Nov ’26", OpenAI: 852, Anthropic: 1270 },
   ],
   stocks: [
+    { ticker: "ANT", name: "Anthropic", price: 97.17, cap: "≈ $1.27T", note: "IPO priced $83 on Nov 18 ’26; first close Nov 19 ’26, +17%" },
     { ticker: "NVDA", name: "Nvidia", price: 213.05, cap: "≈ $5.16T", note: "Q2 FY27 reported 2026-09-07" },
     { ticker: "MSFT", name: "Microsoft", price: 491.71, cap: "≈ $3.65T", note: "capex revised to ≈$175B on accounting change" },
     { ticker: "GOOG", name: "Alphabet", price: 349.90, cap: "≈ $4.28T", note: "capex guide raised to $195–205B" },
@@ -334,8 +337,8 @@ export const TRACKERS = [
 ];
 
 export const SRC = {
-  valuations: [["CNBC — Anthropic Series H", "https://www.cnbc.com/2026/05/28/anthropic-open-ai-startup-value.html"], ["CNBC — Databricks $190B round", "https://www.cnbc.com/2026/08/13/databricks-funding-round-190-billion-valuation.html"], ["Fortune — China's AI IPO rush", "https://fortune.com/2026/07/23/moonshot-deepseek-great-chinese-ai-ipo-rush/"], ["Bloomberg — DeepSeek resumes $8B round", "https://www.bloomberg.com/news/articles/2026-08-06/deepseek-resumes-8-billion-round-with-monolith-in-the-running"]],
-  markets: [["CNBC quotes", "https://www.cnbc.com/quotes/AAPL,AMZN,GOOGL,MSFT,META,NVDA,TSLA"], ["stockanalysis.com — market data", "https://stockanalysis.com/"], ["MLQ.ai — hyperscaler capex tracker", "https://mlq.ai/news/big-techs-2026-capex-range-reaches-720-billion-to-745-billion/"]],
+  valuations: [["CNBC — Anthropic prices IPO at $83, raising $81.3B", "https://www.cnbc.com/2026/11/18/anthropic-ipo-ai-offering-price.html"], ["Yahoo Finance — Anthropic closes first day at $1.27T valuation", "https://finance.yahoo.com/technology/live/anthropic-ipo-live-company-said-to-price-stock-at-83-begin-trading-thursday-212656452.html"], ["CNBC — Anthropic Series H", "https://www.cnbc.com/2026/05/28/anthropic-open-ai-startup-value.html"], ["CNBC — Databricks $190B round", "https://www.cnbc.com/2026/08/13/databricks-funding-round-190-billion-valuation.html"], ["Fortune — China's AI IPO rush", "https://fortune.com/2026/07/23/moonshot-deepseek-great-chinese-ai-ipo-rush/"], ["Bloomberg — DeepSeek resumes $8B round", "https://www.bloomberg.com/news/articles/2026-08-06/deepseek-resumes-8-billion-round-with-monolith-in-the-running"]],
+  markets: [["Yahoo Finance — Anthropic (ANT) first-day close", "https://finance.yahoo.com/technology/live/anthropic-ipo-live-company-said-to-price-stock-at-83-begin-trading-thursday-212656452.html"], ["CNBC quotes", "https://www.cnbc.com/quotes/AAPL,AMZN,GOOGL,MSFT,META,NVDA,TSLA"], ["stockanalysis.com — market data", "https://stockanalysis.com/"], ["MLQ.ai — hyperscaler capex tracker", "https://mlq.ai/news/big-techs-2026-capex-range-reaches-720-billion-to-745-billion/"]],
   models: [["Artificial Analysis — Intelligence Index v4.3.2", "https://artificialanalysis.ai/evaluations/artificial-analysis-intelligence-index"], ["Artificial Analysis — Claude Fable 5.1 tops the Index", "https://artificialanalysis.ai/articles/claude-fable-5-1"], ["Artificial Analysis — benchmarking GPT-6 Astra", "https://artificialanalysis.ai/articles/benchmarking-gpt-6-astra"], ["Artificial Analysis — Muse Spark 1.3: Meta reaches the frontier", "https://artificialanalysis.ai/articles/muse-spark-1-3"], ["OpenAI — GPT-6 Astra", "https://openai.com/index/gpt-6-astra/"], ["Stanford HAI — AI Index 2026", "https://hai.stanford.edu/ai-index/2026-ai-index-report"], ["tbench.ai — Terminal-Bench 2.1", "https://www.tbench.ai/leaderboard/terminal-bench/2.1"]],
   users: [["TechCrunch — Gemini passes 1B MAU", "https://techcrunch.com/2026/08/11/googles-gemini-app-surges-to-one-billion-users/"], ["Tech Insider — chatbot web-share, July ’26", "https://tech-insider.org/ie/claude-vs-chatgpt-vs-gemini-2026/"], ["Instant Press — AI statistics", "https://www.instantpress.co/ai-statistics"]],
   capital: [["Reuters — Anthropic run rate tops $65B, 17 Aug 2026", "https://www.reuters.com/technology/anthropic-revenue-run-rate-tops-65-billion-source-says-2026-08-17/"], ["CNBC — Anthropic $65B in July, 17 Aug 2026", "https://www.cnbc.com/2026/08/17/anthropic-says-annualized-revenue-climbed-to-65-billion-in-july.html"], ["Axios — OpenAI ARR nears $70B, 29 Sep 2026", "https://www.axios.com/2026/09/29/scoop-openais-annual-recurring-revenue-nears-70b"], ["MLQ.ai — capex roundup", "https://mlq.ai/news/big-techs-2026-capex-range-reaches-720-billion-to-745-billion/"]],
@@ -416,7 +419,7 @@ export const JOBS = {
   },
   markets: {
     keys: ["stocks"],
-    /* No model prompt. src/refresh-run.js fetches the seven regular-session
+    /* No model prompt. src/refresh-run.js fetches the eight regular-session
        closes directly (src/market-quotes.js) and passes `{ stocks }` keyed
        by ticker. A missing or non-positive price keeps that ticker's prior
        close — a price is never filled in. */

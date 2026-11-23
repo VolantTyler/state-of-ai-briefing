@@ -102,11 +102,14 @@ wins, the surrounding sentence needs editing too — not just the constant.
 Researched during the v2.4 model-capability update and deliberately left out
 of that change. Each would be a new section, not an edit to an existing one.
 
-- **IPO watch.** Anthropic filed confidentially on 2026-06-01, prospectus
-  expected late September, October listing at a reported $2T target — which
-  would be the largest IPO ever. OpenAI has also filed confidentially. §01
-  charts *private* marks, so a public listing partly invalidates that framing
-  and probably deserves its own panel rather than a footnote.
+- **IPO watch.** *Partly done 2026-11-19.* Anthropic listed on Nasdaq as ANT
+  (priced $83 on 2026-11-18, closed $97.17 on day one, ~$1.27T). It now appears
+  in §01 at its market cap and in §02 as an equity, but a dedicated panel is
+  still open: offering size and day-one pop, lockup expiry, and OpenAI's own
+  filing (reported confidential as of 2026-09-07). §01 was renamed
+  "Company valuations" on 2026-11-23. Anthropic's §02 market cap is a static
+  string like every other cap in that table, and the valuations job only runs
+  Sundays, so the §01 bar will not follow the stock between checks.
 - **Consolidation / M&A.** Nvidia is acquiring Hugging Face for ~$13B
   (announced 2026-09-03, expected to close H1 2027), its second-largest
   purchase after $20B for Groq assets.
