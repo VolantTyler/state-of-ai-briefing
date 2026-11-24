@@ -1,7 +1,7 @@
 {
-  "runAt": "2026-11-23T20:16:05.504Z",
+  "runAt": "2026-11-24T19:31:16.528Z",
   "fatal": false,
-  "wallClockMs": 2200,
+  "wallClockMs": 1669,
   "budget": {
     "maxDurationMs": 1500000,
     "tailReserveMs": 120000,
@@ -56,7 +56,7 @@
       "attempt": 1,
       "continuation": 0,
       "model": "claude-haiku-4-5-20251001",
-      "durationMs": 102,
+      "durationMs": 111,
       "stopReason": null,
       "httpStatus": 401,
       "inputTokens": null,
@@ -87,7 +87,7 @@
       "billed": false,
       "likelyBilled": false,
       "aborted": false,
-      "error": "{\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"},\"request_id\":\"req_011ChLUVKUKFpUBhXWaTMyfR\"}"
+      "error": "{\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"},\"request_id\":\"req_011ChNJt2Q8ZmkobqzGduvev\"}"
     },
     {
       "jobId": "models",
@@ -95,7 +95,7 @@
       "continuation": "openrouter",
       "provider": "openrouter",
       "model": "anthropic/claude-sonnet-5.5",
-      "durationMs": 181,
+      "durationMs": 165,
       "stopReason": null,
       "httpStatus": 403,
       "inputTokens": null,
@@ -130,7 +130,7 @@
       "attempt": 1,
       "continuation": 0,
       "model": "claude-haiku-4-5-20251001",
-      "durationMs": 84,
+      "durationMs": 71,
       "stopReason": null,
       "httpStatus": 401,
       "inputTokens": null,
@@ -161,7 +161,7 @@
       "billed": false,
       "likelyBilled": false,
       "aborted": false,
-      "error": "{\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"},\"request_id\":\"req_011ChLUVLc2MAUBFozmz1Ev9\"}"
+      "error": "{\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"},\"request_id\":\"req_011ChNJt3TNj9QV6CMMy11or\"}"
     },
     {
       "jobId": "users",
@@ -169,7 +169,81 @@
       "continuation": "openrouter",
       "provider": "openrouter",
       "model": "anthropic/claude-sonnet-5.5",
-      "durationMs": 797,
+      "durationMs": 50,
+      "stopReason": null,
+      "httpStatus": 403,
+      "inputTokens": null,
+      "outputTokens": null,
+      "cacheCreationInputTokens": null,
+      "cacheReadInputTokens": null,
+      "cacheCreation": null,
+      "cacheWrite": {
+        "ephemeral5m": null,
+        "ephemeral1h": null,
+        "assumed5m": false
+      },
+      "serverToolUse": {},
+      "serviceTier": null,
+      "usage": null,
+      "estimatedUsd": null,
+      "estimateComplete": false,
+      "unpriced": [
+        "provider:openrouter",
+        "usage-not-reported"
+      ],
+      "notes": [
+        "OpenRouter usage.cost when the response has it. Not the Claude API list-price table."
+      ],
+      "billed": false,
+      "likelyBilled": false,
+      "aborted": false,
+      "error": "{\"error\":{\"message\":\"Key limit exceeded (monthly limit). Manage it using https://openrouter.ai/workspaces/default/keys/4d0d25300b8dffb3ed416fc37ef2ce3fc0a507ae3d1f4b08e9e2292c037e314e $10.23 of $10.00 used; resets 2026-12-01T00:00:00.000Z.\",\"code\":403,\"metadata\":{\"limit_source\":\"openrouter_key_limit\",\"remedy_hint\":\"Raise or remove this API key's usage limit at https://openrouter.ai/settings/keys, or use a key without a limit.\",\"scope\":\"key_limit\",\"limit_usd\":10,\"spend_usd\":10.234396,\"resets_at\"…"
+    },
+    {
+      "jobId": "share",
+      "attempt": 1,
+      "continuation": 0,
+      "model": "claude-haiku-4-5-20251001",
+      "durationMs": 65,
+      "stopReason": null,
+      "httpStatus": 401,
+      "inputTokens": null,
+      "outputTokens": null,
+      "cacheCreationInputTokens": null,
+      "cacheReadInputTokens": null,
+      "cacheCreation": null,
+      "cacheWrite": {
+        "ephemeral5m": null,
+        "ephemeral1h": null,
+        "assumed5m": false
+      },
+      "serverToolUse": {},
+      "serviceTier": null,
+      "usage": null,
+      "estimatedUsd": 0,
+      "estimateComplete": false,
+      "unpriced": [
+        "usage-not-reported"
+      ],
+      "notes": [],
+      "webSearchUsd": 0,
+      "inputUsd": 0,
+      "outputUsd": 0,
+      "cacheReadUsd": 0,
+      "cacheWrite5mUsd": 0,
+      "cacheWrite1hUsd": 0,
+      "billed": false,
+      "likelyBilled": false,
+      "aborted": false,
+      "error": "{\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"},\"request_id\":\"req_011ChNJt3xu594p2Ze1tt6Ws\"}"
+    },
+    {
+      "jobId": "share",
+      "attempt": 1,
+      "continuation": "openrouter",
+      "provider": "openrouter",
+      "model": "anthropic/claude-sonnet-5.5",
+      "durationMs": 57,
       "stopReason": null,
       "httpStatus": 403,
       "inputTokens": null,
@@ -204,7 +278,7 @@
       "attempt": 1,
       "continuation": 0,
       "model": "claude-haiku-4-5-20251001",
-      "durationMs": 78,
+      "durationMs": 75,
       "stopReason": null,
       "httpStatus": 401,
       "inputTokens": null,
@@ -235,7 +309,7 @@
       "billed": false,
       "likelyBilled": false,
       "aborted": false,
-      "error": "{\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"},\"request_id\":\"req_011ChLUVQNVpRQwHJGDfdNqE\"}"
+      "error": "{\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"},\"request_id\":\"req_011ChNJt4X86bGZQm7mFUgnE\"}"
     },
     {
       "jobId": "capital",
@@ -243,7 +317,7 @@
       "continuation": "openrouter",
       "provider": "openrouter",
       "model": "anthropic/claude-sonnet-5.5",
-      "durationMs": 43,
+      "durationMs": 52,
       "stopReason": null,
       "httpStatus": 403,
       "inputTokens": null,
@@ -278,7 +352,7 @@
       "attempt": 1,
       "continuation": 0,
       "model": "claude-haiku-4-5-20251001",
-      "durationMs": 78,
+      "durationMs": 75,
       "stopReason": null,
       "httpStatus": 401,
       "inputTokens": null,
@@ -309,7 +383,7 @@
       "billed": false,
       "likelyBilled": false,
       "aborted": false,
-      "error": "{\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"},\"request_id\":\"req_011ChLUVQtVXCRV4ts6HWgDD\"}"
+      "error": "{\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"},\"request_id\":\"req_011ChNJt548UQjNQX5aMUDLF\"}"
     },
     {
       "jobId": "energy",
@@ -317,7 +391,7 @@
       "continuation": "openrouter",
       "provider": "openrouter",
       "model": "anthropic/claude-sonnet-5.5",
-      "durationMs": 42,
+      "durationMs": 71,
       "stopReason": null,
       "httpStatus": 403,
       "inputTokens": null,
@@ -356,7 +430,7 @@
       "cacheCreationInputTokens": 0,
       "cacheReadInputTokens": 0,
       "serverToolUse": {},
-      "durationMs": 283,
+      "durationMs": 276,
       "stopReasons": [],
       "estimatedUsd": 0,
       "estimateComplete": false,
@@ -376,7 +450,27 @@
       "cacheCreationInputTokens": 0,
       "cacheReadInputTokens": 0,
       "serverToolUse": {},
-      "durationMs": 881,
+      "durationMs": 121,
+      "stopReasons": [],
+      "estimatedUsd": 0,
+      "estimateComplete": false,
+      "unpriced": [
+        "usage-not-reported",
+        "provider:openrouter"
+      ],
+      "timedOut": false,
+      "billedAttempts": 0,
+      "unbilledAttempts": 2,
+      "likelyBilledAttempts": 0
+    },
+    "share": {
+      "attempts": 2,
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "cacheCreationInputTokens": 0,
+      "cacheReadInputTokens": 0,
+      "serverToolUse": {},
+      "durationMs": 122,
       "stopReasons": [],
       "estimatedUsd": 0,
       "estimateComplete": false,
@@ -396,7 +490,7 @@
       "cacheCreationInputTokens": 0,
       "cacheReadInputTokens": 0,
       "serverToolUse": {},
-      "durationMs": 121,
+      "durationMs": 127,
       "stopReasons": [],
       "estimatedUsd": 0,
       "estimateComplete": false,
@@ -416,7 +510,7 @@
       "cacheCreationInputTokens": 0,
       "cacheReadInputTokens": 0,
       "serverToolUse": {},
-      "durationMs": 120,
+      "durationMs": 146,
       "stopReasons": [],
       "estimatedUsd": 0,
       "estimateComplete": false,
@@ -431,14 +525,14 @@
     }
   },
   "totals": {
-    "calls": 8,
+    "calls": 10,
     "inputTokens": 0,
     "outputTokens": 0,
     "cacheCreationInputTokens": 0,
     "cacheReadInputTokens": 0,
     "serverToolUse": {},
-    "summedCallDurationMs": 1405,
-    "wallClockMs": 2200,
+    "summedCallDurationMs": 792,
+    "wallClockMs": 1669,
     "estimatedUsd": 0,
     "estimateComplete": false,
     "unpriced": [
@@ -447,7 +541,7 @@
     ],
     "tokensIncomplete": true,
     "billedAttempts": 0,
-    "unbilledAttempts": 8,
+    "unbilledAttempts": 10,
     "likelyBilledAttempts": 0
   }
 }
