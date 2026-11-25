@@ -1,6 +1,6 @@
 {
-  "updatedAt": "2026-11-24T19:31:19.404Z",
-  "lastRunAt": "2026-11-24T19:31:16.528Z",
+  "updatedAt": "2026-11-25T18:39:36.379Z",
+  "lastRunAt": "2026-11-25T18:39:33.755Z",
   "meta": {
     "valuations": {
       "at": "2026-11-15T17:15:40.212Z",
@@ -11,9 +11,9 @@
       "erroredAt": "2026-11-22T17:53:09.407Z"
     },
     "markets": {
-      "at": "2026-11-24T19:31:18.197Z",
-      "checkedAt": "2026-11-24T19:31:18.197Z",
-      "changedAt": "2026-11-24T19:31:18.197Z",
+      "at": "2026-11-25T18:39:35.317Z",
+      "checkedAt": "2026-11-25T18:39:35.317Z",
+      "changedAt": "2026-11-25T18:39:35.317Z",
       "failed": false
     },
     "models": {
@@ -21,45 +21,45 @@
       "checkedAt": "2026-11-20T16:59:06.514Z",
       "changedAt": "2026-11-20T16:59:06.514Z",
       "failed": true,
-      "error": "anthropic 401: {\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"},\"request_id\":\"req_011ChNJt2Q8ZmkobqzGduvev\"}; OpenRouter fallback failed (openrouter 403: {\"error\":{\"message\":\"Key limit exceeded (monthly limit). Manage it using https://openrouter.ai/workspaces/def",
-      "erroredAt": "2026-11-24T19:31:18.197Z"
+      "error": "anthropic 401: {\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"},\"request_id\":\"req_011ChQ8kDWjPuv9QQ4rFcBq4\"}; OpenRouter fallback failed (openrouter 403: {\"error\":{\"message\":\"Key limit exceeded (monthly limit). Manage it using https://openrouter.ai/workspaces/def",
+      "erroredAt": "2026-11-25T18:39:35.317Z"
     },
     "users": {
       "at": "2026-11-20T16:59:06.514Z",
       "checkedAt": "2026-11-20T16:59:06.514Z",
       "changedAt": "2026-11-20T16:59:06.514Z",
       "failed": true,
-      "error": "anthropic 401: {\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"},\"request_id\":\"req_011ChNJt3TNj9QV6CMMy11or\"}; OpenRouter fallback failed (openrouter 403: {\"error\":{\"message\":\"Key limit exceeded (monthly limit). Manage it using https://openrouter.ai/workspaces/def",
-      "erroredAt": "2026-11-24T19:31:18.197Z"
+      "error": "anthropic 401: {\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"},\"request_id\":\"req_011ChQ8kEYVh4FfLVb6t4HEk\"}; OpenRouter fallback failed (openrouter 403: {\"error\":{\"message\":\"Key limit exceeded (monthly limit). Manage it using https://openrouter.ai/workspaces/def",
+      "erroredAt": "2026-11-25T18:39:35.317Z"
     },
     "share": {
       "at": "2026-11-17T17:38:55.233Z",
       "checkedAt": "2026-11-17T17:38:55.233Z",
       "changedAt": "2026-11-10T16:26:31.315Z",
       "failed": true,
-      "error": "anthropic 401: {\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"},\"request_id\":\"req_011ChNJt3xu594p2Ze1tt6Ws\"}; OpenRouter fallback failed (openrouter 403: {\"error\":{\"message\":\"Key limit exceeded (monthly limit). Manage it using https://openrouter.ai/workspaces/def",
-      "erroredAt": "2026-11-24T19:31:18.197Z"
+      "error": "anthropic 401: {\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"},\"request_id\":\"req_011ChQ8kF5keMQWeC77ZMVkv\"}; OpenRouter fallback failed (openrouter 403: {\"error\":{\"message\":\"Key limit exceeded (monthly limit). Manage it using https://openrouter.ai/workspaces/def",
+      "erroredAt": "2026-11-25T18:39:35.317Z"
     },
     "capital": {
       "at": "2026-11-20T16:59:06.515Z",
       "checkedAt": "2026-11-20T16:59:06.515Z",
       "changedAt": "2026-11-14T15:07:18.456Z",
       "failed": true,
-      "error": "anthropic 401: {\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"},\"request_id\":\"req_011ChNJt4X86bGZQm7mFUgnE\"}; OpenRouter fallback failed (openrouter 403: {\"error\":{\"message\":\"Key limit exceeded (monthly limit). Manage it using https://openrouter.ai/workspaces/def",
-      "erroredAt": "2026-11-24T19:31:18.197Z"
+      "error": "anthropic 401: {\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"},\"request_id\":\"req_011ChQ8kFbkh5UZSWe4afJFv\"}; OpenRouter fallback failed (openrouter 403: {\"error\":{\"message\":\"Key limit exceeded (monthly limit). Manage it using https://openrouter.ai/workspaces/def",
+      "erroredAt": "2026-11-25T18:39:35.317Z"
     },
     "energy": {
       "at": "2026-11-20T16:59:06.515Z",
       "checkedAt": "2026-11-20T16:59:06.515Z",
       "changedAt": "2026-11-19T17:24:26.050Z",
       "failed": true,
-      "error": "anthropic 401: {\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"},\"request_id\":\"req_011ChNJt548UQjNQX5aMUDLF\"}; OpenRouter fallback failed (openrouter 403: {\"error\":{\"message\":\"Key limit exceeded (monthly limit). Manage it using https://openrouter.ai/workspaces/def",
-      "erroredAt": "2026-11-24T19:31:18.197Z"
+      "error": "anthropic 401: {\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"},\"request_id\":\"req_011ChQ8kG5mxh7ZfuBSDu17N\"}; OpenRouter fallback failed (openrouter 403: {\"error\":{\"message\":\"Key limit exceeded (monthly limit). Manage it using https://openrouter.ai/workspaces/def",
+      "erroredAt": "2026-11-25T18:39:35.317Z"
     },
     "storeRanks": {
-      "at": "2026-11-24T19:31:18.197Z",
-      "checkedAt": "2026-11-24T19:31:18.197Z",
-      "changedAt": "2026-11-24T19:31:18.197Z",
+      "at": "2026-11-25T18:39:35.317Z",
+      "checkedAt": "2026-11-25T18:39:35.317Z",
+      "changedAt": "2026-11-25T18:39:35.317Z",
       "failed": false
     }
   },
@@ -75,14 +75,14 @@
     "MiniMax": 33
   },
   "stocks": {
-    "ANT": 87.64,
-    "NVDA": 165.05,
-    "MSFT": 492.5,
-    "GOOG": 279.53,
-    "META": 597.6,
-    "AMZN": 255.39,
-    "AVGO": 313.55,
-    "TSM": 363.6
+    "ANT": 81.91,
+    "NVDA": 155.38,
+    "MSFT": 496.13,
+    "GOOG": 276.58,
+    "META": 589.82,
+    "AMZN": 252.29,
+    "AVGO": 301.08,
+    "TSM": 349.2
   },
   "users": {
     "ChatGPT": 1200,
@@ -196,19 +196,20 @@
       "chatgpt": 3,
       "claude": 5,
       "gemini": 6,
-      "grok": 52
+      "grok": 50,
+      "metaai": 91
     },
     "android": {
       "muse": 1,
       "chatgpt": 3,
-      "claude": 20,
-      "gemini": 53
+      "claude": 22,
+      "gemini": 48
     }
   },
   "usage": {
-    "runAt": "2026-11-24T19:31:16.528Z",
+    "runAt": "2026-11-25T18:39:33.755Z",
     "fatal": false,
-    "wallClockMs": 1669,
+    "wallClockMs": 1562,
     "budget": {
       "maxDurationMs": 1500000,
       "tailReserveMs": 120000,
@@ -263,7 +264,7 @@
         "attempt": 1,
         "continuation": 0,
         "model": "claude-haiku-4-5-20251001",
-        "durationMs": 111,
+        "durationMs": 141,
         "stopReason": null,
         "httpStatus": 401,
         "inputTokens": null,
@@ -294,7 +295,7 @@
         "billed": false,
         "likelyBilled": false,
         "aborted": false,
-        "error": "{\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"},\"request_id\":\"req_011ChNJt2Q8ZmkobqzGduvev\"}"
+        "error": "{\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"},\"request_id\":\"req_011ChQ8kDWjPuv9QQ4rFcBq4\"}"
       },
       {
         "jobId": "models",
@@ -302,7 +303,7 @@
         "continuation": "openrouter",
         "provider": "openrouter",
         "model": "anthropic/claude-sonnet-5.5",
-        "durationMs": 165,
+        "durationMs": 167,
         "stopReason": null,
         "httpStatus": 403,
         "inputTokens": null,
@@ -337,7 +338,7 @@
         "attempt": 1,
         "continuation": 0,
         "model": "claude-haiku-4-5-20251001",
-        "durationMs": 71,
+        "durationMs": 63,
         "stopReason": null,
         "httpStatus": 401,
         "inputTokens": null,
@@ -368,7 +369,7 @@
         "billed": false,
         "likelyBilled": false,
         "aborted": false,
-        "error": "{\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"},\"request_id\":\"req_011ChNJt3TNj9QV6CMMy11or\"}"
+        "error": "{\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"},\"request_id\":\"req_011ChQ8kEYVh4FfLVb6t4HEk\"}"
       },
       {
         "jobId": "users",
@@ -376,7 +377,7 @@
         "continuation": "openrouter",
         "provider": "openrouter",
         "model": "anthropic/claude-sonnet-5.5",
-        "durationMs": 50,
+        "durationMs": 63,
         "stopReason": null,
         "httpStatus": 403,
         "inputTokens": null,
@@ -442,7 +443,7 @@
         "billed": false,
         "likelyBilled": false,
         "aborted": false,
-        "error": "{\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"},\"request_id\":\"req_011ChNJt3xu594p2Ze1tt6Ws\"}"
+        "error": "{\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"},\"request_id\":\"req_011ChQ8kF5keMQWeC77ZMVkv\"}"
       },
       {
         "jobId": "share",
@@ -450,7 +451,7 @@
         "continuation": "openrouter",
         "provider": "openrouter",
         "model": "anthropic/claude-sonnet-5.5",
-        "durationMs": 57,
+        "durationMs": 54,
         "stopReason": null,
         "httpStatus": 403,
         "inputTokens": null,
@@ -485,7 +486,7 @@
         "attempt": 1,
         "continuation": 0,
         "model": "claude-haiku-4-5-20251001",
-        "durationMs": 75,
+        "durationMs": 61,
         "stopReason": null,
         "httpStatus": 401,
         "inputTokens": null,
@@ -516,7 +517,7 @@
         "billed": false,
         "likelyBilled": false,
         "aborted": false,
-        "error": "{\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"},\"request_id\":\"req_011ChNJt4X86bGZQm7mFUgnE\"}"
+        "error": "{\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"},\"request_id\":\"req_011ChQ8kFbkh5UZSWe4afJFv\"}"
       },
       {
         "jobId": "capital",
@@ -524,7 +525,7 @@
         "continuation": "openrouter",
         "provider": "openrouter",
         "model": "anthropic/claude-sonnet-5.5",
-        "durationMs": 52,
+        "durationMs": 51,
         "stopReason": null,
         "httpStatus": 403,
         "inputTokens": null,
@@ -559,7 +560,7 @@
         "attempt": 1,
         "continuation": 0,
         "model": "claude-haiku-4-5-20251001",
-        "durationMs": 75,
+        "durationMs": 65,
         "stopReason": null,
         "httpStatus": 401,
         "inputTokens": null,
@@ -590,7 +591,7 @@
         "billed": false,
         "likelyBilled": false,
         "aborted": false,
-        "error": "{\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"},\"request_id\":\"req_011ChNJt548UQjNQX5aMUDLF\"}"
+        "error": "{\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"},\"request_id\":\"req_011ChQ8kG5mxh7ZfuBSDu17N\"}"
       },
       {
         "jobId": "energy",
@@ -598,7 +599,7 @@
         "continuation": "openrouter",
         "provider": "openrouter",
         "model": "anthropic/claude-sonnet-5.5",
-        "durationMs": 71,
+        "durationMs": 68,
         "stopReason": null,
         "httpStatus": 403,
         "inputTokens": null,
@@ -637,7 +638,7 @@
         "cacheCreationInputTokens": 0,
         "cacheReadInputTokens": 0,
         "serverToolUse": {},
-        "durationMs": 276,
+        "durationMs": 308,
         "stopReasons": [],
         "estimatedUsd": 0,
         "estimateComplete": false,
@@ -657,7 +658,7 @@
         "cacheCreationInputTokens": 0,
         "cacheReadInputTokens": 0,
         "serverToolUse": {},
-        "durationMs": 121,
+        "durationMs": 126,
         "stopReasons": [],
         "estimatedUsd": 0,
         "estimateComplete": false,
@@ -677,7 +678,7 @@
         "cacheCreationInputTokens": 0,
         "cacheReadInputTokens": 0,
         "serverToolUse": {},
-        "durationMs": 122,
+        "durationMs": 119,
         "stopReasons": [],
         "estimatedUsd": 0,
         "estimateComplete": false,
@@ -697,7 +698,7 @@
         "cacheCreationInputTokens": 0,
         "cacheReadInputTokens": 0,
         "serverToolUse": {},
-        "durationMs": 127,
+        "durationMs": 112,
         "stopReasons": [],
         "estimatedUsd": 0,
         "estimateComplete": false,
@@ -717,7 +718,7 @@
         "cacheCreationInputTokens": 0,
         "cacheReadInputTokens": 0,
         "serverToolUse": {},
-        "durationMs": 146,
+        "durationMs": 133,
         "stopReasons": [],
         "estimatedUsd": 0,
         "estimateComplete": false,
@@ -738,8 +739,8 @@
       "cacheCreationInputTokens": 0,
       "cacheReadInputTokens": 0,
       "serverToolUse": {},
-      "summedCallDurationMs": 792,
-      "wallClockMs": 1669,
+      "summedCallDurationMs": 798,
+      "wallClockMs": 1562,
       "estimatedUsd": 0,
       "estimateComplete": false,
       "unpriced": [
